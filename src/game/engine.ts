@@ -381,13 +381,46 @@ export class GameEngine {
 
   // ── input ───────────────────────────────────────────────────────────
 
-  /** Reticle sits above the contact point so the thumb never hides it. */
+  /**
+   * The reticle sits ~40px above the contact point so the thumb never hides
+   * it while probing the matrix. The offset tapers to zero across the
+   * control deck, so that over the bins the packet is exactly under the
+   * finger: at full strength the bottom row of bins would need a touch 40px
+   * below the last pixel of the screen, and even the top row would only be
+   * reachable by pressing somewhere that looks wrong. The taper is
+   * monotonic in y, so dragging downward always moves the packet downward.
+   */
   private reticleFor(x: number, y: number): { x: number; y: number } {
     const l = this.layout;
+    const taperEnd = l.h - l.binsH;
+    const taperStart = taperEnd - l.deckH;
+    let offset = RETICLE_OFFSET_Y;
+    if (y >= taperEnd) {
+      offset = 0;
+    } else if (y > taperStart && l.deckH > 0) {
+      offset = RETICLE_OFFSET_Y * (1 - (y - taperStart) / l.deckH);
+    }
     return {
       x: Math.max(0, Math.min(l.w, x)),
-      y: Math.max(0, Math.min(l.h, y + RETICLE_OFFSET_Y)),
+      y: Math.max(0, Math.min(l.h, y + offset)),
     };
+  }
+
+  /** Put a carried packet's digits back on the grid, unrefined. */
+  private returnPacketToGrid(): void {
+    const packet = this.packet;
+    if (!packet) return;
+    const cluster = this.board.clusters[packet.clusterId];
+    for (const i of cluster.members) {
+      const n = this.board.nodes[i];
+      n.lifted = false;
+      n.scatter = 1;
+      n.sx = packet.x;
+      n.sy = packet.y;
+    }
+    cluster.agitation = 0;
+    if (this.latchedId === cluster.id) this.latchedId = -1;
+    this.packet = null;
   }
 
   private isLive(): boolean {
@@ -704,7 +737,9 @@ export class GameEngine {
         this.timeLeft = 0;
         this.phase = "failed";
         this.releaseGesture();
-        this.packet = null;
+        // Never strand a carried packet: its digits go back to the grid so
+        // no node is left `lifted` with nothing holding it.
+        this.returnPacketToGrid();
         getAudio().silenceAll();
         getAudio().alarm();
         haptics.reject();
