@@ -1,13 +1,72 @@
-import { X } from "lucide-react";
+import { Vibrate, Volume2, X } from "lucide-react";
+import type { ReactNode } from "react";
 import { MIN_CAPTURE, PROBE_RADIUS, TEMPERS, TEMPER_DEFS } from "../game/constants";
 
 interface Props {
   onClose: () => void;
   assist: boolean;
   onAssist: (on: boolean) => void;
+  muted: boolean;
+  onMuted: (on: boolean) => void;
+  hapticsOn: boolean;
+  onHaptics: (on: boolean) => void;
+  hapticsSupported: boolean;
 }
 
-export function HandbookModal({ onClose, assist, onAssist }: Props) {
+function Toggle({
+  on,
+  onChange,
+  label,
+  hint,
+  icon,
+}: {
+  on: boolean;
+  onChange: (next: boolean) => void;
+  label: string;
+  hint: string;
+  icon?: ReactNode;
+}) {
+  return (
+    <label className="flex items-start justify-between gap-3 py-1.5">
+      <span>
+        <span className="flex items-center gap-1.5 text-[10px] font-bold tracking-[0.16em] text-phos-300">
+          {icon}
+          {label}
+        </span>
+        <span className="mt-0.5 block text-[9px] leading-snug text-phos-600">
+          {hint}
+        </span>
+      </span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={on}
+        aria-label={label}
+        onClick={() => onChange(!on)}
+        className={`mt-0.5 flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
+          on ? "border-phos-400 bg-phos-600" : "border-phos-700 bg-phos-950"
+        }`}
+      >
+        <span
+          className={`block h-3.5 w-3.5 rounded-full bg-phos-200 transition-transform ${
+            on ? "translate-x-[18px]" : "translate-x-[2px]"
+          }`}
+        />
+      </button>
+    </label>
+  );
+}
+
+export function HandbookModal({
+  onClose,
+  assist,
+  onAssist,
+  muted,
+  onMuted,
+  hapticsOn,
+  onHaptics,
+  hapticsSupported,
+}: Props) {
   return (
     <div
       role="dialog"
@@ -95,35 +154,32 @@ export function HandbookModal({ onClose, assist, onAssist }: Props) {
           })}
         </ul>
 
-        <div className="mt-4 rounded-[3px] border border-phos-700 bg-phos-900/40 p-2.5">
-          <label className="flex items-start justify-between gap-3">
-            <span>
-              <span className="block text-[10px] font-bold tracking-[0.16em] text-phos-300">
-                COLOUR ASSIST
-              </span>
-              <span className="block text-[9px] leading-snug text-phos-600">
-                Tint agitated clusters with their temper's colour. Kier
-                considers this a crutch.
-              </span>
-            </span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={assist}
-              onClick={() => onAssist(!assist)}
-              className={`mt-0.5 h-5 w-9 shrink-0 rounded-full border transition-colors ${
-                assist
-                  ? "border-phos-400 bg-phos-600"
-                  : "border-phos-700 bg-phos-950"
-              }`}
-            >
-              <span
-                className={`block h-3.5 w-3.5 rounded-full bg-phos-200 transition-transform ${
-                  assist ? "translate-x-[18px]" : "translate-x-[2px]"
-                }`}
-              />
-            </button>
-          </label>
+        <h3 className="crt-text-glow mb-2 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300">
+          TERMINAL SETTINGS
+        </h3>
+        <div className="divide-y divide-phos-800 rounded-[3px] border border-phos-700 bg-phos-900/40 px-2.5 py-1">
+          <Toggle
+            on={!muted}
+            onChange={(on) => onMuted(!on)}
+            label="TERMINAL AUDIO"
+            hint="The temper voices. Strongly advised: the sound is half the tell."
+            icon={<Volume2 size={11} aria-hidden />}
+          />
+          {hapticsSupported ? (
+            <Toggle
+              on={hapticsOn}
+              onChange={onHaptics}
+              label="HAPTIC FEEDBACK"
+              hint="Each temper buzzes to its own cadence."
+              icon={<Vibrate size={11} aria-hidden />}
+            />
+          ) : null}
+          <Toggle
+            on={assist}
+            onChange={onAssist}
+            label="COLOUR ASSIST"
+            hint="Tint agitated clusters with their temper's colour. Kier considers this a crutch."
+          />
         </div>
 
         <p className="mt-4 text-center text-[8px] tracking-[0.22em] text-phos-700">

@@ -169,12 +169,6 @@ export function GameStage() {
               engine.setMode(m);
             }}
             onHandbook={() => setHandbook(true)}
-            onToggleMute={() => {
-              void getAudio().unlock();
-              engine.setMuted(!hud.muted);
-            }}
-            onToggleHaptics={() => engine.setHaptics(!hud.hapticsOn)}
-            hapticsSupported={haptics.supported}
           />
           <div style={{ height: layout.binsH }} />
         </div>
@@ -214,6 +208,14 @@ export function GameStage() {
             onClose={() => setHandbook(false)}
             assist={hud.assist}
             onAssist={(on) => engine.setAssist(on)}
+            muted={hud.muted}
+            onMuted={(on) => {
+              void getAudio().unlock();
+              engine.setMuted(on);
+            }}
+            hapticsOn={hud.hapticsOn}
+            onHaptics={(on) => engine.setHaptics(on)}
+            hapticsSupported={haptics.supported}
           />
         ) : null}
 

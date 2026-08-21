@@ -14,20 +14,54 @@ const SUPPORTED =
 
 export type HapticPattern = number | number[];
 
+interface TemperHaptic {
+  /** The signature pattern, as felt at full proximity. */
+  pattern: number[];
+  /** Cadence at intensity 1 and intensity 0 respectively. */
+  nearMs: number;
+  farMs: number;
+  /** Repeat the pattern to fill the whole period (a continuous texture). */
+  fill?: boolean;
+}
+
 /** Signature patterns, straight from the spec sheet. */
-export const TEMPER_HAPTICS: Record<
-  Temper,
-  { pattern: HapticPattern; nearMs: number; farMs: number }
-> = {
+export const TEMPER_HAPTICS: Record<Temper, TemperHaptic> = {
   // Slow, deep pulse — sorrow takes its time.
   WO: { pattern: [120], nearMs: 380, farMs: 900 },
   // Rapid double-tap — giddy.
   FC: { pattern: [20, 40, 20], nearMs: 200, farMs: 520 },
-  // Continuous shivering buzz.
-  DR: { pattern: [30, 15, 30], nearMs: 140, farMs: 420 },
+  // Continuous shivering buzz: the pattern repeats to fill its own period,
+  // so dread is felt as an unbroken tremor rather than a slow tick.
+  DR: { pattern: [30, 15, 30], nearMs: 150, farMs: 330, fill: true },
   // One heavy kick.
   MA: { pattern: [220], nearMs: 460, farMs: 1000 },
 };
+
+/** Minimum proximity that registers at all. Deliberately low: the point of
+ *  haptics here is to signal *approach*, not just arrival. */
+const FLOOR = 0.05;
+/** Pattern duration at zero proximity, as a fraction of the full pattern. */
+const MIN_SCALE = 0.45;
+/** Gap inserted between repeats of a filled pattern. */
+const FILL_GAP = 12;
+
+function scalePattern(pattern: number[], scale: number): number[] {
+  return pattern.map((ms) => Math.max(8, Math.round(ms * scale)));
+}
+
+/** Repeat `pattern` (with a gap between copies) until it spans `periodMs`. */
+function repeatToFill(pattern: number[], periodMs: number): number[] {
+  const span = pattern.reduce((a, b) => a + b, 0);
+  if (span <= 0) return pattern;
+  // Round rather than floor: overshooting the period slightly is what makes
+  // the tremor unbroken, since the next vibrate() call replaces whatever is
+  // still running.
+  const copies = Math.max(1, Math.min(8, Math.round(periodMs / (span + FILL_GAP))));
+  if (copies === 1) return pattern;
+  const out: number[] = [...pattern];
+  for (let i = 1; i < copies; i++) out.push(FILL_GAP, ...pattern);
+  return out;
+}
 
 class Haptics {
   private enabled = true;
@@ -71,7 +105,7 @@ class Haptics {
    */
   proximity(temper: Temper | null, intensity: number, nowMs: number): void {
     if (!SUPPORTED || !this.enabled) return;
-    if (!temper || intensity <= 0.12) {
+    if (!temper || intensity <= FLOOR) {
       if (this.lastOwner) {
         this.cancel();
         this.lastOwner = null;
@@ -86,8 +120,16 @@ class Haptics {
     }
     const def = TEMPER_HAPTICS[temper];
     if (nowMs < this.nextAt[temper]) return;
-    this.fire(def.pattern);
+    // Proximity drives both halves of the sensation: the pulses themselves
+    // lengthen toward their signature durations, and the cadence tightens.
+    // At intensity 1 the pattern is exactly the one on the spec sheet.
     const period = def.farMs + (def.nearMs - def.farMs) * intensity;
+    let pattern = scalePattern(
+      def.pattern,
+      MIN_SCALE + (1 - MIN_SCALE) * intensity,
+    );
+    if (def.fill) pattern = repeatToFill(pattern, period);
+    this.fire(pattern);
     this.nextAt[temper] = nowMs + period;
   }
 

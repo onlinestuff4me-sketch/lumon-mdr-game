@@ -87,6 +87,24 @@ Three decisions carry most of the performance:
 player sees and the drop targets the engine hit-tests come from the same
 function, so they cannot drift apart.
 
+## Two deliberate departures from the brief
+
+Both were found by playing the thing, and both are documented here rather
+than quietly applied.
+
+- **A positively identified cluster latches.** Agitation is proportional to
+  reticle distance, except that once a cluster has been probed to near-full
+  strength it keeps moving at 55% after the finger lifts, until you refine
+  it or identify another one. Without this you cannot switch to SELECT and
+  draw a box before the cluster goes still — the three-phase loop simply
+  does not close. Audio and haptics still answer to live proximity only, so
+  the latch is a visual affordance and never a sound that follows you.
+- **The reticle offset tapers over the control deck.** The 40px lift holds
+  across the whole matrix, then decays to zero before the bins. At a
+  constant 40px the bottom row of bins would require a touch below the last
+  pixel of the screen — unreachable — and the top row would only respond to
+  a press that looks plainly wrong.
+
 ## Notes on the browser
 
 - `touch-action: none` across the input surface, with pointer capture, so a

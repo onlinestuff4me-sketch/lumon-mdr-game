@@ -144,6 +144,9 @@ export function renderOverlay(
 ): void {
   const { w, h } = e.layout;
   ctx.clearRect(0, 0, w, h);
+
+  if (e.absorb) drawAbsorb(ctx, e);
+
   const packet = e.packet;
   if (!packet) return;
 
@@ -211,6 +214,61 @@ export function renderOverlay(
   ctx.fillText(label, 0, boxH / 2 - 9);
   ctx.restore();
   ctx.globalAlpha = 1;
+}
+
+/**
+ * A correctly binned packet does not simply vanish: it draws in toward the
+ * bin, shrinking and dimming, and leaves a phosphor ring behind on arrival.
+ */
+function drawAbsorb(ctx: CanvasRenderingContext2D, e: GameEngine): void {
+  const a = e.absorb;
+  if (!a) return;
+  const def = TEMPER_DEFS[a.temper];
+  const t = Math.min(1, Math.max(0, a.t));
+  const ease = t * t * (3 - 2 * t);
+  const x = a.x + (a.tx - a.x) * ease;
+  const y = a.y + (a.ty - a.y) * ease;
+  const scale = 1 - 0.78 * ease;
+  const cell = Math.max(14, e.layout.fontPx * 1.25);
+  const cols = Math.ceil(Math.sqrt(a.digits.length));
+  const rows = Math.ceil(a.digits.length / cols);
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+  ctx.globalAlpha = 1 - ease;
+  ctx.fillStyle = def.css;
+  ctx.font = `700 ${Math.round(cell * 0.72)}px "Courier New", Courier, monospace`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.shadowColor = def.css;
+  ctx.shadowBlur = 14;
+  for (let i = 0; i < a.digits.length; i++) {
+    const col = i % cols;
+    const row = (i / cols) | 0;
+    ctx.fillText(
+      String(a.digits[i]),
+      -((cols - 1) * cell) / 2 + col * cell,
+      -((rows - 1) * cell) / 2 + row * cell,
+    );
+  }
+  ctx.restore();
+
+  // Arrival ring at the bin.
+  if (ease > 0.45) {
+    const k = (ease - 0.45) / 0.55;
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = (1 - k) * 0.55;
+    ctx.strokeStyle = def.css;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(a.tx, a.ty, 6 + k * 46, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
 }
 
 function roundRect(

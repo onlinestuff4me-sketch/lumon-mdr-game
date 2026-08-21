@@ -232,8 +232,9 @@ export class AudioEngine {
     a.frequency.value = 150;
     const b = ctx.createOscillator();
     b.type = "sawtooth";
+    // Exactly 212 Hz against 150 Hz — a tritone, near enough to 1.414 that
+    // it beats against itself without any help from detune.
     b.frequency.value = 212;
-    b.detune.value = 7;
 
     const mix = ctx.createGain();
     mix.gain.value = 0.22;

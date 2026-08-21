@@ -1,6 +1,7 @@
 import { getAudio } from "../audio/AudioEngine";
 import { haptics } from "../audio/haptics";
 import {
+  COLS,
   DOUBLE_TAP_MS,
   LEVELS,
   MIN_CAPTURE,
@@ -70,6 +71,8 @@ interface Gesture {
 
 const RISE = 11;
 const FALL = 4.2;
+/** Seconds a refined packet takes to dissolve into its bin. */
+const ABSORB_SECONDS = 0.45;
 /** Proximity at which a cluster counts as positively identified. */
 const LATCH_ENTER = 0.9;
 /** Residual agitation a latched cluster keeps once the finger lifts. */
@@ -90,6 +93,17 @@ export class GameEngine {
 
   bins: Record<Temper, BinState>;
   packet: Packet | null = null;
+  /** A packet mid-dissolve into its bin. Purely cosmetic; the score is
+   *  already banked by the time this exists. */
+  absorb: {
+    temper: Temper;
+    digits: number[];
+    x: number;
+    y: number;
+    tx: number;
+    ty: number;
+    t: number;
+  } | null = null;
 
   reticle = { x: 0, y: 0, active: false };
   marquee = { active: false, x0: 0, y0: 0, x1: 0, y1: 0 };
@@ -279,6 +293,7 @@ export class GameEngine {
 
     this.bins = this.freshBins();
     this.packet = null;
+    this.absorb = null;
     this.marquee.active = false;
     this.hoverBin = null;
     this.mode = "probe";
@@ -375,7 +390,7 @@ export class GameEngine {
     const padX = Math.max(6, g.w * 0.035);
     const padY = Math.max(6, g.h * 0.022);
     const { cellH } = layoutBoard(this.board, g, padX, padY);
-    this.layout.fontPx = Math.max(9, Math.min(cellH * 0.82, g.w / 16 * 0.9));
+    this.layout.fontPx = Math.max(9, Math.min(cellH * 0.82, (g.w / COLS) * 0.9));
     this.atlas.build(Math.round(this.layout.fontPx), this.dpr);
   }
 
@@ -664,6 +679,16 @@ export class GameEngine {
         n.retired = true;
         n.lifted = false;
       }
+      const rect = this.layout.binRects[target];
+      this.absorb = {
+        temper: target,
+        digits: packet.digits,
+        x: packet.x,
+        y: packet.y,
+        tx: rect.x + rect.w / 2,
+        ty: rect.y + rect.h / 2,
+        t: 0,
+      };
       getAudio().chime();
       haptics.success();
       this.say(PRAISE[(this.elapsed | 0) % PRAISE.length], "praise", 1.9);
@@ -757,6 +782,10 @@ export class GameEngine {
     this.updateNodes(dt);
 
     if (this.packet) this.packet.birth = Math.min(1, this.packet.birth + dt * 4);
+    if (this.absorb) {
+      this.absorb.t += dt / ABSORB_SECONDS;
+      if (this.absorb.t >= 1) this.absorb = null;
+    }
 
     getAudio().tick();
   }

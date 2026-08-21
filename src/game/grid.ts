@@ -169,6 +169,37 @@ export function createBoard(seed: number, perTemper: number): Board {
   return { nodes, clusters, ownerOf: owner };
 }
 
+/**
+ * Barrel (pincushion-inverse) distortion strength. The matrix is laid out
+ * on a flat lattice and then pushed outward as a function of radius, so the
+ * rows visibly bow the way they do on a curved tube.
+ *
+ * This warps the *home positions themselves* rather than being a render
+ * pass, which matters: proximity tests, marquee AABB hits and the drawn
+ * glyphs all read the same coordinates, so what the refiner boxes is
+ * exactly what the engine selects. A post-hoc shader could not promise
+ * that without warping the input too.
+ */
+const BARREL_K = 0.062;
+
+/** Map a point on the flat lattice onto the curved face of the tube. */
+function barrel(
+  x: number,
+  y: number,
+  cx: number,
+  cy: number,
+  halfW: number,
+  halfH: number,
+): { x: number; y: number } {
+  const nx = (x - cx) / halfW;
+  const ny = (y - cy) / halfH;
+  const r2 = nx * nx + ny * ny;
+  // Normalised so the corners land exactly back on the region edge: the
+  // curvature redistributes the rows without growing the grid's footprint.
+  const f = (1 + BARREL_K * r2) / (1 + BARREL_K * 2);
+  return { x: cx + nx * f * halfW, y: cy + ny * f * halfH };
+}
+
 /** Recompute home positions + cluster centroids for a new canvas size. */
 export function layoutBoard(
   board: Board,
@@ -180,9 +211,17 @@ export function layoutBoard(
   const cellW = (width - padX * 2) / COLS;
   const cellH = (height - padY * 2) / ROWS;
 
+  const cx = offX + width / 2;
+  const cy = offY + height / 2;
+  const halfW = Math.max(1, width / 2 - padX);
+  const halfH = Math.max(1, height / 2 - padY);
+
   for (const node of board.nodes) {
-    node.hx = offX + padX + cellW * (node.col + 0.5);
-    node.hy = offY + padY + cellH * (node.row + 0.5);
+    const flatX = offX + padX + cellW * (node.col + 0.5);
+    const flatY = offY + padY + cellH * (node.row + 0.5);
+    const warped = barrel(flatX, flatY, cx, cy, halfW, halfH);
+    node.hx = warped.x;
+    node.hy = warped.y;
   }
 
   for (const cluster of board.clusters) {

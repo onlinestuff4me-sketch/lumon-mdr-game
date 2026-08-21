@@ -53,12 +53,14 @@ export function applyTemperMotion(
     }
 
     // ── DREAD ── a 30 Hz horizontal shiver. Small, fast, wrong.
+    // Purely on X: the whole point is that dread does not move the digit,
+    // it only makes it tremble in place.
     case "DR": {
       const OMEGA = 2 * Math.PI * 30;
       for (const i of cluster.members) {
         const n = nodes[i];
         n.dx = amp * 2.6 * Math.sin(OMEGA * t + n.seed * 11);
-        n.dy = amp * 0.7 * Math.sin(OMEGA * 0.5 * t + n.seed * 7);
+        n.dy = 0;
         n.rot = 0;
         n.scale = 1 + amp * 0.02;
         n.flash = 0;
@@ -70,7 +72,9 @@ export function applyTemperMotion(
     // ── MALICE ── radial outward pulses with phosphor flash bursts.
     case "MA": {
       const pulse = Math.max(0, Math.sin(t * 4.8));
-      const burst = Math.pow(pulse, 7);
+      // Sharp but not vanishing: pow(_, 7) put the flash inside a couple of
+      // frames and it read as nothing at all.
+      const burst = Math.pow(pulse, 4);
       for (const i of cluster.members) {
         const n = nodes[i];
         let ux = n.hx - cluster.cx;
@@ -83,7 +87,7 @@ export function applyTemperMotion(
         n.dy = uy * amp * 10 * p;
         n.rot = amp * 0.09 * Math.sin(t * 9 + n.seed);
         n.scale = 1 + amp * 0.16 * p;
-        n.flash = amp * burst;
+        n.flash = Math.min(1, amp * burst * 1.35);
         n.agitation = a;
       }
       break;
