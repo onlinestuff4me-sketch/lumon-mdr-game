@@ -29,12 +29,14 @@ export function GameStage() {
     setHandbook(true);
   }, [engine]);
 
+  // Closing is the mirror of opening: unpausing here would drain a frame of
+  // clock under a drawer that is still on screen, so the resume is left to
+  // the effect below, which runs after the drawer has actually gone.
   const closeHandbook = useCallback(() => {
-    engine.setPaused(false);
     setHandbook(false);
-  }, [engine]);
+  }, []);
 
-  // Backstop, in case the drawer is closed by any other route.
+  // Reconciles both directions, and is the sole resume path.
   useEffect(() => {
     engine.setPaused(handbook);
   }, [engine, handbook]);

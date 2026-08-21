@@ -182,7 +182,7 @@ export function createBoard(seed: number, perTemper: number): Board {
  * exactly what the engine selects. A post-hoc shader could not promise
  * that without warping the input too.
  */
-const BARREL_K = 0.062;
+const BARREL_K = 0.05;
 
 /**
  * Displacement factor for a point on the flat lattice, mapping it onto the
@@ -191,11 +191,24 @@ const BARREL_K = 0.062;
  * The factor *falls* with radius, which is what makes this a barrel and not
  * a pincushion: the middle of each row reaches furthest from the centre and
  * the corners draw in, so rows bow outward the way they do on real glass.
- * Scaling by r² the other way looks superficially similar and is the
- * inverse curve — it sags the rows inward and, worse, compresses the pitch
- * hardest at the centre of the grid where the glyph cells have no slack.
+ * Scaling by r² the other way is the inverse curve and sags the rows
+ * inward, which is what this looked like before.
  *
- * f is at most 1, so no glyph can leave the grid region.
+ * Containment is not "f <= 1" — f peaks at 1 + K at the centre. It holds
+ * because the product is bounded: nx * f(nx, 0) has derivative
+ * (1 + 2K - 3K*nx^2)/(1 + K), positive for every |nx| <= 1, so it rises
+ * monotonically to exactly 1 at the mid-edge and f falls as |ny| grows.
+ * Any lattice with |nx|, |ny| <= 1 stays inside the region, whatever COLS
+ * and ROWS are — and the half-cell inset means the lattice never reaches
+ * 1 anyway.
+ *
+ * K trades bow against pitch: the warp necessarily crowds the glyphs
+ * somewhere, and this curve puts that crowding at the edges and corners
+ * rather than at the centre. It is tuned against glyph *ink*, not against
+ * the atlas cell — the cell is 1.8x the font size because it carries the
+ * baked phosphor halo, and halos overlapping is the effect, not a defect.
+ * At K = 0.05 the worst row pitch still clears the ink by 2.3px on a 320px
+ * stage and 3.8px on a 390px one, with the row bow at 7-9px.
  */
 const BARREL_MAX = 1 + BARREL_K * 2;
 /** Factor at the middle of an edge — the furthest the warp reaches. */

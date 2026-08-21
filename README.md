@@ -141,20 +141,29 @@ On a scripted iPhone-13 viewport in headless Chromium:
 
 Twenty correct assignments against a 90-120 second clock is the brief's
 arithmetic, and it deserved more than an assertion. So there is a bot that
-plays like a thumb: it sweeps the grid serpentine at a set speed, and only
-"sees" a cluster when the game agitates one under it — then it stops to
-read the temper for a set time, boxes it, and bins it. Two player models,
+plays like a thumb. It sweeps the grid serpentine at a set speed and only
+"sees" a cluster when the game agitates one under it — no teleporting to
+known centroids. It then stops to read the temper for a set time, and walks
+every marquee and carry drag along its real path at 700px/s with a settle
+at each end, so a gesture costs what a gesture costs. Two player models,
 against the real clock:
 
 | | Tumwater (120s) | Cold Harbor (90s) |
 |---|---|---|
-| competent — 420px/s sweep, 900ms read, reads the temper right | **won, 80s left** | **won, 42s left** |
-| hesitant — 280px/s sweep, 1600ms read, misjudges 1 temper in 5 | **won, 43s left** | **lost at 90%** |
+| competent — 420px/s sweep, 900ms read, judges the temper right | **won, 56s left** | **won, 15s left** |
+| hesitant — 280px/s sweep, 1600ms read, misjudges 1 temper in 5 | **won, 16s left** | **lost at 80%** |
 
-Which is the shape a difficulty curve should have: the first file teaches
-you and forgives you, the last one asks you to be good at it. The ~0.6s per
-refinement a scripted harness achieves is engine-side cost, not player
-time, and is not the number to quote.
+Which is the shape a difficulty curve should have: the first file forgives
+you, the last one asks you to be good at it. Two caveats on reading these
+numbers. The competent row judges every temper correctly, so it measures
+whether the *mechanics* fit in the clock, not whether the puzzle is easy —
+the hesitant row is the one that models the actual skill. And the bot boxes
+using live node positions, so it never draws a selection that misses; a
+human sometimes does, and recovers in a couple of seconds.
+
+The ~0.6s per refinement a scripted harness achieves by calling engine
+methods directly is engine-side cost, not player time, and is not the
+number to quote.
 
 ## Notes on the browser
 

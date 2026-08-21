@@ -195,6 +195,7 @@ export class GameEngine {
    *  stop, and input is ignored — reading the handbook must not cost you
    *  the file. */
   paused = false;
+  private pausedSilenced = false;
   muted = false;
   hapticsOn = true;
   /** Accessibility aid: paint agitated clusters in their temper colour. */
@@ -353,17 +354,21 @@ export class GameEngine {
     // quota to what actually exists so a file is always completable.
     const counts: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
     for (const c of this.board.clusters) counts[c.temper]++;
-    const scarcest = Math.min(...TEMPERS.map((t) => counts[t]));
-    // Flooring at 1 would happily ship a file with a temper that has no
-    // clusters at all, i.e. a bin that can never fill. Re-seed instead.
-    if (scarcest <= 0) {
-      this.board = createBoard(level.seed ^ 0x9e37, level.quota + level.spare);
-      const retry: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
-      for (const c of this.board.clusters) retry[c.temper]++;
-      this.quota = Math.max(1, Math.min(level.quota, ...TEMPERS.map((t) => retry[t])));
-    } else {
-      this.quota = Math.min(level.quota, scarcest);
+    // A temper with no clusters means a bin that can never fill, so a
+    // saturated board is re-seeded rather than clamped. Flooring the quota
+    // at 1 would ship exactly the uncompletable file this guard exists to
+    // prevent, so the loop keeps trying fresh seeds instead.
+    let scarcest = Math.min(...TEMPERS.map((t) => counts[t]));
+    for (let attempt = 1; scarcest <= 0 && attempt <= 8; attempt++) {
+      this.board = createBoard(
+        (level.seed + attempt * 0x9e37) >>> 0,
+        level.quota + level.spare,
+      );
+      for (const t of TEMPERS) counts[t] = 0;
+      for (const c of this.board.clusters) counts[c.temper]++;
+      scarcest = Math.min(...TEMPERS.map((t) => counts[t]));
     }
+    this.quota = Math.max(1, Math.min(level.quota, scarcest));
     // Every temper must be able to reach 100%: if the board saturated
     // badly enough that some temper has fewer clusters than the quota, the
     // quota drops for all four rather than leaving one bin unfillable.
@@ -374,6 +379,8 @@ export class GameEngine {
     this.marquee.active = false;
     this.hoverBin = null;
     this.mode = "probe";
+    this.paused = false;
+    this.pausedSilenced = false;
     this.totalTime = level.seconds;
     this.timeLeft = level.seconds;
     this.elapsed = 0;
@@ -410,6 +417,10 @@ export class GameEngine {
     // release — a selection the player could not see.
     this.releaseGesture();
     getAudio().click();
+    // Release first: a second finger tapping the deck mid-probe otherwise
+    // leaves an ambient owner set, and the next frame's cancel() kills this
+    // click's haptic.
+    haptics.releaseProximity();
     haptics.tap();
     this.snapshotDirty = true;
     this.emit(true);
@@ -466,7 +477,15 @@ export class GameEngine {
 
   resize(w: number, h: number, dpr: number): void {
     if (w <= 0 || h <= 0) return;
-    this.dpr = Math.min(dpr || 1, 2.5);
+    const nextDpr = Math.min(dpr || 1, 2.5);
+    // iOS fires visualViewport scroll whenever the URL bar settles, which
+    // is routinely just after a touch. Without this guard every such event
+    // ran a full relayout and cancelled any dissolve or scatter in flight,
+    // for a viewport change that never happened.
+    if (w === this.layout.w && h === this.layout.h && nextDpr === this.dpr) {
+      return;
+    }
+    this.dpr = nextDpr;
     this.layout = computeLayout(w, h);
     this.relayout();
 
@@ -924,6 +943,18 @@ export class GameEngine {
   };
 
   private update(dt: number, wall: number): void {
+    if (this.paused) {
+      // Before the clock, before message expiry, before the glitch and
+      // bin-flash windows: all of those are measured against `elapsed`, so
+      // advancing it would expire behind the drawer the very feedback the
+      // player opened the handbook to go and look up.
+      if (!this.pausedSilenced) {
+        getAudio().silenceAll();
+        this.pausedSilenced = true;
+      }
+      return;
+    }
+    this.pausedSilenced = false;
     this.elapsed += dt;
     const live = this.isLive();
 
@@ -955,13 +986,6 @@ export class GameEngine {
     if (this.message && this.elapsed > this.messageUntil) {
       this.message = null;
       this.snapshotDirty = true;
-    }
-
-    if (this.paused) {
-      // A paused terminal is a stopped terminal: no drift, no drone, no
-      // ticker timing out behind the drawer.
-      getAudio().silenceAll();
-      return;
     }
 
     this.updateAgitation(dt, live);
@@ -1097,8 +1121,15 @@ export class GameEngine {
       }
       if (owner && owner.agitation > 0) {
         // Motion already written by applyTemperMotion. Re-probing a cluster
-        // you just mis-binned must show its temper, not the tumble.
-        n.scatter = 0;
+        // you just mis-binned must show its temper, not the tumble — but
+        // blended out of the tumble rather than snapped, since the scatter
+        // offset can be tens of pixels.
+        if (n.scatter > 0) {
+          n.scatter = Math.max(0, n.scatter - dt * 4);
+          const e = n.scatter * n.scatter;
+          n.dx += (n.sx - n.hx - n.dx) * e;
+          n.dy += (n.sy - n.hy - n.dy) * e;
+        }
         continue;
       }
       settleNode(n, t, dt);
