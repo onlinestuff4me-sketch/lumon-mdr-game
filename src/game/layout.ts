@@ -24,7 +24,9 @@ export interface StageLayout {
 /** Chrome heights as a fraction of stage height — the single source of
  *  truth shared by the DOM chrome and the canvas hit-testing. */
 export const HUD_FRAC = 0.078;
-export const DECK_FRAC = 0.064;
+/** Sized so the mode switches clear 44pt after padding and borders — iOS
+ *  HIG's minimum, and Material's 48dp is within a hair of it. */
+export const DECK_FRAC = 0.086;
 export const BINS_FRAC = 0.175;
 
 const BIN_GAP_FRAC = 0.022;

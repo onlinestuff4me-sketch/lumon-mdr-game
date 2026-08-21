@@ -1,7 +1,12 @@
 import { TEMPER_DEFS } from "./constants";
 import type { GameEngine } from "./engine";
 import type { PaletteKey } from "./glyphAtlas";
-import type { Temper } from "./types";
+import type { GridNode, Temper } from "./types";
+
+/** Scratch list of flashing nodes, reused so the render pass allocates
+ *  nothing. Malice flashes a whole cluster at once, and toggling
+ *  globalCompositeOperation per glyph can force a layer flush each time. */
+const flashing: GridNode[] = [];
 
 /** Board layer: the matrix, the reticle, the marquee. */
 export function renderGrid(ctx: CanvasRenderingContext2D, e: GameEngine): void {
@@ -38,16 +43,33 @@ export function renderGrid(ctx: CanvasRenderingContext2D, e: GameEngine): void {
     atlas.draw(ctx, "idle", n.digit, x, y, 0.82 * (1 - a), n.rot, n.scale);
     atlas.draw(ctx, key, n.digit, x, y, Math.min(1, a * 1.15), n.rot, n.scale);
 
-    if (n.flash > 0.02) {
-      ctx.globalCompositeOperation = "lighter";
-      atlas.draw(ctx, "hot", n.digit, x, y, n.flash * 0.9, n.rot, n.scale * 1.1);
-      ctx.globalCompositeOperation = "source-over";
+    if (n.flash > 0.02) flashing.push(n);
+  }
+
+  // One composite-mode switch for every flash on the board.
+  if (flashing.length > 0) {
+    ctx.globalCompositeOperation = "lighter";
+    for (const n of flashing) {
+      atlas.draw(
+        ctx,
+        "hot",
+        n.digit,
+        n.hx + n.dx,
+        n.hy + n.dy,
+        n.flash * 0.9,
+        n.rot,
+        n.scale * 1.1,
+      );
     }
+    ctx.globalCompositeOperation = "source-over";
+    flashing.length = 0;
   }
   ctx.globalAlpha = 1;
 
   if (e.marquee.active) drawMarquee(ctx, e);
-  if (e.reticle.active && !e.packet) drawReticle(ctx, e);
+  // The marquee's own corner ticks mark the drag point; a probe ring on top
+  // of them is just clutter.
+  if (e.reticle.active && !e.packet && !e.marquee.active) drawReticle(ctx, e);
 }
 
 function drawReticle(ctx: CanvasRenderingContext2D, e: GameEngine): void {
@@ -66,14 +88,21 @@ function drawReticle(ctx: CanvasRenderingContext2D, e: GameEngine): void {
 
   ctx.save();
   ctx.strokeStyle = color;
-  ctx.shadowColor = color;
-  ctx.shadowBlur = 10;
 
-  // Outer probe ring, breathing with proximity.
+  // Outer probe ring, breathing with proximity. The halo is a second wide,
+  // faint stroke rather than a shadowBlur: canvas shadows are a software
+  // blur on mobile Safari, and this one would run every frame the finger
+  // is down — which is the whole of the primary interaction.
+  const ring = 26 + hotValue * 6 + Math.sin(t * 3) * 1.5;
+  ctx.globalAlpha = (0.35 + 0.5 * hotValue) * 0.3;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.arc(x, y, ring, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.globalAlpha = 0.35 + 0.5 * hotValue;
   ctx.lineWidth = 1.4;
   ctx.beginPath();
-  ctx.arc(x, y, 26 + hotValue * 6 + Math.sin(t * 3) * 1.5, 0, Math.PI * 2);
+  ctx.arc(x, y, ring, 0, Math.PI * 2);
   ctx.stroke();
 
   // Signal-strength arc.
@@ -108,11 +137,13 @@ function drawMarquee(ctx: CanvasRenderingContext2D, e: GameEngine): void {
   ctx.fillStyle = "rgba(47,214,138,0.09)";
   ctx.fillRect(r.x, r.y, r.w, r.h);
   ctx.strokeStyle = "#2fd68a";
-  ctx.shadowColor = "#2fd68a";
-  ctx.shadowBlur = 8;
-  ctx.lineWidth = 1.5;
   ctx.setLineDash([6, 5]);
   ctx.lineDashOffset = -(e.elapsed * 22) % 11;
+  ctx.globalAlpha = 0.28;
+  ctx.lineWidth = 4.5;
+  ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w, r.h);
+  ctx.globalAlpha = 1;
+  ctx.lineWidth = 1.5;
   ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w, r.h);
   ctx.setLineDash([]);
 
@@ -188,13 +219,14 @@ export function renderOverlay(
   ctx.globalAlpha = 0.9;
   ctx.fillStyle = "rgba(1,6,4,0.88)";
   ctx.strokeStyle = ink;
-  ctx.shadowColor = ink;
-  ctx.shadowBlur = 16;
-  ctx.lineWidth = 1.5;
   roundRect(ctx, -boxW / 2, -boxH / 2, boxW, boxH, 5);
   ctx.fill();
+  ctx.globalAlpha = 0.3;
+  ctx.lineWidth = 6;
   ctx.stroke();
-  ctx.shadowBlur = 0;
+  ctx.globalAlpha = 0.95;
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
 
   ctx.globalAlpha = 1;
   ctx.fillStyle = ink;
@@ -241,8 +273,6 @@ function drawAbsorb(ctx: CanvasRenderingContext2D, e: GameEngine): void {
   ctx.font = `700 ${Math.round(cell * 0.72)}px "Courier New", Courier, monospace`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  ctx.shadowColor = def.css;
-  ctx.shadowBlur = 14;
   for (let i = 0; i < a.digits.length; i++) {
     const col = i % cols;
     const row = (i / cols) | 0;

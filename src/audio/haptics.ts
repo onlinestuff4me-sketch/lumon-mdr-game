@@ -9,7 +9,7 @@ import type { Temper } from "../game/types";
  * with the cycle length scaled by proximity.
  */
 
-const SUPPORTED =
+let SUPPORTED =
   typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
 
 export type HapticPattern = number | number[];
@@ -91,9 +91,12 @@ class Haptics {
   private fire(pattern: HapticPattern): void {
     if (!SUPPORTED || !this.enabled || !this.activated || document.hidden) return;
     try {
-      navigator.vibrate(pattern);
+      // vibrate() returns false when the platform silently refuses (system
+      // vibration switched off, insufficient engagement). Claiming haptics
+      // are on while nothing ever fires is worse than admitting they're not.
+      if (navigator.vibrate(pattern) === false) SUPPORTED = false;
     } catch {
-      /* Some browsers throw when the document is not user-activated. */
+      SUPPORTED = false;
     }
   }
 
@@ -131,6 +134,17 @@ class Haptics {
     if (def.fill) pattern = repeatToFill(pattern, period);
     this.fire(pattern);
     this.nextAt[temper] = nowMs + period;
+  }
+
+  /**
+   * Forget which temper owned the ambient cadence, without stopping the
+   * vibrator. `cancel()` would call vibrate(0), which replaces — and so
+   * kills — a discrete pattern fired microseconds earlier in the same
+   * pointerup (the lift confirmation, the rejection buzz, the mode click).
+   */
+  releaseProximity(): void {
+    this.lastOwner = null;
+    this.nextAt = { WO: 0, FC: 0, DR: 0, MA: 0 };
   }
 
   /** Discrete event taps. */

@@ -75,12 +75,15 @@
     text-rendering: optimizeSpeed;
   }
 
-  /* The whole app is a direct-manipulation surface: never let the
-     browser hijack a gesture for scroll / pinch / double-tap zoom. */
+  /* The app is a direct-manipulation surface, but `touch-action` is
+     intersected down the whole ancestor chain: setting `none` here would
+     make the handbook's own scroll panel unpannable by finger, with no
+     symptom on desktop because the wheel path still works. The lock lives
+     on the input surface itself instead. */
   #root {
-    touch-action: none;
     -webkit-user-select: none;
     user-select: none;
+    -webkit-touch-callout: none;
   }
 }
 

@@ -55,11 +55,23 @@ export function applyTemperMotion(
     // ── DREAD ── a 30 Hz horizontal shiver. Small, fast, wrong.
     // Purely on X: the whole point is that dread does not move the digit,
     // it only makes it tremble in place.
+    //
+    // The specified 30 Hz sits exactly at Nyquist for a 60 fps display, and
+    // at 30 fps (low-power mode, thermal throttling, a mid-range phone) it
+    // advances a whole period per frame and the cluster freezes solid —
+    // dread would become invisible on precisely the devices most likely to
+    // run it. A second, much slower component at an incommensurable ratio
+    // guarantees a visible tremor at any frame rate while leaving 30 Hz the
+    // dominant term where the display can actually show it.
     case "DR": {
       const OMEGA = 2 * Math.PI * 30;
+      const OMEGA_SUB = 2 * Math.PI * 11.3;
       for (const i of cluster.members) {
         const n = nodes[i];
-        n.dx = amp * 2.6 * Math.sin(OMEGA * t + n.seed * 11);
+        n.dx =
+          amp *
+          (2.6 * Math.sin(OMEGA * t + n.seed * 11) +
+            1.15 * Math.sin(OMEGA_SUB * t + n.seed * 5));
         n.dy = 0;
         n.rot = 0;
         n.scale = 1 + amp * 0.02;
@@ -106,8 +118,14 @@ export function settleNode(n: GridNode, t: number, dt: number): void {
   const driftY = Math.cos(t * 0.43 + n.seed * 1.3) * 0.95;
   n.dx += (driftX - n.dx) * k;
   n.dy += (driftY - n.dy) * k;
-  n.rot += (0 - n.rot) * k;
-  n.scale += (1 - n.scale) * k;
-  n.flash *= Math.max(0, 1 - dt * 5);
+  // Snap to exactly 0 and 1 rather than decaying asymptotically toward
+  // them: the renderer's transform-free fast path requires rot === 0 and
+  // scale === 1, and a geometric decay from 0.1 takes some seven thousand
+  // frames to reach exact zero. Every glyph ever touched would otherwise
+  // pay a save/translate/rotate/restore for the rest of the file.
+  n.rot = Math.abs(n.rot) < 1e-3 ? 0 : n.rot + (0 - n.rot) * k;
+  n.scale =
+    Math.abs(n.scale - 1) < 1e-3 ? 1 : n.scale + (1 - n.scale) * k;
+  n.flash = n.flash < 1e-3 ? 0 : n.flash * Math.max(0, 1 - dt * 5);
   n.agitation = 0;
 }

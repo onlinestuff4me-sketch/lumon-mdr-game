@@ -94,6 +94,9 @@ export interface LevelDef {
   readonly seed: number;
   /** Packets required per bin to reach 100%. */
   readonly quota: number;
+  /** Clusters seeded per temper. Kept above the quota so one cluster that
+   *  is lost, misread or unreachable cannot make a file uncompletable. */
+  readonly spare: number;
   /** Multiplier on cluster motion amplitude — later files are subtler. */
   readonly subtlety: number;
 }

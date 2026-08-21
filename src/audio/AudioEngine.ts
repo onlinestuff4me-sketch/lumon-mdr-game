@@ -40,14 +40,16 @@ function makeDistortionCurve(amount: number): Float32Array<ArrayBuffer> {
 export class AudioEngine {
   private ctx: AudioContext | null = null;
   private bus: GainNode | null = null;
-  private limiter: DynamicsCompressorNode | null = null;
   private voices = new Map<Temper, VoiceParam>();
   private intensities: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
   private muted = false;
   private arpStep = 0;
   private nextArpAt = 0;
   private nextKickAt = 0;
-  private visibilityBound = false;
+  /** One second of white noise, generated once and replayed with different
+   *  filters. Synthesising 16k samples inside a pointerup handler was a
+   *  guaranteed frame hitch at the exact moment of negative feedback. */
+  private noiseBuffer: AudioBuffer | null = null;
 
   get isReady(): boolean {
     return this.ctx !== null && this.ctx.state === "running";
@@ -75,7 +77,6 @@ export class AudioEngine {
         return;
       }
       this.buildGraph();
-      this.bindVisibility();
     }
     if (this.ctx.state !== "running") {
       try {
@@ -103,7 +104,12 @@ export class AudioEngine {
     bus.connect(limiter);
     limiter.connect(ctx.destination);
     this.bus = bus;
-    this.limiter = limiter;
+
+    const frames = Math.floor(ctx.sampleRate);
+    const buf = ctx.createBuffer(1, frames, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < frames; i++) data[i] = Math.random() * 2 - 1;
+    this.noiseBuffer = buf;
 
     this.voices.set("WO", this.buildWoe(ctx, bus));
     this.voices.set("FC", this.buildFrolic(ctx, bus));
@@ -394,13 +400,11 @@ export class AudioEngine {
   private noise(dur: number, gain: number, cutoff: number): void {
     const ctx = this.ctx;
     if (!ctx || ctx.state !== "running" || this.muted || !this.bus) return;
+    if (!this.noiseBuffer) return;
     const t = ctx.currentTime;
-    const frames = Math.floor(ctx.sampleRate * dur);
-    const buf = ctx.createBuffer(1, frames, ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < frames; i++) data[i] = Math.random() * 2 - 1;
     const src = ctx.createBufferSource();
-    src.buffer = buf;
+    src.buffer = this.noiseBuffer;
+    src.loop = true;
     const filter = ctx.createBiquadFilter();
     filter.type = "bandpass";
     filter.frequency.value = cutoff;
@@ -409,7 +413,7 @@ export class AudioEngine {
     g.gain.setValueAtTime(gain, t);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
     src.connect(filter).connect(g).connect(this.bus);
-    src.start(t);
+    src.start(t, Math.random() * 0.5, dur);
     src.onended = () => {
       src.disconnect();
       filter.disconnect();
@@ -482,49 +486,22 @@ export class AudioEngine {
     }
   }
 
-  private onVisibility = (): void => {
+  /**
+   * Bring every voice to silence immediately. This is the host's tool for
+   * hiding the tab or tearing down: the graph is deliberately *not*
+   * suspended, because iOS will not resume a context outside a user gesture
+   * and a silently un-resumed context reads to the player as broken audio.
+   */
+  hardStop(): void {
     const ctx = this.ctx;
     if (!ctx) return;
-    if (document.hidden) {
-      this.silenceAll();
-      void ctx.suspend().catch(() => {});
-    } else if (!this.muted) {
-      void ctx.resume().catch(() => {});
-    }
-  };
-
-  private bindVisibility(): void {
-    if (this.visibilityBound) return;
-    document.addEventListener("visibilitychange", this.onVisibility);
-    this.visibilityBound = true;
-  }
-
-  /** Tear the whole graph down. Called on unmount / hot reload. */
-  dispose(): void {
-    if (this.visibilityBound) {
-      document.removeEventListener("visibilitychange", this.onVisibility);
-      this.visibilityBound = false;
-    }
     for (const voice of this.voices.values()) {
-      for (const osc of voice.oscillators) {
-        try {
-          osc.stop();
-        } catch {
-          /* already stopped */
-        }
-        osc.disconnect();
-      }
-      voice.amp.disconnect();
-      voice.filter.disconnect();
+      voice.amp.gain.cancelScheduledValues(ctx.currentTime);
+      voice.amp.gain.setValueAtTime(0, ctx.currentTime);
     }
-    this.voices.clear();
-    this.bus?.disconnect();
-    this.limiter?.disconnect();
-    this.bus = null;
-    this.limiter = null;
-    const ctx = this.ctx;
-    this.ctx = null;
-    if (ctx && ctx.state !== "closed") void ctx.close().catch(() => {});
+    for (const t of Object.keys(this.intensities) as Temper[]) {
+      this.intensities[t] = 0;
+    }
   }
 }
 
@@ -535,7 +512,3 @@ export function getAudio(): AudioEngine {
   return singleton;
 }
 
-export function disposeAudio(): void {
-  singleton?.dispose();
-  singleton = null;
-}

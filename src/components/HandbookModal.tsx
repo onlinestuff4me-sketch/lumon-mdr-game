@@ -78,7 +78,10 @@ export function HandbookModal({
         if (ev.target === ev.currentTarget) onClose();
       }}
     >
-      <div className="max-h-[82%] overflow-y-auto rounded-t-[6px] border-t-2 border-phos-500 bg-phos-950/97 px-4 pb-5 pt-3 shadow-[0_-8px_40px_rgba(23,168,102,0.25)]">
+      <div
+        style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
+        className="max-h-[82%] overflow-y-auto rounded-t-[6px] border-t-2 border-phos-500 bg-phos-950/97 px-4 pb-5 pt-3 shadow-[0_-8px_40px_rgba(23,168,102,0.25)]"
+      >
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <h2 className="crt-text-glow text-[13px] font-bold tracking-[0.2em] text-phos-200">

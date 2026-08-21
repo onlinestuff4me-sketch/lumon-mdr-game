@@ -37,6 +37,7 @@ export interface BinView {
 
 export interface HudSnapshot {
   phase: GamePhase;
+  paused: boolean;
   mode: InputMode;
   levelIndex: number;
   levelName: string;
@@ -58,6 +59,35 @@ export interface HudSnapshot {
 
 type Listener = () => void;
 
+/** Structural equality for the HUD snapshot. The displayed clock is whole
+ *  seconds, so sub-second drift must not count as a change. */
+function sameSnapshot(a: HudSnapshot, b: HudSnapshot): boolean {
+  if (
+    a.phase !== b.phase ||
+    a.paused !== b.paused ||
+    a.mode !== b.mode ||
+    a.levelIndex !== b.levelIndex ||
+    a.carrying !== b.carrying ||
+    a.message !== b.message ||
+    a.messageKind !== b.messageKind ||
+    a.glitch !== b.glitch ||
+    a.audioReady !== b.audioReady ||
+    a.muted !== b.muted ||
+    a.hapticsOn !== b.hapticsOn ||
+    a.assist !== b.assist ||
+    Math.ceil(a.timeLeft) !== Math.ceil(b.timeLeft) ||
+    Math.round(a.progress * 100) !== Math.round(b.progress * 100)
+  ) {
+    return false;
+  }
+  for (let i = 0; i < a.bins.length; i++) {
+    const x = a.bins[i];
+    const y = b.bins[i];
+    if (x.fill !== y.fill || x.hit !== y.hit || x.hover !== y.hover) return false;
+  }
+  return true;
+}
+
 interface Gesture {
   id: number;
   kind: "probe" | "marquee" | "carry";
@@ -71,6 +101,7 @@ interface Gesture {
 
 const RISE = 11;
 const FALL = 4.2;
+const RADIUS_SQ = PROBE_RADIUS * PROBE_RADIUS;
 /** Seconds a refined packet takes to dissolve into its bin. */
 const ABSORB_SECONDS = 0.45;
 /** Proximity at which a cluster counts as positively identified. */
@@ -140,9 +171,15 @@ export class GameEngine {
   private listeners = new Set<Listener>();
   private snapshot: HudSnapshot;
   private snapshotDirty = true;
+  /** Reused each frame so the hot loop allocates nothing. */
+  private peak: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
   private snapshotAt = 0;
   private nextTockAt = 0;
 
+  /** True while a modal owns the screen. The shift clock stops, the drones
+   *  stop, and input is ignored — reading the handbook must not cost you
+   *  the file. */
+  paused = false;
   muted = false;
   hapticsOn = true;
   /** Accessibility aid: paint agitated clusters in their temper colour. */
@@ -150,7 +187,7 @@ export class GameEngine {
 
   constructor() {
     this.layout = computeLayout(360, 640);
-    this.board = createBoard(LEVELS[0].seed, LEVELS[0].quota);
+    this.board = createBoard(LEVELS[0].seed, LEVELS[0].quota + LEVELS[0].spare);
     this.bins = this.freshBins();
     this.snapshot = this.buildSnapshot();
   }
@@ -206,6 +243,10 @@ export class GameEngine {
     this.disposed = true;
     this.stop();
     this.listeners.clear();
+    // The AudioEngine is a page-lifetime singleton whose gains are only
+    // ever moved from inside the loop. Stopping the loop with a drone at
+    // full gain would leave it sounding forever.
+    getAudio().hardStop();
     haptics.cancel();
   }
 
@@ -222,11 +263,17 @@ export class GameEngine {
 
   private emit(force = false): void {
     const now = performance.now();
-    // The HUD only needs ~12 Hz; the canvas carries the 60 Hz information.
+    // The HUD only needs ~11 Hz; the canvas carries the 60 Hz information.
     if (!force && !this.snapshotDirty && now - this.snapshotAt < 90) return;
     this.snapshotAt = now;
     this.snapshotDirty = false;
-    this.snapshot = this.buildSnapshot();
+    const next = this.buildSnapshot();
+    // useSyncExternalStore compares by reference, so handing it a fresh
+    // object every 90ms would re-render the whole chrome forever — on the
+    // briefing screen, on the fail screen, on the completion screen, where
+    // nothing is moving at all. Keep the old object when nothing changed.
+    if (!force && sameSnapshot(this.snapshot, next)) return;
+    this.snapshot = next;
     for (const fn of this.listeners) fn();
   }
 
@@ -246,6 +293,7 @@ export class GameEngine {
       bins.reduce((sum, b) => sum + Math.min(1, b.fill), 0) / TEMPERS.length;
     return {
       phase: this.phase,
+      paused: this.paused,
       mode: this.mode,
       levelIndex: this.levelIndex,
       levelName: level.name,
@@ -280,7 +328,7 @@ export class GameEngine {
     const clamped = Math.max(0, Math.min(LEVELS.length - 1, index));
     const level = LEVELS[clamped];
     this.levelIndex = clamped;
-    this.board = createBoard(level.seed, level.quota);
+    this.board = createBoard(level.seed, level.quota + level.spare);
 
     // If the board saturated before every cluster was placed, lower the
     // quota to what actually exists so a file is always completable.
@@ -290,6 +338,9 @@ export class GameEngine {
       1,
       Math.min(level.quota, ...TEMPERS.map((t) => counts[t])),
     );
+    // Every temper must be able to reach 100%: if the board saturated
+    // badly enough that some temper has fewer clusters than the quota, the
+    // quota drops for all four rather than leaving one bin unfillable.
 
     this.bins = this.freshBins();
     this.packet = null;
@@ -302,7 +353,7 @@ export class GameEngine {
     this.elapsed = 0;
     this.latchedId = -1;
     this.glitchUntil = 0;
-    this.nextTockAt = 11;
+    this.nextTockAt = 10;
     this.phase = "probe";
     this.releaseGesture();
     this.relayout();
@@ -317,6 +368,11 @@ export class GameEngine {
 
   restart(): void {
     this.startLevel(this.levelIndex);
+  }
+
+  /** Back to the first file of a fresh quarter. */
+  restartQuarter(): void {
+    this.startLevel(0);
   }
 
   setMode(mode: InputMode): void {
@@ -336,6 +392,18 @@ export class GameEngine {
   setMuted(muted: boolean): void {
     this.muted = muted;
     getAudio().setMuted(muted);
+    this.snapshotDirty = true;
+    this.emit(true);
+  }
+
+  setPaused(paused: boolean): void {
+    if (this.paused === paused) return;
+    this.paused = paused;
+    if (paused) {
+      this.releaseGesture();
+      getAudio().silenceAll();
+      haptics.cancel();
+    }
     this.snapshotDirty = true;
     this.emit(true);
   }
@@ -430,8 +498,8 @@ export class GameEngine {
       const n = this.board.nodes[i];
       n.lifted = false;
       n.scatter = 1;
-      n.sx = packet.x;
-      n.sy = packet.y;
+      n.sx = packet.x + (this.board.rng() - 0.5) * 60;
+      n.sy = packet.y + (this.board.rng() - 0.5) * 60;
     }
     cluster.agitation = 0;
     if (this.latchedId === cluster.id) this.latchedId = -1;
@@ -439,12 +507,19 @@ export class GameEngine {
   }
 
   private isLive(): boolean {
-    return this.phase === "probe" || this.phase === "select" || this.phase === "carry";
+    if (this.paused) return false;
+    return (
+      this.phase === "probe" || this.phase === "select" || this.phase === "carry"
+    );
   }
 
   pointerDown(id: number, x: number, y: number): void {
     void getAudio().unlock();
     haptics.markActivated();
+    // A tap always revives the terminal. bfcache restores do not reliably
+    // fire visibilitychange on iOS, and a frozen loop with no way back is
+    // indistinguishable from a crash.
+    if (!this.running && !this.disposed) this.start();
     if (!this.isLive()) return;
     // Strictly single-pointer: a second finger is ignored outright rather
     // than being allowed to hijack the in-flight gesture.
@@ -530,7 +605,7 @@ export class GameEngine {
     this.marquee.active = false;
     this.hoverBin = null;
     getAudio().silenceAll();
-    haptics.proximity(null, 0, performance.now());
+    haptics.releaseProximity();
     this.snapshotDirty = true;
   }
 
@@ -589,7 +664,11 @@ export class GameEngine {
 
   private resolveMarquee(): void {
     const box = this.marqueeRect();
-    if (box.w < 8 || box.h < 8) return;
+    if (box.w < 8 || box.h < 8) {
+      this.say("SELECTION TOO SMALL", "error", 1.4);
+      getAudio().click();
+      return;
+    }
 
     const tally = new Map<number, number>();
     for (const n of this.board.nodes) {
@@ -603,21 +682,35 @@ export class GameEngine {
       tally.set(n.cluster, (tally.get(n.cluster) ?? 0) + 1);
     }
 
+    // Clusters are seeded a cell apart, but selection tests *live*
+    // positions and an agitated cluster can drift over its neighbour. A
+    // raw plurality vote therefore let a calm bystander with one more node
+    // in the box hijack — and, worse, silently lift the wrong temper.
+    // Weight the vote by agitation, and let the latched cluster win ties.
     let bestId = -1;
     let bestCount = 0;
+    let bestScore = 0;
     for (const [id, count] of tally) {
-      if (count > bestCount) {
+      const cluster = this.board.clusters[id];
+      const score =
+        count * (0.35 + cluster.agitation) * (id === this.latchedId ? 1.6 : 1);
+      if (score > bestScore) {
+        bestScore = score;
         bestCount = count;
         bestId = id;
       }
     }
 
-    if (bestId < 0 || bestCount < MIN_CAPTURE) {
-      if (bestCount > 0) {
-        this.say(`INSUFFICIENT CAPTURE — ${MIN_CAPTURE} MINIMUM`, "error", 1.8);
-        getAudio().buzz();
-        haptics.reject();
-      }
+    if (bestId < 0) {
+      this.say("NO DATA IN SELECTION", "error", 1.6);
+      getAudio().buzz();
+      haptics.reject();
+      return;
+    }
+    if (bestCount < MIN_CAPTURE) {
+      this.say(`INSUFFICIENT CAPTURE — ${MIN_CAPTURE} MINIMUM`, "error", 1.8);
+      getAudio().buzz();
+      haptics.reject();
       return;
     }
 
@@ -705,8 +798,8 @@ export class GameEngine {
         const n = this.board.nodes[i];
         n.lifted = false;
         n.scatter = 1;
-        n.sx = packet.x + (Math.random() - 0.5) * 60;
-        n.sy = packet.y + (Math.random() - 0.5) * 60;
+        n.sx = packet.x + (this.board.rng() - 0.5) * 60;
+        n.sy = packet.y + (this.board.rng() - 0.5) * 60;
       }
       cluster.agitation = 0;
       if (this.latchedId === cluster.id) this.latchedId = -1;
@@ -737,24 +830,33 @@ export class GameEngine {
   // ── simulation ──────────────────────────────────────────────────────
 
   private frame = (now: number): void => {
+    // Clear first: `stop()` must never be left cancelling an id that has
+    // already fired, and a re-entrant start/stop must not be able to leave
+    // two loops running at once (which would halve dt and drain the shift
+    // clock at double speed while looking perfectly smooth).
+    this.raf = 0;
     if (!this.running) return;
-    // Clamp: a backgrounded tab or a long GC pause must not teleport the
-    // simulation forward.
-    const dt = Math.min(0.05, Math.max(0, (now - this.lastFrame) / 1000));
+    const raw = Math.max(0, (now - this.lastFrame) / 1000);
+    // Physics is clamped so a backgrounded tab or a long GC pause cannot
+    // teleport the simulation forward...
+    const dt = Math.min(0.05, raw);
     this.lastFrame = now;
-    this.update(dt);
+    this.update(dt, raw);
     this.render();
     this.emit();
-    this.raf = requestAnimationFrame(this.frame);
+    if (this.running) this.raf = requestAnimationFrame(this.frame);
   };
 
-  private update(dt: number): void {
+  private update(dt: number, wall: number): void {
     this.elapsed += dt;
     const live = this.isLive();
 
     if (live) {
-      this.timeLeft -= dt;
-      if (this.timeLeft <= this.nextTockAt && this.nextTockAt > 0) {
+      // ...but the shift clock runs on unclamped wall time. Otherwise a
+      // janky device silently gifts the player the difference: at 15 fps a
+      // "90 second" file would last about two minutes.
+      this.timeLeft -= wall;
+      if (this.nextTockAt >= 0 && this.timeLeft <= this.nextTockAt) {
         getAudio().tock(this.nextTockAt <= 5);
         this.nextTockAt -= 1;
       }
@@ -792,28 +894,43 @@ export class GameEngine {
 
   private updateAgitation(dt: number, live: boolean): void {
     const level = LEVELS[this.levelIndex];
-    const probing = live && this.reticle.active && !this.packet;
+    // Only a *probe* gesture probes. Letting a marquee drag agitate the
+    // board meant the box you were drawing could steal the latch from the
+    // cluster you were drawing it around, and then reject your own correct
+    // selection with NO TEMPER DETECTED.
+    const probing =
+      live && this.gesture?.kind === "probe" && this.reticle.active && !this.packet;
     const rx = this.reticle.x;
     const ry = this.reticle.y;
 
-    const peak: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
+    const peak = this.peak;
+    peak.WO = 0;
+    peak.FC = 0;
+    peak.DR = 0;
+    peak.MA = 0;
     let dominant: Temper | null = null;
     let dominantValue = 0;
 
     for (const cluster of this.board.clusters) {
       let target = 0;
       if (probing && !cluster.refined) {
-        // Cheap reject on the bounding circle before the per-node pass.
-        const gross = Math.hypot(rx - cluster.cx, ry - cluster.cy);
-        if (gross < cluster.radius + PROBE_RADIUS) {
-          let nearest = Infinity;
+        // Squared distances throughout — Math.hypot is variadic and does
+        // overflow-safe scaling that nothing here needs, and this runs up
+        // to ~140 times a frame.
+        const gx = rx - cluster.cx;
+        const gy = ry - cluster.cy;
+        const reach = cluster.radius + PROBE_RADIUS;
+        if (gx * gx + gy * gy < reach * reach) {
+          let nearestSq = Infinity;
           for (const i of cluster.members) {
             const n = this.board.nodes[i];
-            const d = Math.hypot(rx - n.hx, ry - n.hy);
-            if (d < nearest) nearest = d;
+            const ddx = rx - n.hx;
+            const ddy = ry - n.hy;
+            const d2 = ddx * ddx + ddy * ddy;
+            if (d2 < nearestSq) nearestSq = d2;
           }
-          if (nearest < PROBE_RADIUS) {
-            target = 1 - nearest / PROBE_RADIUS;
+          if (nearestSq < RADIUS_SQ) {
+            target = 1 - Math.sqrt(nearestSq) / PROBE_RADIUS;
             target = target * target * (3 - 2 * target);
           }
         }
@@ -824,7 +941,7 @@ export class GameEngine {
       cluster.probe += (target - cluster.probe) * (1 - Math.exp(-kp * dt));
       if (cluster.probe < 0.002) cluster.probe = 0;
 
-      if (target >= LATCH_ENTER && this.latchedId !== cluster.id) {
+      if (probing && target >= LATCH_ENTER && this.latchedId !== cluster.id) {
         this.latchedId = cluster.id;
       }
       if (this.latchedId === cluster.id && !cluster.refined) {

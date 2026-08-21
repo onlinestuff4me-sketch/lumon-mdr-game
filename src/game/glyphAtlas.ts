@@ -31,12 +31,27 @@ export class GlyphAtlas {
   private dpr = 1;
   private fontPx = 0;
 
-  build(fontPx: number, dpr: number): void {
+  /** Font sizes are quantised so a continuous resize (an iPad toolbar
+   *  collapsing, a desktop window drag) cannot trigger a rebuild per pixel. */
+  static quantise(fontPx: number): number {
+    return Math.max(8, Math.round(fontPx / 2) * 2);
+  }
+
+  build(rawFontPx: number, dpr: number): void {
+    const fontPx = GlyphAtlas.quantise(rawFontPx);
     if (this.fontPx === fontPx && this.dpr === dpr && this.strips.size) return;
     this.fontPx = fontPx;
     this.dpr = dpr;
     this.cellW = Math.ceil(fontPx * 1.8);
     this.cellH = Math.ceil(fontPx * 2.0);
+    // Zero the outgoing canvases before dropping them: a detached canvas
+    // keeps its (often GPU-backed) store alive until GC, and that is the
+    // classic route to a WebKit "reloaded because it was using significant
+    // memory" kill.
+    for (const old of this.strips.values()) {
+      old.width = 0;
+      old.height = 0;
+    }
     this.strips.clear();
 
     for (const key of Object.keys(PALETTES) as PaletteKey[]) {

@@ -80,6 +80,7 @@ export const LEVELS: readonly LevelDef[] = [
     seconds: 120,
     seed: 0x7a1c,
     quota: 5,
+    spare: 2,
     subtlety: 1,
   },
   {
@@ -89,6 +90,7 @@ export const LEVELS: readonly LevelDef[] = [
     seconds: 110,
     seed: 0x31f9,
     quota: 5,
+    spare: 2,
     subtlety: 0.86,
   },
   {
@@ -98,6 +100,7 @@ export const LEVELS: readonly LevelDef[] = [
     seconds: 100,
     seed: 0x5bd4,
     quota: 5,
+    spare: 2,
     subtlety: 0.72,
   },
   {
@@ -107,6 +110,7 @@ export const LEVELS: readonly LevelDef[] = [
     seconds: 90,
     seed: 0x0c14,
     quota: 5,
+    spare: 2,
     subtlety: 0.58,
   },
 ];

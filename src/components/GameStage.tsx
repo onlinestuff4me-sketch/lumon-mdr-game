@@ -20,6 +20,11 @@ export function GameStage() {
   const [size, setSize] = useState({ w: 360, h: 640 });
   const [handbook, setHandbook] = useState(false);
 
+  // The shift clock stops while a modal owns the screen.
+  useEffect(() => {
+    engine.setPaused(handbook);
+  }, [engine, handbook]);
+
   // ── canvas attach + sizing ──────────────────────────────────────────
   useLayoutEffect(() => {
     const grid = gridRef.current;
@@ -28,6 +33,17 @@ export function GameStage() {
     if (!grid || !overlay || !stage) return;
 
     engine.attach(grid, overlay);
+
+    let pending = 0;
+    const schedule = () => {
+      if (pending) return;
+      // Coalesce bursts (a window drag, a collapsing toolbar) into one
+      // measurement per frame: each one can rebuild the glyph atlas.
+      pending = requestAnimationFrame(() => {
+        pending = 0;
+        measure();
+      });
+    };
 
     const measure = () => {
       const rect = stage.getBoundingClientRect();
@@ -40,9 +56,14 @@ export function GameStage() {
     };
 
     measure();
-    const ro = new ResizeObserver(measure);
+    const ro = new ResizeObserver(schedule);
     ro.observe(stage);
-    window.addEventListener("orientationchange", measure);
+    window.addEventListener("orientationchange", schedule);
+    // M11: a pinched visual viewport shifts and scales the rendered pixels
+    // while clientX/Y stay in layout-viewport space, which desynchronises
+    // the reticle from the finger. Re-measure whenever it moves.
+    window.visualViewport?.addEventListener("resize", schedule);
+    window.visualViewport?.addEventListener("scroll", schedule);
 
     // devicePixelRatio can change when a window moves between displays.
     let dprQuery: MediaQueryList | null = null;
@@ -54,14 +75,17 @@ export function GameStage() {
       dprQuery.addEventListener("change", onDpr);
     };
     const onDpr = () => {
-      measure();
+      schedule();
       watchDpr();
     };
     watchDpr();
 
     return () => {
+      if (pending) cancelAnimationFrame(pending);
       ro.disconnect();
-      window.removeEventListener("orientationchange", measure);
+      window.removeEventListener("orientationchange", schedule);
+      window.visualViewport?.removeEventListener("resize", schedule);
+      window.visualViewport?.removeEventListener("scroll", schedule);
       dprQuery?.removeEventListener("change", onDpr);
       engine.detach();
     };
@@ -70,13 +94,35 @@ export function GameStage() {
   // ── page visibility: stop the loop, the drones and the buzzing ──────
   useEffect(() => {
     const onVis = () => engine.setPageVisible(!document.hidden);
+    // A bfcache restore (iOS back-swipe, Android back) does not reliably
+    // fire visibilitychange; pageshow does, and without it the terminal
+    // comes back frozen on its last painted frame with no way out.
+    const onShow = () => engine.setPageVisible(true);
     document.addEventListener("visibilitychange", onVis);
     window.addEventListener("pagehide", onVis);
+    window.addEventListener("pageshow", onShow);
     return () => {
       document.removeEventListener("visibilitychange", onVis);
       window.removeEventListener("pagehide", onVis);
+      window.removeEventListener("pageshow", onShow);
     };
   }, [engine]);
+
+  // M11: iOS Safari has ignored `user-scalable=no` since iOS 10, and
+  // `touch-action` does not suppress its pinch gesture. Only preventing
+  // the gesture events does.
+  useEffect(() => {
+    const block = (ev: Event) => ev.preventDefault();
+    const opts = { passive: false } as const;
+    document.addEventListener("gesturestart", block, opts);
+    document.addEventListener("gesturechange", block, opts);
+    document.addEventListener("gestureend", block, opts);
+    return () => {
+      document.removeEventListener("gesturestart", block);
+      document.removeEventListener("gesturechange", block);
+      document.removeEventListener("gestureend", block);
+    };
+  }, []);
 
   // ── pointer plumbing ────────────────────────────────────────────────
   const toStage = useCallback((ev: React.PointerEvent) => {
@@ -197,12 +243,6 @@ export function GameStage() {
         />
 
         <CRTOverlay glitch={hud.glitch} />
-        <PhaseOverlay
-          hud={hud}
-          onStart={start}
-          onNext={() => engine.nextLevel()}
-          onRestart={() => engine.restart()}
-        />
         {handbook ? (
           <HandbookModal
             onClose={() => setHandbook(false)}
@@ -218,6 +258,17 @@ export function GameStage() {
             hapticsSupported={haptics.supported}
           />
         ) : null}
+
+        {/* Rendered last, and above the handbook: if the shift expires
+            while the handbook is open, RETRY FILE must not be trapped
+            behind the drawer's scrim. */}
+        <PhaseOverlay
+          hud={hud}
+          onStart={start}
+          onNext={() => engine.nextLevel()}
+          onRestart={() => engine.restart()}
+          onNewQuarter={() => engine.restartQuarter()}
+        />
 
         {live && !hud.audioReady ? (
           <div className="pointer-events-none absolute inset-x-0 z-40 flex justify-center" style={{ top: layout.hudH + 6 }}>

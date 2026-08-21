@@ -7,6 +7,8 @@ export interface Board {
   clusters: Cluster[];
   /** clusterId by node index, -1 for filler. */
   ownerOf: Int32Array;
+  /** The board's own generator, so in-game jitter stays seeded too. */
+  rng: () => number;
 }
 
 const MIN_SIZE = 4;
@@ -166,7 +168,7 @@ export function createBoard(seed: number, perTemper: number): Board {
     };
   }
 
-  return { nodes, clusters, ownerOf: owner };
+  return { nodes, clusters, ownerOf: owner, rng };
 }
 
 /**
