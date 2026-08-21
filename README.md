@@ -136,9 +136,25 @@ On a scripted iPhone-13 viewport in headless Chromium:
 - **Flat heap** across ~170 probe cycles and six level restarts (12.8 MB →
   13.2 MB), and no Web Audio nodes allocated at all during twelve seconds of
   continuous probing across all four tempers — the voices are built once.
-- A full file completes end to end under script with no orphaned nodes, and
-  the mechanical part of twenty refinements costs about 13 seconds, leaving
-  roughly 5 seconds of searching per cluster on Tumwater.
+- A full file completes end to end under script with no orphaned nodes.
+### Is a file actually winnable?
+
+Twenty correct assignments against a 90-120 second clock is the brief's
+arithmetic, and it deserved more than an assertion. So there is a bot that
+plays like a thumb: it sweeps the grid serpentine at a set speed, and only
+"sees" a cluster when the game agitates one under it — then it stops to
+read the temper for a set time, boxes it, and bins it. Two player models,
+against the real clock:
+
+| | Tumwater (120s) | Cold Harbor (90s) |
+|---|---|---|
+| competent — 420px/s sweep, 900ms read, reads the temper right | **won, 80s left** | **won, 42s left** |
+| hesitant — 280px/s sweep, 1600ms read, misjudges 1 temper in 5 | **won, 43s left** | **lost at 90%** |
+
+Which is the shape a difficulty curve should have: the first file teaches
+you and forgives you, the last one asks you to be good at it. The ~0.6s per
+refinement a scripted harness achieves is engine-side cost, not player
+time, and is not the number to quote.
 
 ## Notes on the browser
 

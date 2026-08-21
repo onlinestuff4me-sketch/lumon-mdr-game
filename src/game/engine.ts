@@ -340,6 +340,10 @@ export class GameEngine {
   // ── level control ───────────────────────────────────────────────────
 
   startLevel(index: number): void {
+    // Also a revival point: the tap self-heal lives on the input surface,
+    // which a full-screen overlay covers, so BEGIN SHIFT / RETRY FILE must
+    // be able to restart a loop that died while an overlay was up.
+    if (!this.running && !this.disposed) this.start();
     const clamped = Math.max(0, Math.min(LEVELS.length - 1, index));
     const level = LEVELS[clamped];
     this.levelIndex = clamped;
@@ -349,10 +353,17 @@ export class GameEngine {
     // quota to what actually exists so a file is always completable.
     const counts: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
     for (const c of this.board.clusters) counts[c.temper]++;
-    this.quota = Math.max(
-      1,
-      Math.min(level.quota, ...TEMPERS.map((t) => counts[t])),
-    );
+    const scarcest = Math.min(...TEMPERS.map((t) => counts[t]));
+    // Flooring at 1 would happily ship a file with a temper that has no
+    // clusters at all, i.e. a bin that can never fill. Re-seed instead.
+    if (scarcest <= 0) {
+      this.board = createBoard(level.seed ^ 0x9e37, level.quota + level.spare);
+      const retry: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
+      for (const c of this.board.clusters) retry[c.temper]++;
+      this.quota = Math.max(1, Math.min(level.quota, ...TEMPERS.map((t) => retry[t])));
+    } else {
+      this.quota = Math.min(level.quota, scarcest);
+    }
     // Every temper must be able to reach 100%: if the board saturated
     // badly enough that some temper has fewer clusters than the quota, the
     // quota drops for all four rather than leaving one bin unfillable.
@@ -393,7 +404,11 @@ export class GameEngine {
   setMode(mode: InputMode): void {
     if (this.mode === mode) return;
     this.mode = mode;
-    this.marquee.active = false;
+    // Abandon any gesture in flight. Clearing only `marquee.active` left the
+    // gesture alive as kind "marquee", so a box made invisible by a
+    // second-finger tap on the mode switch still resolved into a packet on
+    // release — a selection the player could not see.
+    this.releaseGesture();
     getAudio().click();
     haptics.tap();
     this.snapshotDirty = true;
@@ -417,6 +432,7 @@ export class GameEngine {
     if (paused) {
       this.releaseGesture();
       getAudio().silenceAll();
+      haptics.releaseProximity();
       haptics.cancel();
     }
     this.snapshotDirty = true;
@@ -466,6 +482,18 @@ export class GameEngine {
     // setTransform (not scale) so repeated resizes never compound.
     this.gridCtx?.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
     this.overlayCtx?.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+
+    // Both animations are anchored to absolute stage coordinates that
+    // relayout has just invalidated. Finish them rather than send them to
+    // a point that no longer means anything.
+    this.absorb = null;
+    for (const n of this.board.nodes) {
+      if (n.scatter > 0) n.scatter = 0;
+    }
+    if (this.packet) {
+      this.packet.x = Math.min(this.layout.w, Math.max(0, this.packet.x));
+      this.packet.y = Math.min(this.layout.h, Math.max(0, this.packet.y));
+    }
   }
 
   private relayout(): void {
@@ -763,7 +791,6 @@ export class GameEngine {
     }
 
     const cluster = this.board.clusters[bestId];
-    if (cluster.refined) return;
     if (cluster.agitation < 0.22) {
       this.say("NO TEMPER DETECTED — PROBE FIRST", "error", 1.9);
       getAudio().buzz();
@@ -869,6 +896,7 @@ export class GameEngine {
     this.phase = "complete";
     this.releaseGesture();
     getAudio().silenceAll();
+    haptics.releaseProximity();
     getAudio().fanfare();
     haptics.complete();
     this.say("FILE REFINED. PLEASE ENJOY EACH NUMBER EQUALLY.", "praise", 6);
@@ -917,6 +945,7 @@ export class GameEngine {
         this.returnPacketToGrid();
         getAudio().silenceAll();
         getAudio().alarm();
+        haptics.releaseProximity();
         haptics.reject();
         this.say("SHIFT EXPIRED — FILE RETURNED TO QUEUE", "error", 6);
         this.snapshotDirty = true;
@@ -926,6 +955,13 @@ export class GameEngine {
     if (this.message && this.elapsed > this.messageUntil) {
       this.message = null;
       this.snapshotDirty = true;
+    }
+
+    if (this.paused) {
+      // A paused terminal is a stopped terminal: no drift, no drone, no
+      // ticker timing out behind the drawer.
+      getAudio().silenceAll();
+      return;
     }
 
     this.updateAgitation(dt, live);
@@ -951,6 +987,13 @@ export class GameEngine {
     const rx = this.reticle.x;
     const ry = this.reticle.y;
 
+    // Latch selection is resolved after the loop, by strongest proximity.
+    // Taking the first cluster to cross the threshold means taking the
+    // highest *id*, which at a 37px tolerance is the wrong cluster on a
+    // quarter of the board: the drone would report the nearest cluster
+    // while a different one stayed agitated for the player to box.
+    let latchCandidate = -1;
+    let latchBest = LATCH_ENTER;
     const peak = this.peak;
     peak.WO = 0;
     peak.FC = 0;
@@ -989,11 +1032,11 @@ export class GameEngine {
       cluster.probe += (target - cluster.probe) * (1 - Math.exp(-kp * dt));
       if (cluster.probe < 0.002) cluster.probe = 0;
 
-      if (probing && target >= LATCH_ENTER && this.latchedId !== cluster.id) {
-        this.latchedId = cluster.id;
-        if (this.gesture) this.gesture.latchedDuring = cluster.id;
+      if (probing && target >= latchBest) {
+        latchBest = target;
+        latchCandidate = cluster.id;
       }
-      if (this.latchedId === cluster.id && !cluster.refined) {
+      if (this.latchedId === cluster.id && !cluster.refined && live) {
         target = Math.max(target, LATCH_FLOOR);
       }
       const k = target > cluster.agitation ? RISE : FALL;
@@ -1016,16 +1059,33 @@ export class GameEngine {
       }
     }
 
+    if (latchCandidate >= 0) {
+      this.latchedId = latchCandidate;
+      // Recorded unconditionally, not only when the latch changes: re-probing
+      // an already-latched cluster is the same gesture from the player's side
+      // and must arm SELECT the same way.
+      if (this.gesture) this.gesture.latchedDuring = latchCandidate;
+    }
+
     const audio = getAudio();
     for (const t of TEMPERS) audio.setProximity(t, peak[t]);
-    haptics.proximity(dominant, dominantValue, performance.now());
+    // The ambient cadence answers to a live probe only. Driving it from a
+    // decaying probe after release re-fires one pulse a frame later, which
+    // replaces (and so destroys) the lift or rejection pattern that the
+    // same pointerup just played.
+    haptics.proximity(
+      probing ? dominant : null,
+      probing ? dominantValue : 0,
+      performance.now(),
+    );
   }
 
   private updateNodes(dt: number): void {
     const t = this.elapsed;
     for (const n of this.board.nodes) {
       if (n.retired || n.lifted) continue;
-      if (n.scatter > 0) {
+      const owner = n.cluster >= 0 ? this.board.clusters[n.cluster] : null;
+      if (n.scatter > 0 && !(owner && owner.agitation > 0)) {
         n.scatter = Math.max(0, n.scatter - dt * 1.6);
         const e = n.scatter * n.scatter;
         n.dx = (n.sx - n.hx) * e;
@@ -1035,8 +1095,11 @@ export class GameEngine {
         n.flash = e * 0.5;
         continue;
       }
-      if (n.cluster >= 0 && this.board.clusters[n.cluster].agitation > 0) {
-        continue; // motion already written by applyTemperMotion
+      if (owner && owner.agitation > 0) {
+        // Motion already written by applyTemperMotion. Re-probing a cluster
+        // you just mis-binned must show its temper, not the tumble.
+        n.scatter = 0;
+        continue;
       }
       settleNode(n, t, dt);
     }

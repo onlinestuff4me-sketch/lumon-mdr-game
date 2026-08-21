@@ -81,6 +81,13 @@
      symptom on desktop because the wheel path still works. The lock lives
      on the input surface itself instead. */
   #root {
+    /* `manipulation` is the one value that suppresses the double-tap-zoom
+       delay while still permitting pans, so it intersects harmlessly with
+       the drawer's `pan-y` and the input surface's `none`. Plain `none`
+       here would block the drawer; omitting it entirely leaves every DOM
+       control double-tap-zoomable on iOS, which ignores `user-scalable=no`
+       and is a real hazard on a mode switch you tap constantly. */
+    touch-action: manipulation;
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;

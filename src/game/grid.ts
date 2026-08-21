@@ -184,22 +184,30 @@ export function createBoard(seed: number, perTemper: number): Board {
  */
 const BARREL_K = 0.062;
 
-/** Map a point on the flat lattice onto the curved face of the tube. */
-function barrel(
-  x: number,
-  y: number,
-  cx: number,
-  cy: number,
-  halfW: number,
-  halfH: number,
-): { x: number; y: number } {
-  const nx = (x - cx) / halfW;
-  const ny = (y - cy) / halfH;
+/**
+ * Displacement factor for a point on the flat lattice, mapping it onto the
+ * curved face of the tube.
+ *
+ * The factor *falls* with radius, which is what makes this a barrel and not
+ * a pincushion: the middle of each row reaches furthest from the centre and
+ * the corners draw in, so rows bow outward the way they do on real glass.
+ * Scaling by r² the other way looks superficially similar and is the
+ * inverse curve — it sags the rows inward and, worse, compresses the pitch
+ * hardest at the centre of the grid where the glyph cells have no slack.
+ *
+ * f is at most 1, so no glyph can leave the grid region.
+ */
+const BARREL_MAX = 1 + BARREL_K * 2;
+/** Factor at the middle of an edge — the furthest the warp reaches. */
+const BARREL_EDGE = (1 + BARREL_K) / BARREL_MAX;
+
+function barrelFactor(nx: number, ny: number): number {
   const r2 = nx * nx + ny * ny;
-  // Normalised so the corners land exactly back on the region edge: the
-  // curvature redistributes the rows without growing the grid's footprint.
-  const f = (1 + BARREL_K * r2) / (1 + BARREL_K * 2);
-  return { x: cx + nx * f * halfW, y: cy + ny * f * halfH };
+  // Divided through by the edge factor so the middle of each edge lands
+  // exactly on the padding boundary rather than short of it. The corners,
+  // which bow furthest inward, still come to 1/(1 + K) of the half-extent,
+  // so nothing escapes the grid region.
+  return (1 + BARREL_K * (2 - r2)) / BARREL_MAX / BARREL_EDGE;
 }
 
 /** Recompute home positions + cluster centroids for a new canvas size. */
@@ -219,11 +227,11 @@ export function layoutBoard(
   const halfH = Math.max(1, height / 2 - padY);
 
   for (const node of board.nodes) {
-    const flatX = offX + padX + cellW * (node.col + 0.5);
-    const flatY = offY + padY + cellH * (node.row + 0.5);
-    const warped = barrel(flatX, flatY, cx, cy, halfW, halfH);
-    node.hx = warped.x;
-    node.hy = warped.y;
+    const nx = (offX + padX + cellW * (node.col + 0.5) - cx) / halfW;
+    const ny = (offY + padY + cellH * (node.row + 0.5) - cy) / halfH;
+    const f = barrelFactor(nx, ny);
+    node.hx = cx + nx * f * halfW;
+    node.hy = cy + ny * f * halfH;
   }
 
   for (const cluster of board.clusters) {

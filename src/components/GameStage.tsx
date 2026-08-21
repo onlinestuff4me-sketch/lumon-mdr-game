@@ -20,7 +20,21 @@ export function GameStage() {
   const [size, setSize] = useState({ w: 360, h: 640 });
   const [handbook, setHandbook] = useState(false);
 
-  // The shift clock stops while a modal owns the screen.
+  const openHandbook = useCallback(() => {
+    // Paused in the same handler that opens the drawer, not in an effect
+    // afterwards: the drawer sits above the phase overlay, and a passive
+    // effect leaves a frame in which the clock could expire and render the
+    // fail screen underneath it.
+    engine.setPaused(true);
+    setHandbook(true);
+  }, [engine]);
+
+  const closeHandbook = useCallback(() => {
+    engine.setPaused(false);
+    setHandbook(false);
+  }, [engine]);
+
+  // Backstop, in case the drawer is closed by any other route.
   useEffect(() => {
     engine.setPaused(handbook);
   }, [engine, handbook]);
@@ -214,9 +228,9 @@ export function GameStage() {
               void getAudio().unlock();
               engine.setMode(m);
             }}
-            onHandbook={() => setHandbook(true)}
+            onHandbook={openHandbook}
           />
-          <div style={{ height: layout.binsH }} />
+          <div className="shrink-0" style={{ height: layout.binsH }} />
         </div>
 
         <BinDeck bins={hud.bins} layout={layout} />
@@ -245,7 +259,7 @@ export function GameStage() {
         <CRTOverlay glitch={hud.glitch} />
         {handbook ? (
           <HandbookModal
-            onClose={() => setHandbook(false)}
+            onClose={closeHandbook}
             assist={hud.assist}
             onAssist={(on) => engine.setAssist(on)}
             muted={hud.muted}
@@ -259,16 +273,18 @@ export function GameStage() {
           />
         ) : null}
 
-        {/* Rendered last, and above the handbook: if the shift expires
-            while the handbook is open, RETRY FILE must not be trapped
-            behind the drawer's scrim. */}
+        {/* The drawer deliberately sits above this (z-70 vs z-60) so it can
+            be opened from the briefing and end-of-file screens. What keeps
+            RETRY FILE from being trapped behind its scrim is the pause: the
+            clock is stopped and input ignored while the drawer is open, so
+            no phase can change underneath it. */}
         <PhaseOverlay
           hud={hud}
           onStart={start}
           onNext={() => engine.nextLevel()}
           onRestart={() => engine.restart()}
           onNewQuarter={() => engine.restartQuarter()}
-          onHandbook={() => setHandbook(true)}
+          onHandbook={openHandbook}
         />
 
         {live && !hud.audioReady ? (
@@ -292,7 +308,7 @@ function StatusTicker({ hud }: { hud: ReturnType<typeof useEngine>["hud"] }) {
         ? "text-phos-200 border-phos-400/70"
         : "text-phos-400 border-phos-600/70";
   return (
-    <div className="pointer-events-none relative z-20 flex justify-center px-3 pb-1">
+    <div className="pointer-events-none relative z-20 flex shrink-0 justify-center px-3 pb-1">
       <span
         className={`crt-text-glow max-w-full truncate rounded-[2px] border bg-phos-950/90 px-2 py-1 text-[9px] tracking-[0.14em] ${color}`}
       >

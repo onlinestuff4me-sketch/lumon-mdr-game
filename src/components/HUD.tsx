@@ -12,7 +12,7 @@ export function HUD({ hud, height }: { hud: HudSnapshot; height: number }) {
 
   return (
     <header
-      className="relative z-20 flex flex-col justify-center border-b border-phos-700/70 bg-phos-950/90 px-3"
+      className="relative z-20 flex shrink-0 flex-col justify-center border-b border-phos-700/70 bg-phos-950/90 px-3"
       style={{ height }}
     >
       <div className="flex items-baseline justify-between text-[10px] tracking-[0.18em] text-phos-500">

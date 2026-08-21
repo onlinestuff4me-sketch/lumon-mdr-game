@@ -17,7 +17,7 @@ export function ControlDeck({ hud, height, onMode, onHandbook }: Props) {
   const probe = hud.mode === "probe";
   return (
     <div
-      className="relative z-40 flex items-stretch gap-1.5 border-y border-phos-700/70 bg-phos-900/80 px-2 py-1"
+      className="relative z-40 flex shrink-0 items-stretch gap-1.5 border-y border-phos-700/70 bg-phos-900/80 px-2 py-1"
       style={{ height }}
     >
       <div className="flex flex-[5] items-stretch overflow-hidden rounded-[3px] border border-phos-600/80 bg-phos-950">
