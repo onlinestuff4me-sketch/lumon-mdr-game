@@ -97,6 +97,8 @@ interface Gesture {
   x: number;
   y: number;
   moved: boolean;
+  /** Cluster positively identified during *this* gesture, or -1. */
+  latchedDuring: number;
 }
 
 const RISE = 11;
@@ -104,10 +106,23 @@ const FALL = 4.2;
 const RADIUS_SQ = PROBE_RADIUS * PROBE_RADIUS;
 /** Seconds a refined packet takes to dissolve into its bin. */
 const ABSORB_SECONDS = 0.45;
-/** Proximity at which a cluster counts as positively identified. */
-const LATCH_ENTER = 0.9;
+/**
+ * Proximity at which a cluster counts as positively identified.
+ *
+ * The proximity curve is a smoothstep over R = 80px, so this threshold is
+ * really a targeting tolerance: 0.9 means landing within ~16px of a member,
+ * which on a ~25x16px cell is one specific glyph — aimed blind, 40px above
+ * a fingertip. 0.55 widens it to ~37px, about one comfortable thumb
+ * landing, without touching R or the 0..1 intensity ramp that feeds the
+ * motion, the audio and the haptics.
+ */
+const LATCH_ENTER = 0.55;
 /** Residual agitation a latched cluster keeps once the finger lifts. */
-const LATCH_FLOOR = 0.55;
+const LATCH_FLOOR = 0.5;
+/** Live proximity required at release for SELECT to auto-arm. */
+const ARM_SELECT_AT = 0.5;
+/** A probe shorter than this was a sweep, not a study. */
+const ARM_SELECT_MIN_MS = 300;
 
 export class GameEngine {
   board: Board;
@@ -541,6 +556,7 @@ export class GameEngine {
       x,
       y,
       moved: false,
+      latchedDuring: -1,
     };
 
     this.reticle.x = r.x;
@@ -593,9 +609,14 @@ export class GameEngine {
     const isTap = !g.moved && dt < TAP_MAX_MS;
 
     if (g.kind === "marquee") {
-      this.resolveMarquee();
+      // A tap is the mode-toggle gesture, not a zero-area selection: without
+      // this, double-tapping back to PROBE resolves an empty marquee twice
+      // and buzzes at you on the way out.
+      if (!isTap) this.resolveMarquee();
     } else if (g.kind === "carry" && this.packet) {
       this.resolveDrop(this.reticleFor(x, y));
+    } else if (g.kind === "probe") {
+      this.armSelectIfIdentified(g, dt);
     }
 
     if (isTap) this.registerTap(g.startX, g.startY);
@@ -620,6 +641,33 @@ export class GameEngine {
     this.hoverBin = null;
     getAudio().silenceAll();
     haptics.cancel();
+    this.snapshotDirty = true;
+  }
+
+  /**
+   * Lifting a finger off a cluster you have just identified arms SELECT.
+   *
+   * The three-phase loop otherwise costs a whole extra deliberate gesture
+   * per packet, twenty times a file, against a 90-120s clock. Double-tap
+   * and the SELECT switch both still work — this only removes the need to
+   * use one on the fast path. Gated on *live* proximity rather than the
+   * latch, so lifting a finger somewhere empty never arms anything.
+   */
+  private armSelectIfIdentified(g: Gesture, durationMs: number): void {
+    if (this.packet || this.mode === "select") return;
+    // Only a deliberate study arms the box: the cluster must have been
+    // identified during this very gesture, the finger must still be on it
+    // at release, and the probe must have lasted long enough to actually
+    // read the motion. Brushing past a cluster mid-sweep does not count.
+    if (g.latchedDuring < 0 || g.latchedDuring !== this.latchedId) return;
+    if (durationMs < ARM_SELECT_MIN_MS) return;
+    const cluster = this.board.clusters[this.latchedId];
+    if (!cluster || cluster.refined) return;
+    if (cluster.probe < ARM_SELECT_AT) return;
+    this.mode = "select";
+    getAudio().click();
+    haptics.tap();
+    this.say("TEMPER DETECTED — DRAW A SELECTION", "info", 1.8);
     this.snapshotDirty = true;
   }
 
@@ -943,6 +991,7 @@ export class GameEngine {
 
       if (probing && target >= LATCH_ENTER && this.latchedId !== cluster.id) {
         this.latchedId = cluster.id;
+        if (this.gesture) this.gesture.latchedDuring = cluster.id;
       }
       if (this.latchedId === cluster.id && !cluster.refined) {
         target = Math.max(target, LATCH_FLOOR);

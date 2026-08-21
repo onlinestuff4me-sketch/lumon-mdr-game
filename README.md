@@ -87,10 +87,10 @@ Three decisions carry most of the performance:
 player sees and the drop targets the engine hit-tests come from the same
 function, so they cannot drift apart.
 
-## Two deliberate departures from the brief
+## Deliberate departures from the brief
 
-Both were found by playing the thing, and both are documented here rather
-than quietly applied.
+Each was found by playing or measuring the thing, and each is written down
+here rather than quietly applied.
 
 - **A positively identified cluster latches.** Agitation is proportional to
   reticle distance, except that once a cluster has been probed to near-full
@@ -104,6 +104,25 @@ than quietly applied.
   constant 40px the bottom row of bins would require a touch below the last
   pixel of the screen — unreachable — and the top row would only respond to
   a press that looks plainly wrong.
+- **Dread carries a second, slower component.** The specified 30 Hz shiver
+  sits exactly at Nyquist for a 60 Hz display, and at 30 Hz — low-power
+  mode, thermal throttling, a mid-range phone — it advances a full period
+  per frame and freezes solid, so dread would vanish on precisely the
+  devices most likely to run it. An 11.3 Hz term at under half the
+  amplitude keeps the tremor visible at any frame rate while 30 Hz stays
+  dominant wherever the display can show it.
+
+Nothing the brief fixes numerically was touched to make the game winnable:
++20% per correct bin, the 90-120 second shifts and the 80px probe radius
+are all exactly as specified. What changed instead is the cost of a
+*gesture*. Identifying a cluster at 0.9 proximity meant landing within 16px
+of one specific glyph, aimed blind from 40px below; at 0.55 the target is
+about 37px, roughly one thumb. Measured over every cluster on the board,
+the share of touches inside a cluster's own footprint that succeed went
+from 83% to 99.9%. And lifting a finger off a cluster you have just studied
+arms SELECT for you, removing one deliberate gesture from each of the
+twenty refinements a file needs. Double-tap and the SELECT switch both
+still work; they are simply no longer mandatory.
 
 ## Measured
 
