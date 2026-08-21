@@ -268,6 +268,7 @@ export function GameStage() {
           onNext={() => engine.nextLevel()}
           onRestart={() => engine.restart()}
           onNewQuarter={() => engine.restartQuarter()}
+          onHandbook={() => setHandbook(true)}
         />
 
         {live && !hud.audioReady ? (

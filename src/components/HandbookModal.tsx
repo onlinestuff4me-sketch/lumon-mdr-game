@@ -72,7 +72,7 @@ export function HandbookModal({
       role="dialog"
       aria-modal="true"
       aria-label="Lumon employee handbook"
-      className="absolute inset-0 z-50 flex flex-col justify-end bg-black/70 backdrop-blur-[1px]"
+      className="absolute inset-0 z-70 flex flex-col justify-end bg-black/70 backdrop-blur-[1px]"
       onPointerDown={(ev) => {
         ev.stopPropagation();
         if (ev.target === ev.currentTarget) onClose();

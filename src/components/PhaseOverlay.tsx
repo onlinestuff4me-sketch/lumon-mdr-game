@@ -1,4 +1,4 @@
-import { Play, RotateCcw, ChevronRight } from "lucide-react";
+import { CircleHelp, Play, RotateCcw, ChevronRight } from "lucide-react";
 import { LEVELS, PRAISE } from "../game/constants";
 import type { HudSnapshot } from "../game/engine";
 
@@ -8,6 +8,7 @@ interface Props {
   onNext: () => void;
   onRestart: () => void;
   onNewQuarter: () => void;
+  onHandbook: () => void;
 }
 
 const BTN =
@@ -19,6 +20,7 @@ export function PhaseOverlay({
   onNext,
   onRestart,
   onNewQuarter,
+  onHandbook,
 }: Props) {
   if (hud.phase === "probe" || hud.phase === "select" || hud.phase === "carry") {
     return null;
@@ -121,6 +123,19 @@ export function PhaseOverlay({
           </button>
         </>
       ) : null}
+
+      {/* The handbook has to be reachable from here too: the deck is behind
+          this overlay, and the briefing is exactly when a new refiner wants
+          to read the rules. It opens above this layer, and the shift clock
+          is paused while it is open, so nothing can expire underneath it. */}
+      <button
+        type="button"
+        onClick={onHandbook}
+        className="mt-6 inline-flex items-center gap-1.5 text-[9px] tracking-[0.2em] text-phos-600 underline-offset-4 hover:text-phos-400"
+      >
+        <CircleHelp size={10} strokeWidth={2.2} aria-hidden />
+        READ THE HANDBOOK
+      </button>
     </div>
   );
 }
