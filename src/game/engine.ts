@@ -182,6 +182,8 @@ export class GameEngine {
   private dpr = 1;
   private running = false;
   private disposed = false;
+  /** False until a real measurement has sized the canvases. */
+  private sized = false;
 
   private listeners = new Set<Listener>();
   private snapshot: HudSnapshot;
@@ -223,6 +225,9 @@ export class GameEngine {
 
   detach(): void {
     this.stop();
+    // A re-attach may hand us fresh canvas elements with default backing
+    // stores, so the next resize must not be short-circuited.
+    this.sized = false;
     this.gridCanvas = null;
     this.overlayCanvas = null;
     this.gridCtx = null;
@@ -482,9 +487,21 @@ export class GameEngine {
     // is routinely just after a touch. Without this guard every such event
     // ran a full relayout and cancelled any dissolve or scatter in flight,
     // for a viewport change that never happened.
-    if (w === this.layout.w && h === this.layout.h && nextDpr === this.dpr) {
+    //
+    // `sized` is what stops the constructor's placeholder layout from
+    // satisfying that comparison: a stage measuring exactly 360x640 at DPR
+    // 1 — which is exact 9:16, and a stock device preset — would otherwise
+    // match on the very first call and leave both canvases on the 300x150
+    // HTML default, stretched over the stage.
+    if (
+      this.sized &&
+      w === this.layout.w &&
+      h === this.layout.h &&
+      nextDpr === this.dpr
+    ) {
       return;
     }
+    this.sized = true;
     this.dpr = nextDpr;
     this.layout = computeLayout(w, h);
     this.relayout();
@@ -1127,8 +1144,13 @@ export class GameEngine {
         if (n.scatter > 0) {
           n.scatter = Math.max(0, n.scatter - dt * 4);
           const e = n.scatter * n.scatter;
+          // Every channel the scatter branch writes, or the digits glide
+          // home while snapping upright in a single frame.
           n.dx += (n.sx - n.hx - n.dx) * e;
           n.dy += (n.sy - n.hy - n.dy) * e;
+          n.rot += (e * 2.4 - n.rot) * e;
+          n.scale += (1 + e * 0.3 - n.scale) * e;
+          n.flash += (e * 0.5 - n.flash) * e;
         }
         continue;
       }
