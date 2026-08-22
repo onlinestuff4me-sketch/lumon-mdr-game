@@ -13,6 +13,21 @@ export type GamePhase =
 /** Interaction mode toggled from the control deck / by double tap. */
 export type InputMode = "probe" | "select";
 
+/** The reveal/hide cycle of the file that introduces the probe. */
+export interface PulseDef {
+  /** Seconds the group stays visibly agitated each time it surfaces. */
+  readonly revealS: number;
+  /** Seconds between the end of one reveal and the start of the next. */
+  readonly hiddenS: number;
+  /** Quiet seconds required after the last touch before a reveal may fire,
+   *  so a reveal never happens underneath a finger already on the board. */
+  readonly tapCooldownS: number;
+  /** Motion amplitude of a reveal — a hint, not an announcement. */
+  readonly subtlety: number;
+  /** Fade in and out of each reveal. A hard cut reads as a glitch. */
+  readonly rampS: number;
+}
+
 export interface GridNode {
   /** Index into GameState.nodes — equals row * COLS + col. */
   readonly idx: number;
@@ -46,7 +61,21 @@ export interface GridNode {
 
 export interface Cluster {
   readonly id: number;
-  readonly temper: Temper;
+  /** Mutable: a morphing cluster changes temper in front of the player. */
+  temper: Temper;
+  /** Where a morphing cluster ends up, or null if it never morphs. */
+  morphTo: Temper | null;
+  /** Seconds of agitation before the morph begins. */
+  morphAfter: number;
+  /** True once the morph has run, so it happens exactly once. */
+  morphed: boolean;
+  /** A site that stirs when probed and belongs to nothing. No bin takes it,
+   *  it fills no quota, and it is silent — the ear stays honest. */
+  decoy: boolean;
+  /** The unnamed fifth temper: it borrows the motion of whichever temper
+   *  was last refined, so it always looks like something known and is
+   *  always wrong. Nothing in the game explains it. */
+  fifth: boolean;
   readonly members: number[];
   /** Centroid in board space, px. */
   cx: number;
@@ -115,6 +144,39 @@ export interface LevelDef {
   /** Name the temper in the ticker as soon as a cluster is identified.
    *  This is the whole teaching mechanism of the calibration file. */
   readonly teaches?: boolean;
+  /** Digits of a group a selection box must touch to lift the whole group.
+   *  Defaults to MIN_CAPTURE. The orientation screens set it to 1, so
+   *  dragging over any part of a group takes all of it — a new player is
+   *  never told their correct instinct was a wrong box. */
+  readonly minCapture?: number;
+  /** What happens on completion. "none" flashes and auto-advances, which
+   *  is what turns 21 orientation screens into one sequence rather than 21
+   *  interruptions; "full" is the usual 100% / addendum / NEXT FILE. */
+  readonly ceremony?: "none" | "full";
+  /** Milliseconds held on the completed board before the next screen. */
+  readonly autoAdvanceMs?: number;
+  /** Whether this file gets its own row in the handbook archive and
+   *  releases an addendum. The orientation screens share one row. */
+  readonly archived?: boolean;
+  /** Position within a multi-screen sequence, for the HUD. */
+  readonly stage?: readonly [number, number];
+  /** The group surfaces and sinks on a cycle instead of staying visible.
+   *  This is how the probe is introduced: motion that hides. */
+  readonly pulse?: PulseDef;
+  /** Seconds the lens holds at full size after the finger lifts, and then
+   *  the seconds it takes to shrink away. Present only where the lens is
+   *  being introduced and has to be seen to be understood. */
+  readonly lensLingerS?: number;
+  readonly lensShrinkS?: number;
+  /** Decoy sites: [count, agitation as a fraction of a real group]. */
+  readonly decoys?: readonly [number, number];
+  /** Morphing groups: [count, seconds held before the change]. */
+  readonly morphs?: readonly [number, number];
+  /** A channel this file takes away. The player's own setting is restored
+   *  when the file ends. */
+  readonly redact?: "audio";
+  /** Carries the unnamed fifth temper. */
+  readonly fifth?: boolean;
   /** Clusters agitate on their own, with no probe at all. The orientation
    *  file's entire lesson: groups are hidden in plain sight among digits
    *  that only look identical, and the ones that matter move. Probing is

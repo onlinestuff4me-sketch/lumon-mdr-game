@@ -33,22 +33,33 @@ of them 404s every asset on the other.
 
 ## The loop
 
-The queue runs in three acts behind two training files, so the job is learned
-rather than sprung on you. **ORIENTATION** is one group, already moving on
-its own, on a board of digits that look exactly like it — no probing, no
-clock, no temper to identify: box it and bin it, and learn that the matrix
-hides things. **CALIBRATION** then meets all four tempers, one cluster each, spread wide,
+The queue runs in three acts behind a training sequence, so the job is
+learned rather than sprung on you. **ORIENTATION** is 21 short screens in
+which nothing is hidden: every group is already moving, and all you do is
+box it and bin it. Three screens per temper teach what each one looks like,
+four put two tempers on the deck, five put up all four. Boxing is generous
+there — touching any one digit takes the whole group — and the screens
+advance themselves, so it reads as one continuous sequence rather than 21
+files. **BELLINGHAM** then takes the visibility away: the group surfaces for
+two seconds and sinks for five, and your first touch summons the lens
+instead of the box, which lingers and shrinks so you can see what it is.
+**CALIBRATION** then meets all four tempers, one cluster each, spread wide,
 no clock, and the terminal names each one as you find it. **Act I** is four
 files of a *single* temper — three groups of it, one bin spanning the whole
 deck, nothing to confuse it against, and no clock until the last of them. **Act II** puts two
 tempers in a file, two groups each, and starts the shift clock; this is
 where the real skill lives, telling one from another. **Act III** is the job
 as Lumon specifies it, all four at once on a crowded board, with the clock
-tightening and the motion damping file by file. Fourteen files, and each one
-hands back a line of the story on completion.
+tightening and the motion damping file by file. Act III now introduces one new
+rule per file — decoys, the morph, a redacted channel — each taught on its
+own file before it is used, and Cold Harbor carries something the handbook
+does not describe. Each refined file hands back a line of the story.
 
 The full table, what each act teaches and why each Act II pairing was chosen
-are in [docs/PROGRESSION.md](docs/PROGRESSION.md).
+are in [docs/PROGRESSION.md](docs/PROGRESSION.md); the onboarding sequence
+and the Act III mechanics are specified in
+[docs/ONBOARDING.md](docs/ONBOARDING.md), with a live tuning sheet for every
+number served at **`/tool`** next to the game.
 
 Once you have refined anything, the briefing offers **RESUME AT <file>** —
 one past the furthest file you have completed — so a returning refiner
@@ -83,7 +94,7 @@ and the clock bites the player who is guessing.
 The handbook shows a live animated sample of each temper beside its
 description, and the shift clock stops while it is open — so checking what
 dread actually looks like, mid-file, is free. It also carries the
-**archive**: the fourteen files with their addenda, the ones you have
+**archive**: the files with their addenda, the ones you have
 refined declassified and the rest redacted word by word. It persists, so
 the count of recovered addenda is the closest thing here to a save file.
 

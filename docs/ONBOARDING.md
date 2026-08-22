@@ -1,5 +1,10 @@
 # Onboarding and the phased introduction of mechanics
 
+> Status: implemented. The queue is 38 screens — 21 orientation, one probe
+> file, calibration, four Act I, four Act II, and seven in Act III — across
+> 18 archive rows. The tuning sheet that produced these numbers is served
+> at **`/tool`** alongside the game.
+
 The design rule behind everything here: **a player is never asked to do two
 new things at once, and never meets a new rule for the first time under a
 clock.** Every mechanic gets shown in isolation, then used once in a real
@@ -7,8 +12,8 @@ file, then becomes part of the world.
 
 This document is the specification. Every number in it is a lever, and
 every lever has a name used consistently here, in the tuning artifact, and
-(once built) in `src/game/constants.ts`. Nothing here is implemented yet —
-this is the plan to tune before building.
+(once built) in `src/game/constants.ts`. **Built and shipped at the defaults below.** Where an implementation detail
+diverged from the plan, it is marked ▸.
 
 ---
 
@@ -65,9 +70,9 @@ The full deck, one group per temper, still all visible, still no clock.
 | Lever | Default | What it does |
 |---|---|---|
 | `orientation.minOverlapDigits` | 1 | How many of a group's digits a selection box must touch to lift the **whole** group. At 1, dragging over any part of a group takes all of it. The real game requires 4 (`MIN_CAPTURE`); this is the "generous selection" rule, and it exists so a new player is never told their correct instinct was a wrong box. |
-| `orientation.ceremony` | `none` | What happens between screens. `none` = flash and auto-advance; `brief` = a one-line "REFINED" flash; `full` = the normal 100% / addendum / NEXT FILE screen. |
+| `orientation.ceremony` | `none` | What happens between screens. `none` = a REFINED flash and auto-advance; `full` = the normal 100% / addendum / NEXT FILE screen. ▸ Screens 1–20 are `none`; screen 21 is `full`, so the sequence ends properly and releases the one addendum it is worth. |
 | `orientation.autoAdvanceMs` | 900 | Pause after the last group is binned before the next screen loads. |
-| `orientation.startMode` | `select` | These screens open in SELECT. There is nothing to probe. |
+| `orientation.startMode` | `select` | These screens open in SELECT. There is nothing to probe. ▸ They also *return* to SELECT after each lift: the engine used to drop back to PROBE, which on these screens handed the refiner a tool that does nothing for the remaining groups. |
 | `orientation.wrongBinPenalty` | `scatter` | What a wrong bin does. `scatter` matches the real game; `nudge` would refuse the drop and say so without scattering. |
 
 ---
@@ -106,7 +111,7 @@ them. Here that instinct is honoured and then redirected:
 
 | Lever | Default | What it does |
 |---|---|---|
-| `probeIntro.forceProbeOnTap` | true | The first touch on this screen puts the terminal into PROBE, not SELECT — the player reaches for the box and gets the lens instead. This is the moment the mechanic is introduced. |
+| `probeIntro.forceProbeOnTap` | true | The first touch on this screen puts the terminal into PROBE, not SELECT — the player reaches for the box and gets the lens instead. This is the moment the mechanic is introduced. ▸ Implemented as `startMode: "probe"`, which is the same thing with less machinery. |
 | `probeIntro.lensLingerS` | 1.0 | The lens stays at full size for this long after the finger lifts, instead of vanishing with it. Without the linger the player never sees what they just summoned. |
 | `probeIntro.lensShrinkS` | 0.4 | The lens then shrinks to nothing. The shrink is the tell that this is a *tool*, not a glitch — it has a lifecycle. |
 | `probeIntro.armSelectAfterProbe` | true | Once the group has been held and identified, SELECT arms itself, as in the real game. |
@@ -133,16 +138,17 @@ treatment ORIENTATION uses: **taught in isolation → used once → part of the
 world.**
 
 Each teaching file is untimed or generous, carries one or two tempers, and
-does nothing except demonstrate its rule.
+does nothing except demonstrate its rule. They carry ordinary place names
+rather than being labelled TEACH: Lumon does not annotate its own files.
 
 | # | File | Clock | What it is |
 |---|---|---|---|
 | 1 | **TUMWATER** | 120s | Baseline. All four tempers, no new rules. |
-| 2 | **TEACH · DECOYS** | none | 2 tempers. Digits that stir faintly when probed and belong to no group. Shown alongside a real group so the difference is visible side by side. |
+| 2 | **JESUP** | none | 2 tempers. Digits that stir faintly when probed and belong to no group. Shown alongside a real group so the difference is visible side by side. |
 | 3 | **ALLENTOWN** | 110s | Decoys live, on a real board. |
-| 4 | **TEACH · THE MORPH** | none | 1 temper, 1 group. It reads as one temper, and while the player watches it becomes another. Nothing else happens on the screen. |
+| 4 | **NANNING** | none | 2 tempers, 1 group each. It reads as one temper, and while the player watches it becomes another. Nothing else happens on the screen. |
 | 5 | **SIENA** | 100s | Decoys + morph. |
-| 6 | **TEACH · REDACTION** | 150s | 2 tempers, audio cut, announced: `TERMINAL AUDIO SUBSYSTEM UNDER MAINTENANCE`. Learning to read dread and malice apart by motion alone, while there is still time to do it badly. |
+| 6 | **YAKIMA** | 150s | 2 tempers, audio cut, announced: `TERMINAL AUDIO SUBSYSTEM UNDER MAINTENANCE`. Learning to read dread and malice apart by motion alone, while there is still time to do it badly. |
 | 7 | **COLD HARBOR** | 90s | Everything, plus the fifth temper. |
 
 ### The levers
@@ -151,7 +157,7 @@ does nothing except demonstrate its rule.
 |---|---|---|
 | `decoys.perBoard` | 2 | Decoy sites on a board that has them. |
 | `decoys.agitation` | 0.35 | How strongly a decoy stirs, as a fraction of a real group. Too high and it is indistinguishable; too low and it is invisible. |
-| `decoys.silent` | true | Decoys make no sound and no buzz. The sound is the honest channel; only the eye can be fooled. |
+| `decoys.silent` | true | Decoys make no sound and no buzz. The sound is the honest channel; only the eye can be fooled. ▸ Also excluded from the teaching ticker: a file that names what you found must not name a decoy as woe, which is the exact lie the mechanic exists to expose. And boxing one answers `NO TEMPER DETECTED` rather than the generic `PROBE FIRST` — a decoy never reaches full agitation, so the generic guard would have told the refiner to probe harder on a site they had already probed. |
 | `morph.holdBeforeS` | 2.0 | How long a morphing group shows its first temper before changing. |
 | `morph.transitionS` | 0.6 | How long the change takes. |
 | `morph.perBoard` | 1 | Morphing groups per board that has them. |
@@ -178,21 +184,20 @@ name from redacted blocks to `05 · ████████` and its status to
 
 ---
 
-## Cost, stated plainly
+## Cost, and what was done about it
 
-This adds 21 orientation screens, 1 probe file and 3 teaching files to a
-queue that currently has 14 files. Three consequences worth deciding on
-before any of it is built:
+This added 21 orientation screens, 1 probe file and 3 teaching files to a
+queue that had 14. Three consequences, and how each is handled:
 
-1. **The completion ceremony has to go for Part 1.** Twenty-one screens
-   each ending in a 100% banner, an addendum and a NEXT FILE button is
-   twenty-one interruptions in what should feel like one continuous
-   sequence. `orientation.ceremony: none` is the default above for that
-   reason.
-2. **They should not each be an archive entry.** Twenty-one redacted rows
-   would swamp the fourteen real files and make the archive read as a
-   progress bar rather than a set of secrets. ORIENTATION should hold one
-   archive row for the whole sequence.
-3. **A returning player must be able to skip all of it.** RESUME AT already
-   does this from the archive; the `training` flag needs to cover every new
-   screen so SKIP lands past them.
+1. **No completion ceremony inside Part 1.** Twenty-one screens each ending
+   in a 100% banner, an addendum and a NEXT FILE button is twenty-one
+   interruptions in what should feel like one continuous sequence. Screens
+   1–20 flash REFINED and advance themselves after 900ms.
+2. **One archive row, not twenty-one.** Twenty-one redacted rows would swamp
+   the real files and make the archive read as a progress bar rather than a
+   set of secrets. ORIENTATION holds one row; a screen inside the sequence
+   marks that row IN PROGRESS.
+3. **All of it is skippable.** ORIENTATION, BELLINGHAM and CALIBRATION are
+   all `training`, so SKIP on the briefing lands on DRANESVILLE, and RESUME
+   AT drops a returning refiner exactly where they stopped — including
+   part-way through orientation.

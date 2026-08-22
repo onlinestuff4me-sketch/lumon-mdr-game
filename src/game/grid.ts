@@ -111,17 +111,31 @@ function growCluster(
  * a missing cluster makes a bin unfillable, whereas slightly closer
  * clusters are only slightly harder.
  */
+/** What a seeded cluster is for. Decoys and the fifth temper occupy the
+ *  board and answer to a probe, but fill no quota and no bin takes them. */
+export interface Extra {
+  readonly temper: Temper;
+  readonly decoy?: boolean;
+  readonly fifth?: boolean;
+}
+
 export function createBoard(
   seed: number,
   tempers: readonly Temper[],
   perTemper: number,
   spacing = 1,
+  extras: readonly Extra[] = [],
 ): Board {
+  const real = tempers.length * perTemper;
   for (let s = Math.max(1, spacing); s > 1; s--) {
-    const attempt = seedBoard(seed, tempers, perTemper, s);
-    if (attempt.clusters.length === tempers.length * perTemper) return attempt;
+    const attempt = seedBoard(seed, tempers, perTemper, s, extras);
+    // Only the real clusters have to fit: a board that cannot hold every
+    // decoy is still winnable, and a board short a real cluster is not.
+    if (attempt.clusters.filter((c) => !c.decoy && !c.fifth).length === real) {
+      return attempt;
+    }
   }
-  return seedBoard(seed, tempers, perTemper, 1);
+  return seedBoard(seed, tempers, perTemper, 1, extras);
 }
 
 function seedBoard(
@@ -129,15 +143,19 @@ function seedBoard(
   tempers: readonly Temper[],
   perTemper: number,
   spacing: number,
+  extras: readonly Extra[] = [],
 ): Board {
   const rng = mulberry32(seed);
   const owner = new Int32Array(CELL_COUNT).fill(-1);
 
-  const wanted: Temper[] = [];
+  const wanted: Extra[] = [];
   for (const t of tempers) {
-    for (let i = 0; i < perTemper; i++) wanted.push(t);
+    for (let i = 0; i < perTemper; i++) wanted.push({ temper: t });
   }
   shuffle(rng, wanted);
+  // Extras are appended after the shuffle, so a saturated board drops a
+  // decoy before it drops anything the player needs.
+  wanted.push(...extras);
 
   const clusters: Cluster[] = [];
   const candidates = shuffle(
@@ -146,7 +164,8 @@ function seedBoard(
   );
 
   let cursor = 0;
-  for (const temper of wanted) {
+  for (const want of wanted) {
+    const { temper } = want;
     const id = clusters.length;
     const target = randInt(rng, MIN_SIZE, MAX_SIZE);
     let members: number[] | null = null;
@@ -162,6 +181,11 @@ function seedBoard(
     clusters.push({
       id,
       temper,
+      morphTo: null,
+      morphAfter: 0,
+      morphed: false,
+      decoy: want.decoy === true,
+      fifth: want.fifth === true,
       members,
       cx: 0,
       cy: 0,

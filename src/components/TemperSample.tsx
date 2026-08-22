@@ -60,6 +60,11 @@ export function TemperSample({ temper }: { temper: Temper }) {
     const cluster: Cluster = {
       id: 0,
       temper,
+      morphTo: null,
+      morphAfter: 0,
+      morphed: false,
+      decoy: false,
+      fifth: false,
       members: nodes.map((n) => n.idx),
       cx: w / 2,
       cy: h / 2,

@@ -1,6 +1,9 @@
 # The queue
 
-Fourteen files in three acts, behind two training files. The design goal is that a refiner should
+Thirty-eight screens: a 21-screen orientation sequence, a file that
+introduces the probe, calibration, and then three acts. Orientation and the
+probe file are specified in [ONBOARDING.md](ONBOARDING.md) — this document
+covers everything from CALIBRATION onwards. The design goal is that a refiner should
 never be asked to do two new things at once, and should always leave a file
 knowing something they did not know going in — about a temper, or about
 Lumon.
@@ -13,20 +16,24 @@ the engine.
 
 | # | File | Act | Tempers | Bins | Groups / temper | Groups | Spacing | Per match | Clock | Subtlety |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1 | ORIENTATION | — | WO | 1 | 1 | 1 | 6 | +100% | none | 1.35 |
-| 2 | CALIBRATION | — | 4 | 4 | 1 | 4 | 4 | +100% | none | 1.15 |
-| 3 | DRANESVILLE | I | WO | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
-| 4 | SUNSET PARK | I | FC | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
-| 5 | CAIRNS | I | DR | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
-| 6 | EMINENCE | I | MA | 1 | 3 | 3 | 5 | +33% | 180s | 1.10 |
-| 7 | KINGSPORT | II | WO FC | 2 | 2 | 4 | 4 | +50% | 150s | 1.00 |
-| 8 | LE MANS | II | DR MA | 2 | 2 | 4 | 4 | +50% | 150s | 0.95 |
-| 9 | LONGBRANCH | II | WO DR | 2 | 2 | 4 | 4 | +50% | 140s | 0.92 |
-| 10 | MOONBEAM | II | FC MA | 2 | 2 | 4 | 4 | +50% | 140s | 0.90 |
-| 11 | TUMWATER | III | all four | 4 | 2 | 8 | 3 | +50% | 120s | 1.00 |
-| 12 | ALLENTOWN | III | all four | 4 | 2 | 8 | 3 | +50% | 110s | 0.86 |
-| 13 | SIENA | III | all four | 4 | 2 | 8 | 3 | +50% | 100s | 0.72 |
-| 14 | COLD HARBOR | III | all four | 4 | 2 | 8 | 3 | +50% | 90s | 0.58 |
+| 1–21 | ORIENTATION | — | 1 → 2 → 4 | 1 → 2 → 4 | 1 | 1–4 | 6/6/5 | +100% | none | 1.35→1.15 |
+| 22 | BELLINGHAM | — | WO | 1 | 1 | 1 | 6 | +100% | none | pulsed |
+| 23 | CALIBRATION | — | 4 | 4 | 1 | 4 | 4 | +100% | none | 1.15 |
+| 24 | DRANESVILLE | I | WO | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
+| 25 | SUNSET PARK | I | FC | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
+| 26 | CAIRNS | I | DR | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
+| 27 | EMINENCE | I | MA | 1 | 3 | 3 | 5 | +33% | 180s | 1.10 |
+| 28 | KINGSPORT | II | WO FC | 2 | 2 | 4 | 4 | +50% | 150s | 1.00 |
+| 29 | LE MANS | II | DR MA | 2 | 2 | 4 | 4 | +50% | 150s | 0.95 |
+| 30 | LONGBRANCH | II | WO DR | 2 | 2 | 4 | 4 | +50% | 140s | 0.92 |
+| 31 | MOONBEAM | II | FC MA | 2 | 2 | 4 | 4 | +50% | 140s | 0.90 |
+| 32 | TUMWATER | III | all four | 4 | 2 | 8 | 3 | +50% | 120s | 1.00 |
+| 33 | JESUP | III | WO DR | 2 | 1 | 2 | 4 | +100% | none | 1.00 |
+| 34 | ALLENTOWN | III | all four | 4 | 2 | 8 | 3 | +50% | 110s | 0.86 |
+| 35 | NANNING | III | WO FC | 2 | 1 | 2 | 5 | +100% | none | 1.05 |
+| 36 | SIENA | III | all four | 4 | 2 | 8 | 3 | +50% | 100s | 0.72 |
+| 37 | YAKIMA | III | DR MA | 2 | 2 | 4 | 4 | +50% | 150s | 0.90 |
+| 38 | COLD HARBOR | III | all four | 4 | 2 | 8 | 3 | +50% | 90s | 0.58 |
 
 Clock figures are STANDARD pace; EXTENDED, the default, doubles them. Every
 correct assignment also credits 5 seconds back.
@@ -95,11 +102,13 @@ half-learned. The clock starts here, generously (150s, versus 120s for the
 first four-temper file).
 
 **Act III — the job.** All four tempers, two groups each, on a board that
-lets them crowd (spacing 3). The escalation across the four files is not
-in the count but in the two axes that actually make it harder: the clock
-drops 120 → 110 → 100 → 90, and `subtlety` damps the motion 1.00 → 0.58,
-so by COLD HARBOR you are reading tells at just over half amplitude with
-three quarters of the time.
+lets them crowd (spacing 3). The clock drops 120 → 110 → 100 → 90 and
+`subtlety` damps the motion 1.00 → 0.58, but the real escalation is that
+each file introduces a rule the last one did not have, taught first on a
+file of its own: **JESUP** shows decoys, **NANNING** shows a group changing
+temper while you watch, **YAKIMA** takes the audio away. COLD HARBOR
+carries all three, plus one thing nothing explains. See
+[ONBOARDING.md](ONBOARDING.md#part-3--act-iii-one-new-rule-at-a-time).
 
 ## The knobs
 
@@ -141,7 +150,7 @@ might be for.
 
 Completions are recorded in `localStorage` (`src/game/archive.ts`, under
 its own key so a settings migration cannot wipe it) and the handbook
-carries a **PERPETUITY WING · ARCHIVE** section listing all fourteen files:
+carries a **PERPETUITY WING · ARCHIVE** section listing every file that has an archive row:
 
 - **DECLASSIFIED** — completed. Name, file code and the full addendum.
 - **IN PROGRESS** — the file you are on. Name and code, addendum still
@@ -150,7 +159,7 @@ carries a **PERPETUITY WING · ARCHIVE** section listing all fourteen files:
   word by word, preserving word lengths, so it reads as a document that
   exists and is being kept from you rather than as an empty slot.
 
-The counter at the top of the section (`n of 14 recovered`) is the closest
+The counter at the top of the section (`n of 18 recovered`) is the closest
 thing the game has to a save file, and survives across sittings.
 
 The briefing screen reads the same archive: with any file refined, its

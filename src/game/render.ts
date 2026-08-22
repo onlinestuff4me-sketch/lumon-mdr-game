@@ -120,6 +120,8 @@ function lensBulge(ctx: CanvasRenderingContext2D): CanvasGradient {
  */
 function drawReticle(ctx: CanvasRenderingContext2D, e: GameEngine): void {
   const { x, y } = e.reticle;
+  const sc = e.reticle.scale;
+  if (sc <= 0.02) return;
   const t = e.elapsed;
 
   let hot: Temper | null = null;
@@ -132,6 +134,19 @@ function drawReticle(ctx: CanvasRenderingContext2D, e: GameEngine): void {
   }
   const color = hot && e.assist ? TEMPER_DEFS[hot].css : "#2fd68a";
   const atlas = e.atlas;
+
+  // On the file that teaches the lens it closes down rather than blinking
+  // out. Scaling about the lens centre shrinks the glass, the magnified
+  // digits, the cached sheen, the bezel and the ticks together. Clipping to
+  // a smaller radius instead would leave the highlight and the rim sitting
+  // still while the glass moved, so the transform wraps the whole reticle.
+  const shrinking = sc < 1;
+  if (shrinking) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(sc, sc);
+    ctx.translate(-x, -y);
+  }
 
   ctx.save();
 
@@ -239,6 +254,7 @@ function drawReticle(ctx: CanvasRenderingContext2D, e: GameEngine): void {
   }
   ctx.stroke();
   ctx.restore();
+  if (shrinking) ctx.restore();
   ctx.globalAlpha = 1;
 }
 

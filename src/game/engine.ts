@@ -16,7 +16,7 @@ import {
   TAP_SLOP,
   TEMPERS,
 } from "./constants";
-import { createBoard, layoutBoard, type Board } from "./grid";
+import { createBoard, layoutBoard, type Board, type Extra } from "./grid";
 import { loadSettings, saveSettings } from "./settings";
 import { computeLayout, pointInRect, type Rect, type StageLayout } from "./layout";
 import { GlyphAtlas } from "./glyphAtlas";
@@ -25,9 +25,12 @@ import { renderGrid, renderOverlay } from "./render";
 import type { Pace } from "./constants";
 import type {
   BinState,
+  Cluster,
   GamePhase,
   InputMode,
+  LevelDef,
   Packet,
+  PulseDef,
   Temper,
 } from "./types";
 
@@ -63,6 +66,8 @@ export interface HudSnapshot {
   untimed: boolean;
   teaching: boolean;
   activeTempers: readonly Temper[];
+  /** [n, of] within a multi-screen sequence, or null. */
+  stage: readonly [number, number] | null;
   lore: string;
   isLastLevel: boolean;
 }
@@ -135,6 +140,46 @@ const ARM_SELECT_AT = 0.5;
 /** A probe shorter than this was a sweep, not a study. */
 const ARM_SELECT_MIN_MS = 300;
 
+/**
+ * Clusters a file seeds beyond the ones its bins need: decoy sites, and the
+ * unnamed fifth temper. Both occupy the board and answer to a probe; no bin
+ * takes either, and neither fills a quota.
+ */
+function boardExtras(level: LevelDef): Extra[] {
+  const extras: Extra[] = [];
+  const [decoyCount] = level.decoys ?? [0, 0];
+  for (let i = 0; i < decoyCount; i++) {
+    // A decoy borrows a temper so it has some motion to show. Which one is
+    // rotated through the file's own tempers, so a decoy never stands out
+    // by moving in a way nothing else on the board does.
+    extras.push({ temper: level.tempers[i % level.tempers.length], decoy: true });
+  }
+  if (level.fifth) extras.push({ temper: level.tempers[0], fifth: true });
+  return extras;
+}
+
+/**
+ * Marks the clusters that change temper while the refiner watches. Chosen
+ * by position rather than at random so a file plays the same way twice —
+ * the whole queue is seeded, and a mechanic that moved between plays could
+ * not be learned.
+ */
+function assignMorphs(board: Board, level: LevelDef): void {
+  const [count, holdS] = level.morphs ?? [0, 0];
+  if (count <= 0 || level.tempers.length < 2) return;
+  const real = board.clusters.filter((c) => !c.decoy && !c.fifth);
+  for (let i = 0; i < Math.min(count, real.length); i++) {
+    const c = real[i];
+    // It becomes a temper this file actually has a bin for; otherwise the
+    // lesson would be "sometimes a group is unbinnable", which is a
+    // different mechanic entirely and belongs to the fifth temper.
+    const others = level.tempers.filter((t) => t !== c.temper);
+    c.morphTo = others[i % others.length];
+    c.morphAfter = holdS;
+    c.morphed = false;
+  }
+}
+
 export class GameEngine {
   board: Board;
   layout: StageLayout;
@@ -162,7 +207,12 @@ export class GameEngine {
     t: number;
   } | null = null;
 
-  reticle = { x: 0, y: 0, active: false };
+  /** `scale` is the lens's own lifecycle: 1 while a finger is down, held
+   *  for `lensLingerS` after it lifts, then shrunk to 0 over
+   *  `lensShrinkS`. A lens that vanished with the finger was never seen by
+   *  the player who summoned it. */
+  reticle = { x: 0, y: 0, active: false, scale: 1 };
+  private lensHoldUntil = -1;
   marquee = { active: false, x0: 0, y0: 0, x1: 0, y1: 0 };
   hoverBin: Temper | null = null;
 
@@ -176,6 +226,18 @@ export class GameEngine {
   /** Elapsed time at which the orientation file re-offers its hint, or -1
    *  when this file has no hint. Cleared once a packet is lifted. */
   private orientHintAt = -1;
+  /** Seconds at which the pulse file's next reveal may begin, and when the
+   *  current reveal ends. Both -1 when this file has no pulse. */
+  private pulseNextAt = -1;
+  private pulseUntil = -1;
+  /** Elapsed time of the last touch, for the pulse's tap cooldown. */
+  private lastTouchAt = -1e9;
+  /** The temper the fifth borrows: whichever was last refined. */
+  private lastRefined: Temper = "WO";
+  /** Elapsed time at which a finished no-ceremony screen advances. */
+  private advanceAt = -1;
+  /** The player's own audio setting, held while a file redacts it. */
+  private mutedBeforeRedaction: boolean | null = null;
 
   /** Cluster ids currently pulsing from a rejected drop. */
   glitchUntil = 0;
@@ -383,6 +445,7 @@ export class GameEngine {
       untimed: level.untimed === true,
       teaching: level.teaches === true,
       activeTempers: level.tempers,
+      stage: level.stage ?? null,
       lore: level.lore,
       isLastLevel: this.levelIndex >= LEVELS.length - 1,
     };
@@ -411,12 +474,21 @@ export class GameEngine {
       level.tempers,
       level.quota + level.spare,
       level.spacing,
+      boardExtras(level),
     );
 
     // If the board saturated before every cluster was placed, lower the
     // quota to what actually exists so a file is always completable.
     const counts: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
-    for (const c of this.board.clusters) counts[c.temper]++;
+    // Decoys and the fifth temper occupy the board but fill no bin, so they
+    // must never count towards a temper having enough clusters.
+    const tally = () => {
+      for (const t of TEMPERS) counts[t] = 0;
+      for (const c of this.board.clusters) {
+        if (!c.decoy && !c.fifth) counts[c.temper]++;
+      }
+    };
+    tally();
     const active = level.tempers;
     // A temper with no clusters means a bin that can never fill, so a
     // saturated board is re-seeded rather than clamped. Flooring the quota
@@ -429,9 +501,9 @@ export class GameEngine {
         level.tempers,
         level.quota + level.spare,
         level.spacing,
+        boardExtras(level),
       );
-      for (const t of TEMPERS) counts[t] = 0;
-      for (const c of this.board.clusters) counts[c.temper]++;
+      tally();
       scarcest = Math.min(...active.map((t) => counts[t]));
     }
     this.quota = Math.max(1, Math.min(level.quota, scarcest));
@@ -460,6 +532,17 @@ export class GameEngine {
     this.releaseGesture();
     this.refreshLayout();
     this.orientHintAt = level.selfAgitate === true ? 13 : -1;
+    this.advanceAt = -1;
+    this.lensHoldUntil = -1;
+    this.reticle.scale = 1;
+    this.lastTouchAt = -1e9;
+    // The pulse starts hidden: the first thing the file does is nothing,
+    // which is the point — the group has to be missed before it surfaces.
+    this.pulseNextAt = level.pulse ? level.pulse.hiddenS : -1;
+    this.pulseUntil = -1;
+    this.applyRedaction(level.redact === "audio");
+    this.lastRefined = level.tempers[0];
+    assignMorphs(this.board, level);
     if (level.selfAgitate) {
       // The generic "FILE LOADED" line teaches nothing to someone who does
       // not yet know the matrix hides anything.
@@ -508,6 +591,10 @@ export class GameEngine {
 
   setMuted(muted: boolean): void {
     this.muted = muted;
+    // A deliberate choice made during a redacted file wins: there is now
+    // nothing to restore, or restoring would overwrite what the player just
+    // asked for.
+    this.mutedBeforeRedaction = null;
     getAudio().setMuted(muted);
     this.persist();
     this.snapshotDirty = true;
@@ -552,6 +639,52 @@ export class GameEngine {
     this.persist();
     this.snapshotDirty = true;
     this.emit(true);
+  }
+
+  /**
+   * A file that takes the voices away, and gives them back. The player's own
+   * setting is stashed and restored: a teaching file must never silently
+   * change a preference the refiner set for themselves.
+   */
+  /**
+   * The reveal/hide cycle of the file that introduces the probe, as a 0..1
+   * envelope on cluster agitation.
+   *
+   * The next reveal is gated on *both* the quiet gap since the last one and
+   * a cooldown since the refiner last touched the board, so a group never
+   * surfaces underneath a finger that is already down — which would teach
+   * exactly the wrong lesson about what the finger is for.
+   */
+  private pulseEnvelope(p: PulseDef): number {
+    if (this.elapsed >= this.pulseUntil) {
+      // Not revealing. Should the next one start?
+      const ready = Math.max(this.pulseNextAt, this.lastTouchAt + p.tapCooldownS);
+      if (this.elapsed >= ready) {
+        this.pulseUntil = this.elapsed + p.revealS;
+        this.pulseNextAt = this.pulseUntil + p.hiddenS;
+      } else {
+        return 0;
+      }
+    }
+    const into = this.elapsed - (this.pulseUntil - p.revealS);
+    const left = this.pulseUntil - this.elapsed;
+    // Ramped at both ends: a hard cut reads as a rendering glitch rather
+    // than as something surfacing.
+    const ramp = p.rampS > 0 ? Math.min(1, into / p.rampS, left / p.rampS) : 1;
+    return Math.max(0, Math.min(1, ramp)) * p.subtlety;
+  }
+
+  private applyRedaction(on: boolean): void {
+    if (on) {
+      if (this.mutedBeforeRedaction === null) {
+        this.mutedBeforeRedaction = this.muted;
+      }
+      this.muted = true;
+    } else if (this.mutedBeforeRedaction !== null) {
+      this.muted = this.mutedBeforeRedaction;
+      this.mutedBeforeRedaction = null;
+    }
+    getAudio().setMuted(this.muted);
   }
 
   private say(
@@ -720,6 +853,9 @@ export class GameEngine {
     if (this.gesture) return;
 
     const r = this.reticleFor(x, y);
+    this.lastTouchAt = this.elapsed;
+    this.lensHoldUntil = -1;
+    this.reticle.scale = 1;
     const kind: Gesture["kind"] = this.packet
       ? "carry"
       : this.mode === "select"
@@ -803,7 +939,16 @@ export class GameEngine {
     if (isTap) this.registerTap(g.startX, g.startY);
 
     this.gesture = null;
-    this.reticle.active = false;
+    this.lastTouchAt = this.elapsed;
+    // On the file that introduces the lens, it does not vanish with the
+    // finger: it holds, then shrinks. A tool the player never got to look
+    // at cannot teach them it is a tool.
+    const linger = LEVELS[this.levelIndex].lensLingerS ?? 0;
+    if (g.kind === "probe" && linger > 0 && !this.packet) {
+      this.lensHoldUntil = this.elapsed + linger;
+    } else {
+      this.reticle.active = false;
+    }
     this.marquee.active = false;
     this.hoverBin = null;
     getAudio().silenceAll();
@@ -817,6 +962,7 @@ export class GameEngine {
     // Cancelled mid-drag (system gesture, call, notch swipe): abandon the
     // selection but never lose the packet — it stays carried.
     this.gesture = null;
+    this.lensHoldUntil = -1;
     this.reticle.active = false;
     this.marquee.active = false;
     this.hoverBin = null;
@@ -854,6 +1000,7 @@ export class GameEngine {
 
   private releaseGesture(): void {
     this.gesture = null;
+    this.lensHoldUntil = -1;
     this.reticle.active = false;
     this.marquee.active = false;
     this.hoverBin = null;
@@ -936,14 +1083,26 @@ export class GameEngine {
       haptics.reject();
       return;
     }
-    if (bestCount < MIN_CAPTURE) {
-      this.say(`INSUFFICIENT CAPTURE — ${MIN_CAPTURE} MINIMUM`, "error", 1.8);
+    const minCapture = LEVELS[this.levelIndex].minCapture ?? MIN_CAPTURE;
+    if (bestCount < minCapture) {
+      this.say(`INSUFFICIENT CAPTURE — ${minCapture} MINIMUM`, "error", 1.8);
       getAudio().buzz();
       haptics.reject();
       return;
     }
 
     const cluster = this.board.clusters[bestId];
+    // A decoy never reaches the agitation a real group does, so the generic
+    // guard below would fire on it and tell the refiner to probe harder —
+    // advice that cannot work, on a site they did probe. It gets the honest
+    // answer instead, and gets it before the guard can lie.
+    if (cluster.decoy) {
+      this.say("NO TEMPER DETECTED", "error", 1.8);
+      getAudio().buzz();
+      haptics.reject();
+      this.glitchUntil = this.elapsed + 0.25;
+      return;
+    }
     if (cluster.agitation < 0.22) {
       this.say("NO TEMPER DETECTED — PROBE FIRST", "error", 1.9);
       getAudio().buzz();
@@ -970,7 +1129,11 @@ export class GameEngine {
     };
     this.latchedId = -1;
     this.phase = "carry";
-    this.mode = "probe";
+    // Back to whatever mode this file lives in. On the orientation screens
+    // that is SELECT: they have no probe, and dropping the refiner into
+    // PROBE after their first lift left them holding a tool that does
+    // nothing for the remaining three groups.
+    this.mode = LEVELS[this.levelIndex].startMode ?? "probe";
     getAudio().lift();
     haptics.lift();
     this.say("PACKET LIFTED — ASSIGN A TEMPER", "info", 2.2);
@@ -989,12 +1152,32 @@ export class GameEngine {
       return;
     }
 
+    if (cluster.fifth) {
+      // Every bin refuses it, and it fills no quota. Nothing in the game
+      // says what it is, and nothing ever will. Leaving it alone costs
+      // nothing; this is what trying costs.
+      const bin = this.bins[target];
+      bin.lastHitAt = this.elapsed;
+      bin.lastHitOk = false;
+      this.scatterBack(cluster, packet);
+      getAudio().buzz();
+      haptics.reject();
+      this.glitchUntil = this.elapsed + 0.6;
+      this.say("NO TEMPER DETECTED", "error", 2.4);
+      this.packet = null;
+      this.phase = "probe";
+      this.hoverBin = null;
+      this.snapshotDirty = true;
+      return;
+    }
+
     if (target === packet.temper) {
       const bin = this.bins[target];
       bin.fill = Math.min(1, bin.fill + 1 / this.quota);
       bin.lastHitAt = this.elapsed;
       bin.lastHitOk = true;
       cluster.refined = true;
+      this.lastRefined = target;
       for (const i of cluster.members) {
         const n = this.board.nodes[i];
         n.retired = true;
@@ -1032,17 +1215,7 @@ export class GameEngine {
       const bin = this.bins[target];
       bin.lastHitAt = this.elapsed;
       bin.lastHitOk = false;
-      // Unrefined data scatters back to the grid, still agitated, still
-      // waiting. Nothing is lost but time.
-      for (const i of cluster.members) {
-        const n = this.board.nodes[i];
-        n.lifted = false;
-        n.scatter = 1;
-        n.sx = packet.x + (this.board.rng() - 0.5) * 60;
-        n.sy = packet.y + (this.board.rng() - 0.5) * 60;
-      }
-      cluster.agitation = 0;
-      if (this.latchedId === cluster.id) this.latchedId = -1;
+      this.scatterBack(cluster, packet);
       getAudio().buzz();
       haptics.reject();
       this.glitchUntil = this.elapsed + 0.5;
@@ -1054,17 +1227,45 @@ export class GameEngine {
     this.snapshotDirty = true;
   }
 
+  /**
+   * Unrefined data returns to the grid, still agitated and still waiting.
+   * Nothing is lost but time — which is what keeps a mis-binned cluster
+   * from being able to make a file uncompletable.
+   */
+  private scatterBack(cluster: Cluster, packet: Packet): void {
+    for (const i of cluster.members) {
+      const n = this.board.nodes[i];
+      n.lifted = false;
+      n.scatter = 1;
+      n.sx = packet.x + (this.board.rng() - 0.5) * 60;
+      n.sy = packet.y + (this.board.rng() - 0.5) * 60;
+    }
+    cluster.agitation = 0;
+    if (this.latchedId === cluster.id) this.latchedId = -1;
+  }
+
   private checkCompletion(): void {
     for (const t of this.activeTempers) {
       if (this.bins[t].fill < 0.999) return;
     }
+    const level = LEVELS[this.levelIndex];
     this.phase = "complete";
     this.releaseGesture();
     getAudio().silenceAll();
     haptics.releaseProximity();
-    getAudio().fanfare();
     haptics.complete();
-    this.say("FILE REFINED. PLEASE ENJOY EACH NUMBER EQUALLY.", "praise", 6);
+
+    if (level.ceremony === "none" && this.levelIndex < LEVELS.length - 1) {
+      // One continuous sequence, not a run of interruptions: a short flash
+      // on the cleared board, then the next screen. No banner, no addendum,
+      // no button. The phase still goes to "complete" so input stops.
+      getAudio().chime();
+      this.advanceAt = this.elapsed + (level.autoAdvanceMs ?? 900) / 1000;
+      this.say("REFINED", "praise", 2);
+    } else {
+      getAudio().fanfare();
+      this.say("FILE REFINED. PLEASE ENJOY EACH NUMBER EQUALLY.", "praise", 6);
+    }
     this.snapshotDirty = true;
   }
 
@@ -1129,6 +1330,29 @@ export class GameEngine {
       }
     }
 
+    // ── the lens's own lifecycle ─────────────────────────────────────
+    if (this.lensHoldUntil >= 0 && !this.gesture) {
+      const shrink = LEVELS[this.levelIndex].lensShrinkS ?? 0.4;
+      const over = this.elapsed - this.lensHoldUntil;
+      if (over <= 0) {
+        this.reticle.scale = 1;
+      } else {
+        this.reticle.scale = Math.max(0, 1 - over / Math.max(0.05, shrink));
+        if (this.reticle.scale <= 0) {
+          this.reticle.active = false;
+          this.lensHoldUntil = -1;
+          this.reticle.scale = 1;
+        }
+      }
+    }
+
+    // ── a finished screen with no ceremony advances itself ───────────
+    if (this.advanceAt >= 0 && this.elapsed >= this.advanceAt) {
+      this.advanceAt = -1;
+      this.nextLevel();
+      return;
+    }
+
     if (this.message && this.elapsed > this.messageUntil) {
       this.message = null;
       this.snapshotDirty = true;
@@ -1168,6 +1392,10 @@ export class GameEngine {
     const probing =
       live && this.gesture?.kind === "probe" && this.reticle.active && !this.packet;
     const selfAgitate = level.selfAgitate === true && live;
+    // The pulse file's groups surface and sink on their own schedule. The
+    // envelope is computed once per frame and applied like self-agitation,
+    // so the same "moves without a finger" path carries both.
+    const pulse = level.pulse && live ? this.pulseEnvelope(level.pulse) : 0;
     const rx = this.reticle.x;
     const ry = this.reticle.y;
 
@@ -1185,6 +1413,7 @@ export class GameEngine {
     peak.MA = 0;
     let dominant: Temper | null = null;
     let dominantValue = 0;
+    const decoyAgitation = level.decoys?.[1] ?? 0.35;
 
     for (const cluster of this.board.clusters) {
       let target = 0;
@@ -1229,6 +1458,21 @@ export class GameEngine {
       // that groups move, and leaves the probe as something to discover
       // one file later.
       if (selfAgitate && !cluster.refined) target = 1;
+      if (pulse > 0 && !cluster.refined) target = Math.max(target, pulse);
+
+      // A morphing cluster changes temper in front of the refiner, once,
+      // after it has been agitated long enough to have been read. Keyed off
+      // agitated time rather than wall-clock so it cannot happen while
+      // nobody is looking at it.
+      if (cluster.morphTo && !cluster.morphed && cluster.clock >= cluster.morphAfter) {
+        cluster.temper = cluster.morphTo;
+        cluster.morphed = true;
+        this.glitchUntil = this.elapsed + 0.2;
+      }
+      // The fifth borrows whatever was last refined, so it always looks
+      // like something the refiner knows, and is always wrong.
+      if (cluster.fifth) cluster.temper = this.lastRefined;
+      if (cluster.decoy) target *= decoyAgitation;
       const k = target > cluster.agitation ? RISE : FALL;
       cluster.agitation += (target - cluster.agitation) * (1 - Math.exp(-k * dt));
       if (cluster.agitation < 0.002) cluster.agitation = 0;
@@ -1237,12 +1481,17 @@ export class GameEngine {
         cluster.clock += dt;
         applyTemperMotion(cluster, this.board.nodes, level.subtlety);
       }
-      if (cluster.probe > peak[cluster.temper]) {
-        peak[cluster.temper] = cluster.probe;
-      }
-      if (cluster.probe > dominantValue) {
-        dominantValue = cluster.probe;
-        dominant = cluster.temper;
+      // A decoy is a lie told to the eye only. It never reaches the audio
+      // peaks or the haptic cadence, so the drone and the buzz stay honest
+      // and a refiner who listens is never fooled by one.
+      if (!cluster.decoy) {
+        if (cluster.probe > peak[cluster.temper]) {
+          peak[cluster.temper] = cluster.probe;
+        }
+        if (cluster.probe > dominantValue) {
+          dominantValue = cluster.probe;
+          dominant = cluster.temper;
+        }
       }
       if (cluster.agitation === 0) {
         cluster.clock = 0;
@@ -1250,12 +1499,17 @@ export class GameEngine {
     }
 
     if (latchCandidate >= 0) {
-      const teaching = LEVELS[this.levelIndex].teaches === true;
+      const found = this.board.clusters[latchCandidate];
+      // A teaching file names what you have found — but a decoy is not a
+      // temper and the fifth has no name, and having the terminal announce
+      // one as woe would teach the exact lie the mechanic exists to expose.
+      const teaching =
+        LEVELS[this.levelIndex].teaches === true && !found.decoy && !found.fifth;
       if (teaching && latchCandidate !== this.latchedId) {
         // The calibration file names what you have found the moment you
         // find it. Four tempers learned by feeling them, not by reading a
         // description and hoping.
-        const def = TEMPER_DEFS[this.board.clusters[latchCandidate].temper];
+        const def = TEMPER_DEFS[found.temper];
         this.say(
           `${def.code} ${def.name} — ${def.signature.toUpperCase()}`,
           "info",

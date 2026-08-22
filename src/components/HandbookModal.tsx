@@ -79,7 +79,16 @@ export function HandbookModal({
   archive,
   levelIndex,
 }: Props) {
-  const recovered = LEVELS.filter((l) => archive.has(l.id)).length;
+  // The orientation screens are one sequence, not 21 files: only the last
+  // of them carries an archive row, so the list stays a set of secrets
+  // rather than a progress bar.
+  const files = LEVELS.filter((l) => l.archived !== false);
+  const recovered = files.filter((l) => archive.has(l.id)).length;
+  // A screen inside a sequence belongs to the row that closes it, so
+  // playing orientation screen 5 marks the ORIENTATION row IN PROGRESS
+  // rather than marking nothing at all.
+  const currentRow =
+    LEVELS.slice(levelIndex).find((l) => l.archived !== false)?.id ?? null;
   return (
     <div
       role="dialog"
@@ -178,12 +187,12 @@ export function HandbookModal({
         </h3>
         <p className="mb-2 text-[9px] leading-snug text-phos-600">
           One addendum is declassified per refined file. {recovered} of{" "}
-          {LEVELS.length} recovered. The remainder are not yours yet.
+          {files.length} recovered. The remainder are not yours yet.
         </p>
         <ol className="space-y-1">
-          {LEVELS.map((level, i) => {
+          {files.map((level) => {
             const open = archive.has(level.id);
-            const current = i === levelIndex && !open;
+            const current = level.id === currentRow && !open;
             return (
               <li
                 key={level.id}
