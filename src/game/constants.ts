@@ -119,6 +119,35 @@ export const TIME_CREDIT = 5;
  */
 export const LEVELS: readonly LevelDef[] = [
   // ── Orientation ────────────────────────────────────────────────────
+  // Before probing, before tempers, before the clock: one group, already
+  // moving, on a board of digits that look exactly like it. Playtesting
+  // found that a player dropped straight into CALIBRATION has no reason to
+  // believe there is anything hidden in the matrix at all, and so no reason
+  // to hold a finger on it. This file supplies the reason. It opens in
+  // SELECT, so the first gesture a refiner ever makes is a box round
+  // something they can already see.
+  {
+    id: "orientation",
+    name: "ORIENTATION",
+    fileCode: "0001",
+    tempers: ["WO"],
+    spacing: 6,
+    lore: "Everything you will ever refine is already on the screen. Most of it is only pretending to be still.",
+    seconds: 0,
+    untimed: true,
+    training: true,
+    selfAgitate: true,
+    startMode: "select",
+    // Chosen, not arbitrary: this seed puts the file's only group near the
+    // middle of the board (col 8, row 13) with seven digits in it. A first
+    // file must not hide its one teaching example in a corner.
+    seed: 0x09,
+    quota: 1,
+    spare: 0,
+    // Deliberately louder than any real file: this motion has to be
+    // noticeable to someone who does not yet know to look for motion.
+    subtlety: 1.35,
+  },
   {
     id: "calibration",
     name: "CALIBRATION",
@@ -128,6 +157,7 @@ export const LEVELS: readonly LevelDef[] = [
     lore: "You have been selected. The numbers are frightening, and you are the only one who can feel it.",
     seconds: 0,
     untimed: true,
+    training: true,
     teaches: true,
     seed: 0x1e55,
     quota: 1,

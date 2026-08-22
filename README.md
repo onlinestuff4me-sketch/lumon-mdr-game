@@ -33,15 +33,18 @@ of them 404s every asset on the other.
 
 ## The loop
 
-The queue runs in three acts, so the job is learned rather than sprung on
-you. **CALIBRATION** meets all four tempers, one cluster each, spread wide,
+The queue runs in three acts behind two training files, so the job is learned
+rather than sprung on you. **ORIENTATION** is one group, already moving on
+its own, on a board of digits that look exactly like it — no probing, no
+clock, no temper to identify: box it and bin it, and learn that the matrix
+hides things. **CALIBRATION** then meets all four tempers, one cluster each, spread wide,
 no clock, and the terminal names each one as you find it. **Act I** is four
 files of a *single* temper — three groups of it, one bin spanning the whole
 deck, nothing to confuse it against, and no clock until the last of them. **Act II** puts two
 tempers in a file, two groups each, and starts the shift clock; this is
 where the real skill lives, telling one from another. **Act III** is the job
 as Lumon specifies it, all four at once on a crowded board, with the clock
-tightening and the motion damping file by file. Thirteen files, and each one
+tightening and the motion damping file by file. Fourteen files, and each one
 hands back a line of the story on completion.
 
 The full table, what each act teaches and why each Act II pairing was chosen
@@ -80,7 +83,7 @@ and the clock bites the player who is guessing.
 The handbook shows a live animated sample of each temper beside its
 description, and the shift clock stops while it is open — so checking what
 dread actually looks like, mid-file, is free. It also carries the
-**archive**: the thirteen files with their addenda, the ones you have
+**archive**: the fourteen files with their addenda, the ones you have
 refined declassified and the rest redacted word by word. It persists, so
 the count of recovered addenda is the closest thing here to a save file.
 
@@ -192,7 +195,7 @@ On a scripted iPhone-13 viewport in headless Chromium:
   13.2 MB), and no Web Audio nodes allocated at all during twelve seconds of
   continuous probing across all four tempers — the voices are built once.
 - A full file completes end to end under script with no orphaned nodes.
-- **Latch accuracy 768/768 across all thirteen boards.** Every cluster on
+- **Latch accuracy 780/780 across all fourteen boards.** Every cluster on
   every file probed at its centroid and at ±8px and ±14px on both axes,
   through the real pointer API and the real reticle taper: the cluster that
   latches is the cluster nearest the reticle, every time, including on the
@@ -200,6 +203,12 @@ On a scripted iPhone-13 viewport in headless Chromium:
 - **DRANESVILLE plays to 100% with hand-speed gestures** — probe, marquee
   and carry all walked along their real paths at 700px/s — filling its one
   bin 0 → 33 → 67 → 100.
+- **ORIENTATION plays to 100% with no probe at all**, which is its whole
+  point. Its cluster reaches full agitation untouched (peak displacement
+  1.4px per frame against 0.24px for the filler digits around it) while its
+  `probe` stays at 0, so the drone and the haptics still wait for a finger.
+  CALIBRATION's clusters measure 0.000 agitation until probed — the
+  self-agitation does not leak into any other file.
 ### Is a file actually winnable?
 
 Eight correct assignments against a 90-120 second clock is Act III's

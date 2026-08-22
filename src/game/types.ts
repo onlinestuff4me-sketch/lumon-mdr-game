@@ -115,4 +115,18 @@ export interface LevelDef {
   /** Name the temper in the ticker as soon as a cluster is identified.
    *  This is the whole teaching mechanism of the calibration file. */
   readonly teaches?: boolean;
+  /** Clusters agitate on their own, with no probe at all. The orientation
+   *  file's entire lesson: groups are hidden in plain sight among digits
+   *  that only look identical, and the ones that matter move. Probing is
+   *  introduced afterwards, once the player knows what they are hunting
+   *  for. */
+  readonly selfAgitate?: boolean;
+  /** Input mode the file opens in. Orientation opens in SELECT, so the
+   *  first thing a new refiner ever does is draw a box round something
+   *  they can already see moving. */
+  readonly startMode?: InputMode;
+  /** This file teaches the gesture chain rather than the tempers, and is
+   *  what SKIP on the briefing screen skips. Marked explicitly rather than
+   *  inferred from `teaches`, which is also set on every Act I file. */
+  readonly training?: boolean;
 }

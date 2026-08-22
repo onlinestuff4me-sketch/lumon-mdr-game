@@ -173,6 +173,9 @@ export class GameEngine {
    * the same cluster three times is not.
    */
   latchedId = -1;
+  /** Elapsed time at which the orientation file re-offers its hint, or -1
+   *  when this file has no hint. Cleared once a packet is lifted. */
+  private orientHintAt = -1;
 
   /** Cluster ids currently pulsing from a rejected drop. */
   glitchUntil = 0;
@@ -441,7 +444,7 @@ export class GameEngine {
     this.absorb = null;
     this.marquee.active = false;
     this.hoverBin = null;
-    this.mode = "probe";
+    this.mode = level.startMode ?? "probe";
     this.paused = false;
     this.pausedSilenced = false;
     const seconds = level.untimed
@@ -456,7 +459,14 @@ export class GameEngine {
     this.phase = "probe";
     this.releaseGesture();
     this.refreshLayout();
-    this.say(`FILE ${level.name} #${level.fileCode} LOADED`, "info", 2.6);
+    this.orientHintAt = level.selfAgitate === true ? 13 : -1;
+    if (level.selfAgitate) {
+      // The generic "FILE LOADED" line teaches nothing to someone who does
+      // not yet know the matrix hides anything.
+      this.say("ONE GROUP IS ALREADY MOVING. BOX IT.", "info", 7);
+    } else {
+      this.say(`FILE ${level.name} #${level.fileCode} LOADED`, "info", 2.6);
+    }
     getAudio().boot();
     this.emit(true);
   }
@@ -1124,6 +1134,19 @@ export class GameEngine {
       this.snapshotDirty = true;
     }
 
+    // Orientation offers its hint a second time, once, for a player who
+    // read the first line, did nothing, and watched it disappear. Cancelled
+    // the moment anything is lifted, so it can never talk over a refiner
+    // who has already understood.
+    if (this.orientHintAt >= 0 && live) {
+      if (this.packet || this.board.clusters.some((c) => c.refined)) {
+        this.orientHintAt = -1;
+      } else if (this.elapsed >= this.orientHintAt) {
+        this.orientHintAt = -1;
+        this.say("BOX THE MOVING DIGITS. DRAG THEM TO THE BIN.", "info", 7);
+      }
+    }
+
     this.updateAgitation(dt, live);
     this.updateNodes(dt);
 
@@ -1144,6 +1167,7 @@ export class GameEngine {
     // selection with NO TEMPER DETECTED.
     const probing =
       live && this.gesture?.kind === "probe" && this.reticle.active && !this.packet;
+    const selfAgitate = level.selfAgitate === true && live;
     const rx = this.reticle.x;
     const ry = this.reticle.y;
 
@@ -1199,6 +1223,12 @@ export class GameEngine {
       if (this.latchedId === cluster.id && !cluster.refined && live) {
         target = Math.max(target, LATCH_FLOOR);
       }
+      // Orientation's clusters move with no probe at all. Raised on the
+      // agitation target only, never on `probe`, so the drone and the
+      // buzzing still answer to a live finger — the file shows the player
+      // that groups move, and leaves the probe as something to discover
+      // one file later.
+      if (selfAgitate && !cluster.refined) target = 1;
       const k = target > cluster.agitation ? RISE : FALL;
       cluster.agitation += (target - cluster.agitation) * (1 - Math.exp(-k * dt));
       if (cluster.agitation < 0.002) cluster.agitation = 0;

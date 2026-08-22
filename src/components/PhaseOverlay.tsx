@@ -14,6 +14,14 @@ interface Props {
   onResume: (index: number) => void;
 }
 
+/** The first file past the training files — where SKIP lands. Derived
+ *  rather than hardcoded, so inserting another training file cannot
+ *  silently drop a player into the middle of the tutorial. */
+const FIRST_REAL_FILE = Math.max(
+  1,
+  LEVELS.findIndex((l) => !l.training),
+);
+
 const BTN =
   "mt-5 inline-flex items-center gap-2 rounded-[3px] border border-phos-400 bg-phos-600/25 px-5 py-2.5 text-[11px] font-bold tracking-[0.22em] text-phos-200 crt-text-glow active:bg-phos-600/50";
 
@@ -51,10 +59,11 @@ export function PhaseOverlay({
             bin them by the temper they evoke.
           </p>
           <p className="mt-3 text-[10px] leading-relaxed text-phos-400">
-            You begin on <span className="text-phos-200">CALIBRATION</span>:
-            no clock, one cluster of each temper, and the terminal names each
-            one as you find it. Four files then teach one temper apiece, four
-            pair them up, and the last four are the job itself.
+            You begin on <span className="text-phos-200">ORIENTATION</span>:
+            one group, already moving, on a screen of digits that only look
+            like it. Box it and bin it. <span className="text-phos-200">
+            CALIBRATION</span> then teaches you to find the ones that are
+            hiding, and names each temper as you feel it.
           </p>
           <p className="mt-3 text-[9px] leading-relaxed tracking-[0.1em] text-phos-600">
             HEADPHONES AND HAPTICS RECOMMENDED.
@@ -63,19 +72,19 @@ export function PhaseOverlay({
           </p>
           <button type="button" className={BTN} onClick={onStart}>
             <Play size={12} strokeWidth={2.6} />
-            BEGIN CALIBRATION
+            BEGIN ORIENTATION
           </button>
           {/* A returning refiner picks up where the story left off rather
               than re-earning addenda they already hold. Falls back to the
               plain skip on a terminal with no history. */}
           <button
             type="button"
-            onClick={() => onResume(resumeAt > 0 ? resumeAt : 1)}
+            onClick={() => onResume(resumeAt > 0 ? resumeAt : FIRST_REAL_FILE)}
             className="mt-3 text-[9px] tracking-[0.2em] text-phos-600 underline-offset-4"
           >
             {resumeAt > 0
               ? `RESUME AT ${LEVELS[resumeAt].name}`
-              : "SKIP CALIBRATION"}
+              : "SKIP THE TRAINING FILES"}
           </button>
         </>
       ) : null}

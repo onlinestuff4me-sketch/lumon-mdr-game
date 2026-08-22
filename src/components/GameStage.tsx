@@ -25,7 +25,6 @@ export function GameStage() {
   const [handbook, setHandbook] = useState(false);
   const [archive, setArchive] = useState<ReadonlySet<string>>(loadArchive);
 
-
   const openHandbook = useCallback(() => {
     // Read the archive here rather than tracking it in an effect: the
     // drawer is the only thing that renders it, and it is unmounted until
@@ -336,8 +335,14 @@ export function GameStage() {
           }}
         />
 
+        {/* Below the coach band, not inside it: at hudH + 6 this badge sat
+            on top of the ticker and clipped the line telling the player what
+            to do — which is exactly the line a first-time player needs. */}
         {live && !hud.audioReady ? (
-          <div className="pointer-events-none absolute inset-x-0 z-40 flex justify-center" style={{ top: layout.hudH + 6 }}>
+          <div
+            className="pointer-events-none absolute inset-x-0 z-40 flex justify-center"
+            style={{ top: layout.hudH + layout.tickerH + 4 }}
+          >
             <span className="rounded-[2px] border border-phos-700 bg-phos-950/85 px-2 py-0.5 text-[8px] tracking-[0.16em] text-phos-600">
               TAP TO ENABLE TERMINAL AUDIO
             </span>
