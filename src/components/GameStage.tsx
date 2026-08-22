@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { getAudio } from "../audio/AudioEngine";
 import { haptics } from "../audio/haptics";
 import { LEVELS } from "../game/constants";
-import { loadArchive, recordCompletion } from "../game/archive";
+import { loadArchive, recordCompletion, resumeIndex } from "../game/archive";
 import { computeLayout } from "../game/layout";
 import { useEngine } from "../hooks/useEngine";
 import { BinDeck } from "./BinDeck";
@@ -12,6 +12,8 @@ import { HandbookModal } from "./HandbookModal";
 import { HUD } from "./HUD";
 import { PhaseOverlay } from "./PhaseOverlay";
 import { Viewport } from "./Viewport";
+
+const LEVEL_IDS = LEVELS.map((l) => l.id);
 
 export function GameStage() {
   const { engine, hud } = useEngine();
@@ -217,6 +219,10 @@ export function GameStage() {
   const live =
     hud.phase === "probe" || hud.phase === "select" || hud.phase === "carry";
 
+  // Recomputed from the archive state, which is refreshed on every path
+  // that can reach the briefing screen.
+  const resumeAt = resumeIndex(archive, LEVEL_IDS);
+
   const start = useCallback(() => {
     void getAudio().unlock();
     haptics.markActivated();
@@ -315,12 +321,18 @@ export function GameStage() {
           onStart={start}
           onNext={() => engine.nextLevel()}
           onRestart={() => engine.restart()}
-          onNewQuarter={() => engine.restartQuarter()}
+          onNewQuarter={() => {
+            // Back to the briefing, where the resume link is read — so the
+            // files refined this sitting have to be visible to it.
+            setArchive(loadArchive());
+            engine.restartQuarter();
+          }}
           onHandbook={openHandbook}
-          onSkipCalibration={() => {
+          resumeAt={resumeAt}
+          onResume={(index) => {
             void getAudio().unlock();
             haptics.markActivated();
-            engine.startLevel(1);
+            engine.startLevel(index);
           }}
         />
 

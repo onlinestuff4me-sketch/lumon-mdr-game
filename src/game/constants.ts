@@ -188,8 +188,13 @@ export const LEVELS: readonly LevelDef[] = [
     tempers: ["MA"],
     spacing: 5,
     lore: "Malice was the last temper to be named, and the first to be found. The board does not like you.",
-    seconds: 0,
-    untimed: true,
+    // The last teaching file, and the only Act I file with a clock. Going
+    // from four untimed files straight into a two-temper file that is timed
+    // meets the player with the clock and a second temper in the same
+    // breath; here the clock arrives while the task is still trivial —
+    // three groups of one temper, no wrong bin to drop into — so it can be
+    // learned as a HUD element rather than as a threat.
+    seconds: 180,
     teaches: true,
     seed: 0x5d26,
     quota: 3,

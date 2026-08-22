@@ -37,7 +37,7 @@ The queue runs in three acts, so the job is learned rather than sprung on
 you. **CALIBRATION** meets all four tempers, one cluster each, spread wide,
 no clock, and the terminal names each one as you find it. **Act I** is four
 files of a *single* temper — three groups of it, one bin spanning the whole
-deck, nothing to confuse it against, still no clock. **Act II** puts two
+deck, nothing to confuse it against, and no clock until the last of them. **Act II** puts two
 tempers in a file, two groups each, and starts the shift clock; this is
 where the real skill lives, telling one from another. **Act III** is the job
 as Lumon specifies it, all four at once on a crowded board, with the clock
@@ -46,6 +46,10 @@ hands back a line of the story on completion.
 
 The full table, what each act teaches and why each Act II pairing was chosen
 are in [docs/PROGRESSION.md](docs/PROGRESSION.md).
+
+Once you have refined anything, the briefing offers **RESUME AT <file>** —
+one past the furthest file you have completed — so a returning refiner
+picks the story up rather than re-earning addenda they already hold.
 
 1. **PROBE** — hold a finger on the matrix. A lens floats above your
    fingertip, magnifying the digits under it so your thumb never covers the

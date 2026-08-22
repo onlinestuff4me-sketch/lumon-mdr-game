@@ -9,7 +9,9 @@ interface Props {
   onRestart: () => void;
   onNewQuarter: () => void;
   onHandbook: () => void;
-  onSkipCalibration: () => void;
+  /** Index of the file to resume at; 0 when nothing has been refined. */
+  resumeAt: number;
+  onResume: (index: number) => void;
 }
 
 const BTN =
@@ -22,7 +24,8 @@ export function PhaseOverlay({
   onRestart,
   onNewQuarter,
   onHandbook,
-  onSkipCalibration,
+  resumeAt,
+  onResume,
 }: Props) {
   if (hud.phase === "probe" || hud.phase === "select" || hud.phase === "carry") {
     return null;
@@ -62,12 +65,17 @@ export function PhaseOverlay({
             <Play size={12} strokeWidth={2.6} />
             BEGIN CALIBRATION
           </button>
+          {/* A returning refiner picks up where the story left off rather
+              than re-earning addenda they already hold. Falls back to the
+              plain skip on a terminal with no history. */}
           <button
             type="button"
-            onClick={onSkipCalibration}
+            onClick={() => onResume(resumeAt > 0 ? resumeAt : 1)}
             className="mt-3 text-[9px] tracking-[0.2em] text-phos-600 underline-offset-4"
           >
-            SKIP CALIBRATION
+            {resumeAt > 0
+              ? `RESUME AT ${LEVELS[resumeAt].name}`
+              : "SKIP CALIBRATION"}
           </button>
         </>
       ) : null}

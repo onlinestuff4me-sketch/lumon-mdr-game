@@ -35,3 +35,23 @@ export function recordCompletion(id: string): ReadonlySet<string> {
   }
   return next;
 }
+
+/**
+ * The file to resume at: one past the furthest file completed, clamped to
+ * the last one. Deliberately "furthest", not "count" — a player who skipped
+ * ahead once should not be sent back to re-earn files they already hold,
+ * and a player who replays an early file should not lose their place.
+ *
+ * Returns 0 when nothing has been refined, which is the briefing's normal
+ * start-from-the-beginning case.
+ */
+export function resumeIndex(
+  archive: ReadonlySet<string>,
+  levelIds: readonly string[],
+): number {
+  let furthest = -1;
+  levelIds.forEach((id, i) => {
+    if (archive.has(id)) furthest = i;
+  });
+  return Math.min(levelIds.length - 1, furthest + 1);
+}

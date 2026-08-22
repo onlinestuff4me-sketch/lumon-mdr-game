@@ -17,7 +17,7 @@ the engine.
 | 2 | DRANESVILLE | I | WO | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
 | 3 | SUNSET PARK | I | FC | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
 | 4 | CAIRNS | I | DR | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
-| 5 | EMINENCE | I | MA | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
+| 5 | EMINENCE | I | MA | 1 | 3 | 3 | 5 | +33% | 180s | 1.10 |
 | 6 | KINGSPORT | II | WO FC | 2 | 2 | 4 | 4 | +50% | 150s | 1.00 |
 | 7 | LE MANS | II | DR MA | 2 | 2 | 4 | 4 | +50% | 150s | 0.95 |
 | 8 | LONGBRANCH | II | WO DR | 2 | 2 | 4 | 4 | +50% | 140s | 0.92 |
@@ -49,8 +49,13 @@ bin, so the fill meter is a long bar across the bottom of the screen and
 progress is readable at a glance while your eyes are on the matrix.
 
 Four files, in the order the tempers are numbered: woe, frolic, dread,
-malice. Still no clock — a first meeting with a signature should not be
-timed.
+malice. A first meeting with a signature is not timed — except on the last
+of them. **EMINENCE carries a 180s clock**, and it is the only Act I file
+that does. Without it the player goes from four untimed files straight into
+a two-temper file that is timed, meeting the clock and a second temper in
+the same breath. Here the clock arrives while the task is still trivial —
+three groups of one temper, no wrong bin to drop into — so it is learned as
+a HUD element rather than as a threat.
 
 **Act II — two tempers, two bins.** This is where the actual skill lives:
 not *finding* a cluster but *telling one from another*. Two groups of each
@@ -97,7 +102,9 @@ Six fields on `LevelDef` carry the whole ramp:
 - **`subtlety`** — multiplier on motion amplitude. Above 1.0 in the teaching
   files, down to 0.58 at COLD HARBOR.
 - **`untimed` / `teaches`** — no shift clock; name the temper in the ticker
-  on identification. Both on for CALIBRATION, `untimed` for all of Act I.
+  on identification. Both on for CALIBRATION; `untimed` for the first three
+  Act I files, and `teaches` for all four, so EMINENCE still names malice
+  while running its clock.
 
 ## Lore and the archive
 
@@ -120,6 +127,12 @@ carries a **PERPETUITY WING · ARCHIVE** section listing all thirteen files:
 
 The counter at the top of the section (`n of 13 recovered`) is the closest
 thing the game has to a save file, and survives across sittings.
+
+The briefing screen reads the same archive: with any file refined, its
+secondary action becomes **RESUME AT <file>** — one past the *furthest*
+file completed, not the count, so skipping ahead once does not send you
+back and replaying an early file does not lose your place. With an empty
+archive it stays SKIP CALIBRATION.
 
 ## Verifying a change to the ramp
 
