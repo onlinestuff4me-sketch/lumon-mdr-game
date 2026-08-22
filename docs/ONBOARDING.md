@@ -1,0 +1,198 @@
+# Onboarding and the phased introduction of mechanics
+
+The design rule behind everything here: **a player is never asked to do two
+new things at once, and never meets a new rule for the first time under a
+clock.** Every mechanic gets shown in isolation, then used once in a real
+file, then becomes part of the world.
+
+This document is the specification. Every number in it is a lever, and
+every lever has a name used consistently here, in the tuning artifact, and
+(once built) in `src/game/constants.ts`. Nothing here is implemented yet —
+this is the plan to tune before building.
+
+---
+
+## Part 1 — ORIENTATION: reading the tempers by eye
+
+Twenty-one screens in three stages, before the probe exists. No clock, no
+hiding: every group is **already moving**, and all the player does is see
+it, box it, and bin it. What is being taught is not a gesture — it is *what
+each temper looks like*, learned by doing rather than by reading.
+
+### Stage 1 · one temper, one group (12 screens)
+
+Three screens per temper, in temper order, each with a single group and a
+single full-width bin.
+
+| Lever | Default | What it does |
+|---|---|---|
+| `stage1.screensPerTemper` | 3 | Screens spent on each temper before moving to the next. Lower = faster onboarding, less recognition drilled in. |
+| `stage1.groupsPerScreen` | 1 | Groups on the board. Above 1 the screen stops being "here is one thing, look at it". |
+| `stage1.temperOrder` | WO, FC, DR, MA | Sequence. Woe first because its droop is the slowest and most legible. |
+| `stage1.subtlety` | 1.35 | Motion amplitude multiplier. Deliberately louder than any real file — this motion must be noticeable to someone who does not yet know to look for motion. |
+
+Three screens per temper rather than one because recognition is the whole
+product of this stage, and recognition needs repetition in different places
+on the board. Three is also short enough that a repeat player is not
+punished — twelve screens at roughly 6–8 seconds each is about 90 seconds.
+
+### Stage 2 · two tempers, two groups (4 screens)
+
+The first discrimination: two bins on the deck, one group of each, and a
+wrong answer is now possible for the first time.
+
+| Lever | Default | What it does |
+|---|---|---|
+| `stage2.screens` | 4 | Screens in this stage. |
+| `stage2.groupsPerScreen` | 2 | One group per temper on the deck. |
+| `stage2.pairings` | WO+FC, DR+MA, WO+DR, FC+MA | Which two tempers each screen shows. Mirrors Act II's pairings, so the easy discrimination comes first and the two genuinely confusable pairs (dread/malice, frolic/malice) come later. |
+| `stage2.subtlety` | 1.25 | Slightly quieter than stage 1. |
+| `stage2.spacing` | 6 | Minimum clear cells between groups, so each is read on its own. |
+
+### Stage 3 · four tempers, four groups (5 screens)
+
+The full deck, one group per temper, still all visible, still no clock.
+
+| Lever | Default | What it does |
+|---|---|---|
+| `stage3.screens` | 5 | Screens in this stage. |
+| `stage3.groupsPerScreen` | 4 | One per temper. |
+| `stage3.subtlety` | 1.15 | Quieter again — the last step before motion starts hiding. |
+| `stage3.spacing` | 5 | |
+
+### Rules that apply to all of Part 1
+
+| Lever | Default | What it does |
+|---|---|---|
+| `orientation.minOverlapDigits` | 1 | How many of a group's digits a selection box must touch to lift the **whole** group. At 1, dragging over any part of a group takes all of it. The real game requires 4 (`MIN_CAPTURE`); this is the "generous selection" rule, and it exists so a new player is never told their correct instinct was a wrong box. |
+| `orientation.ceremony` | `none` | What happens between screens. `none` = flash and auto-advance; `brief` = a one-line "REFINED" flash; `full` = the normal 100% / addendum / NEXT FILE screen. |
+| `orientation.autoAdvanceMs` | 900 | Pause after the last group is binned before the next screen loads. |
+| `orientation.startMode` | `select` | These screens open in SELECT. There is nothing to probe. |
+| `orientation.wrongBinPenalty` | `scatter` | What a wrong bin does. `scatter` matches the real game; `nudge` would refuse the drop and say so without scattering. |
+
+---
+
+## Part 2 — THE PROBE FILE: motion that hides
+
+One screen. One group. One bin. This is where the game stops showing the
+player the answer, and the whole file is built to make that transition
+legible rather than jarring.
+
+### The pulse
+
+The group is not permanently agitated and not permanently still. It
+**breathes**: it surfaces for a moment, then sinks back into the matrix.
+
+```
+    reveal        hidden         reveal        hidden
+   ┌──2.0s──┐              ┌──2.0s──┐
+───┘        └────5.0s──────┘        └────5.0s──────
+```
+
+| Lever | Default | What it does |
+|---|---|---|
+| `probeIntro.revealDurationS` | 2.0 | How long the group stays visibly agitated each time it surfaces. |
+| `probeIntro.hiddenWaitS` | 5.0 | Gap between the end of one reveal and the start of the next. |
+| `probeIntro.tapCooldownS` | 5.0 | Minimum quiet time after the player's last touch before a reveal is allowed. Stops a reveal firing while a finger is already on the board and stealing the lesson. |
+| `probeIntro.revealSubtlety` | 0.80 | Motion amplitude of a reveal. Below Part 1's levels: it should read as a hint, not an announcement. |
+| `probeIntro.revealRampS` | 0.35 | Fade in and out of each reveal. A hard cut reads as a rendering glitch. |
+
+The next reveal fires at `max(lastRevealEnd + hiddenWaitS, lastTap + tapCooldownS)`.
+
+### The handover
+
+The player's instinct after Part 1 is to tap the moving digits and box
+them. Here that instinct is honoured and then redirected:
+
+| Lever | Default | What it does |
+|---|---|---|
+| `probeIntro.forceProbeOnTap` | true | The first touch on this screen puts the terminal into PROBE, not SELECT — the player reaches for the box and gets the lens instead. This is the moment the mechanic is introduced. |
+| `probeIntro.lensLingerS` | 1.0 | The lens stays at full size for this long after the finger lifts, instead of vanishing with it. Without the linger the player never sees what they just summoned. |
+| `probeIntro.lensShrinkS` | 0.4 | The lens then shrinks to nothing. The shrink is the tell that this is a *tool*, not a glitch — it has a lifecycle. |
+| `probeIntro.armSelectAfterProbe` | true | Once the group has been held and identified, SELECT arms itself, as in the real game. |
+
+Once the group is probed, boxed and binned, the file completes and
+**CALIBRATION** takes over — which is where the existing progression, and
+the four-temper naming ticker, already picks up.
+
+### Why this order
+
+Part 1 teaches *what a temper looks like* with nothing hidden. Part 2
+teaches *that tempers hide* and hands over the tool for finding them. Doing
+it the other way round is the original bug: the probe is undiscoverable
+when the player does not yet know what they are probing for.
+
+---
+
+## Part 3 — ACT III: one new rule at a time
+
+Act III's difficulty currently comes from two continuous dials — the clock
+down, the motion damped. Both are "the same task, tighter". The mechanics
+below make it *a different task*, and each gets the same three-beat
+treatment ORIENTATION uses: **taught in isolation → used once → part of the
+world.**
+
+Each teaching file is untimed or generous, carries one or two tempers, and
+does nothing except demonstrate its rule.
+
+| # | File | Clock | What it is |
+|---|---|---|---|
+| 1 | **TUMWATER** | 120s | Baseline. All four tempers, no new rules. |
+| 2 | **TEACH · DECOYS** | none | 2 tempers. Digits that stir faintly when probed and belong to no group. Shown alongside a real group so the difference is visible side by side. |
+| 3 | **ALLENTOWN** | 110s | Decoys live, on a real board. |
+| 4 | **TEACH · THE MORPH** | none | 1 temper, 1 group. It reads as one temper, and while the player watches it becomes another. Nothing else happens on the screen. |
+| 5 | **SIENA** | 100s | Decoys + morph. |
+| 6 | **TEACH · REDACTION** | 150s | 2 tempers, audio cut, announced: `TERMINAL AUDIO SUBSYSTEM UNDER MAINTENANCE`. Learning to read dread and malice apart by motion alone, while there is still time to do it badly. |
+| 7 | **COLD HARBOR** | 90s | Everything, plus the fifth temper. |
+
+### The levers
+
+| Lever | Default | What it does |
+|---|---|---|
+| `decoys.perBoard` | 2 | Decoy sites on a board that has them. |
+| `decoys.agitation` | 0.35 | How strongly a decoy stirs, as a fraction of a real group. Too high and it is indistinguishable; too low and it is invisible. |
+| `decoys.silent` | true | Decoys make no sound and no buzz. The sound is the honest channel; only the eye can be fooled. |
+| `morph.holdBeforeS` | 2.0 | How long a morphing group shows its first temper before changing. |
+| `morph.transitionS` | 0.6 | How long the change takes. |
+| `morph.perBoard` | 1 | Morphing groups per board that has them. |
+| `morph.snapshotAtLift` | true | A packet's temper is fixed when it lifts, so a morph after selection cannot invalidate a correct read. Turning this off makes the mechanic much crueller. |
+| `redaction.channel` | `audio` | Which channel a redacted file removes: `audio`, `haptics`, or `lens`. |
+| `redaction.restoreSetting` | true | The player's own audio setting is restored after the file. A tutorial must never silently change a preference. |
+| `fifthTemper.motion` | `borrowed` | What it does. `borrowed` = it takes on the motion of the last temper the player correctly binned, so it always looks like something they know and is always wrong. |
+| `fifthTemper.taught` | **false** | Whether it gets a teaching file. Deliberately false — see below. |
+| `fifthTemper.appearsOn` | COLD HARBOR | Which files carry it. |
+
+### The one exception to the teaching rule
+
+**The fifth temper is never taught.** Every other mechanic here gets a file
+that explains it, because a rule you cannot learn is just an unfair one.
+The fifth temper is the opposite case: its entire value is that nothing
+explains it. It has no coach line, no handbook entry, and no teaching file.
+It costs a scatter to try and nothing to leave alone, so a player who never
+works it out loses nothing but the secret.
+
+Its only acknowledgement is a fourteenth row in the handbook archive with
+**no file code**, which stays SEALED forever. Probing it once changes its
+name from redacted blocks to `05 · ████████` and its status to
+**UNRESOLVED**.
+
+---
+
+## Cost, stated plainly
+
+This adds 21 orientation screens, 1 probe file and 3 teaching files to a
+queue that currently has 14 files. Three consequences worth deciding on
+before any of it is built:
+
+1. **The completion ceremony has to go for Part 1.** Twenty-one screens
+   each ending in a 100% banner, an addendum and a NEXT FILE button is
+   twenty-one interruptions in what should feel like one continuous
+   sequence. `orientation.ceremony: none` is the default above for that
+   reason.
+2. **They should not each be an archive entry.** Twenty-one redacted rows
+   would swamp the fourteen real files and make the archive read as a
+   progress bar rather than a set of secrets. ORIENTATION should hold one
+   archive row for the whole sequence.
+3. **A returning player must be able to skip all of it.** RESUME AT already
+   does this from the archive; the `training` flag needs to cover every new
+   screen so SKIP lands past them.
