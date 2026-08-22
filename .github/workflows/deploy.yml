@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - claude/severance-mdr-game-lfvw52
   workflow_dispatch:
 
 # Allow one concurrent deployment; a newer push supersedes an in-flight one
