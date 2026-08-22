@@ -7,8 +7,16 @@ export const CELL_COUNT = COLS * ROWS;
 
 /** Radial threshold at which a cluster begins to agitate (CSS px). */
 export const PROBE_RADIUS = 80;
-/** The reticle floats above the fingertip so the thumb never occludes it. */
-export const RETICLE_OFFSET_Y = -40;
+/**
+ * The lens floats above the fingertip so the thumb never occludes it.
+ *
+ * The brief said 40px, which was measured against a bare crosshair. Once
+ * the reticle became a 36px-radius magnifier, 40px put the *bottom* of the
+ * glass level with the contact point and a thumb covered most of it — the
+ * one thing you are meant to be reading. This clears the lens above the
+ * contact patch entirely.
+ */
+export const RETICLE_OFFSET_Y = -68;
 /** Minimum captured members for a marquee to resolve into a packet. */
 export const MIN_CAPTURE = 4;
 /** Double-tap window (ms) and slop (px) for the mode toggle gesture. */
@@ -97,57 +105,392 @@ export const PACE: Record<Pace, { label: string; hint: string; scale: number }> 
 /** Seconds credited back to the shift for each correctly refined packet. */
 export const TIME_CREDIT = 5;
 
+/**
+ * The file queue: an orientation sequence, a file that introduces the
+ * probe, and then three acts.
+ *
+ * The rule behind the order is that a refiner is never asked to do two new
+ * things at once, and never meets a new rule for the first time under a
+ * clock. ORIENTATION hides nothing and has no probe — every group is
+ * already moving, and all that is taught is what each temper looks like.
+ * BELLINGHAM then takes that away: the group surfaces and sinks, and the
+ * first touch summons the lens rather than the box. CALIBRATION names the
+ * four. Act I gives one temper per file, Act II two — which is where the
+ * actual skill lives, telling one from another — and Act III is the job,
+ * with each of its new mechanics taught in isolation before it is used.
+ *
+ * See docs/ONBOARDING.md for the levers behind every number here.
+ */
+
+/** Orientation motion is louder than any real file: it has to be noticed
+ *  by someone who does not yet know to look for motion. */
+const OR_SUBTLETY = [1.35, 1.25, 1.15] as const;
+
+/** Act II's pairings, reused for orientation's stage 2 so the ordering of
+ *  discriminations — easy first, the two confusable pairs last — is taught
+ *  in the same order it is later tested. */
+const PAIRS: readonly (readonly [Temper, Temper])[] = [
+  ["WO", "FC"],
+  ["DR", "MA"],
+  ["WO", "DR"],
+  ["FC", "MA"],
+];
+
+/**
+ * The 21 orientation screens. Generated rather than written out: they
+ * differ only in which tempers they carry and which seed they use, and
+ * twenty-one hand-written near-duplicates is twenty-one chances to make
+ * one of them subtly wrong.
+ */
+function orientationScreens(): LevelDef[] {
+  const out: LevelDef[] = [];
+  const groups: readonly Temper[][] = [
+    // Stage 1 — three screens per temper, in numbered order.
+    ...TEMPERS.flatMap((t) => [[t], [t], [t]]),
+    // Stage 2 — two tempers, two bins, one group of each.
+    ...PAIRS.map(([a, b]) => [a, b]),
+    // Stage 3 — the full deck, one group per temper.
+    ...Array.from({ length: 5 }, () => [...TEMPERS]),
+  ];
+
+  groups.forEach((tempers, i) => {
+    const stage = i < 12 ? 0 : i < 16 ? 1 : 2;
+    const last = i === groups.length - 1;
+    out.push({
+      id: `orientation-${String(i + 1).padStart(2, "0")}`,
+      name: "ORIENTATION",
+      fileCode: "0001",
+      tempers,
+      spacing: stage === 0 ? 6 : stage === 1 ? 6 : 5,
+      lore:
+        "Everything you will ever refine is already on the screen. Most of it is only pretending to be still.",
+      seconds: 0,
+      untimed: true,
+      training: true,
+      selfAgitate: true,
+      startMode: "select",
+      // One digit of overlap lifts the whole group. A new refiner is never
+      // told that their correct instinct was a wrong box.
+      minCapture: 1,
+      // No ceremony between screens: 21 completion banners would break one
+      // continuous sequence into 21 interruptions. The last screen keeps
+      // the full screen, so orientation ends properly and releases the one
+      // addendum the whole sequence is worth.
+      ceremony: last ? "full" : "none",
+      autoAdvanceMs: 900,
+      archived: last,
+      stage: [i + 1, groups.length],
+      seed: (0x0b1e + i * 0x1d37) >>> 0,
+      quota: 1,
+      spare: 0,
+      subtlety: OR_SUBTLETY[stage],
+    });
+  });
+  return out;
+}
+
 export const LEVELS: readonly LevelDef[] = [
+  // ── Orientation: nothing is hidden ─────────────────────────────────
+  ...orientationScreens(),
+
+  // ── The probe: motion that hides ───────────────────────────────────
+  // Playtesting found the probe undiscoverable, and the reason is upstream
+  // of the probe: a player who has no evidence the matrix hides anything
+  // has no reason to hold a finger on it. Orientation supplies that
+  // evidence; this file takes it away again. The group surfaces for two
+  // seconds and sinks for five, and the first touch puts the terminal into
+  // PROBE — the refiner reaches for the box they have used twenty-one
+  // times and gets the lens instead. The lens then lingers and shrinks,
+  // which is what makes it read as a tool with a lifecycle rather than as
+  // a rendering glitch.
+  {
+    id: "bellingham",
+    name: "BELLINGHAM",
+    fileCode: "0002",
+    tempers: ["WO"],
+    spacing: 6,
+    lore: "A number that has stopped moving has not stopped being frightening. It is only waiting.",
+    seconds: 0,
+    untimed: true,
+    training: true,
+    startMode: "probe",
+    minCapture: 1,
+    pulse: {
+      revealS: 2,
+      hiddenS: 5,
+      tapCooldownS: 5,
+      subtlety: 0.8,
+      rampS: 0.35,
+    },
+    lensLingerS: 1,
+    lensShrinkS: 0.4,
+    seed: 0x2f11,
+    quota: 1,
+    spare: 0,
+    subtlety: 1,
+  },
+
   {
     id: "calibration",
     name: "CALIBRATION",
     fileCode: "0000",
+    tempers: ["WO", "FC", "DR", "MA"],
+    spacing: 4,
+    lore: "You have been selected. The numbers are frightening, and you are the only one who can feel it.",
     seconds: 0,
     untimed: true,
+    training: true,
     teaches: true,
     seed: 0x1e55,
     quota: 1,
     spare: 0,
     subtlety: 1.15,
   },
+
+  // ── Act I: one temper per file, one bin ────────────────────────────
+  {
+    id: "dranesville",
+    name: "DRANESVILLE",
+    fileCode: "0117",
+    tempers: ["WO"],
+    spacing: 5,
+    lore: "Woe is the first temper because it is the heaviest. Kier bore it so that you would not have to.",
+    seconds: 0,
+    untimed: true,
+    teaches: true,
+    seed: 0x2a41,
+    quota: 3,
+    spare: 0,
+    subtlety: 1.1,
+  },
+  {
+    id: "sunset-park",
+    name: "SUNSET PARK",
+    fileCode: "0308",
+    tempers: ["FC"],
+    spacing: 5,
+    lore: "Frolic is permitted between the hours of nine and five, and is not to be carried outside.",
+    seconds: 0,
+    untimed: true,
+    teaches: true,
+    seed: 0x3b7d,
+    quota: 3,
+    spare: 0,
+    subtlety: 1.1,
+  },
+  {
+    id: "cairns",
+    name: "CAIRNS",
+    fileCode: "0512",
+    tempers: ["DR"],
+    spacing: 5,
+    lore: "Dread is the tremor of a number that knows something you do not. Do not ask it what.",
+    seconds: 0,
+    untimed: true,
+    teaches: true,
+    seed: 0x4c19,
+    quota: 3,
+    spare: 0,
+    subtlety: 1.1,
+  },
+  {
+    id: "eminence",
+    name: "EMINENCE",
+    fileCode: "0704",
+    tempers: ["MA"],
+    spacing: 5,
+    lore: "Malice was the last temper to be named, and the first to be found. The board does not like you.",
+    // The last teaching file, and the only Act I file with a clock. Going
+    // from four untimed files straight into a two-temper file that is timed
+    // meets the player with the clock and a second temper in the same
+    // breath; here the clock arrives while the task is still trivial —
+    // three groups of one temper, no wrong bin to drop into — so it can be
+    // learned as a HUD element rather than as a threat.
+    seconds: 180,
+    teaches: true,
+    seed: 0x5d26,
+    quota: 3,
+    spare: 0,
+    subtlety: 1.1,
+  },
+
+  // ── Act II: two tempers per file, two bins, and a clock ────────────
+  {
+    id: "kingsport",
+    name: "KINGSPORT",
+    fileCode: "0901",
+    tempers: ["WO", "FC"],
+    spacing: 4,
+    lore: "Sorrow and delight are neighbours on the wheel. Refiners who confuse them are reassigned, kindly.",
+    seconds: 150,
+    seed: 0x6e33,
+    quota: 2,
+    spare: 0,
+    subtlety: 1,
+  },
+  {
+    id: "le-mans",
+    name: "LE MANS",
+    fileCode: "1005",
+    tempers: ["DR", "MA"],
+    spacing: 4,
+    lore: "A shiver and a strike are not the same thing. One waits for you. One does not.",
+    seconds: 150,
+    seed: 0x7f4a,
+    quota: 2,
+    spare: 0,
+    subtlety: 0.95,
+  },
+  {
+    id: "longbranch",
+    name: "LONGBRANCH",
+    fileCode: "1118",
+    tempers: ["WO", "DR"],
+    spacing: 4,
+    lore: "Some files are heavier than others. This is not recorded anywhere, and you should not record it either.",
+    seconds: 140,
+    seed: 0x8a57,
+    quota: 2,
+    spare: 0,
+    subtlety: 0.92,
+  },
+  {
+    id: "moonbeam",
+    name: "MOONBEAM",
+    fileCode: "1203",
+    tempers: ["FC", "MA"],
+    spacing: 4,
+    lore: "The numbers were people once. That is a rumour, and rumours are a form of frolic.",
+    seconds: 140,
+    seed: 0x9b64,
+    quota: 2,
+    spare: 0,
+    subtlety: 0.9,
+  },
+
+  // ── Act III: the work itself, one new rule at a time ───────────────
+  // Act III used to escalate on two continuous dials — the clock down, the
+  // motion damped — which only makes it the same task, tighter. Each of
+  // these mechanics makes it a different task instead, and each gets the
+  // same three beats orientation uses: taught in isolation on an untimed
+  // file, used once on a real board, then part of the world. The one
+  // exception is the fifth temper, which is never taught: its entire value
+  // is that nothing explains it.
   {
     id: "tumwater",
     name: "TUMWATER",
     fileCode: "0414",
+    tempers: ["WO", "FC", "DR", "MA"],
+    spacing: 3,
+    lore: "Your first full file. Somewhere above you, a percentage moved, and someone was pleased.",
     seconds: 120,
     seed: 0x7a1c,
-    quota: 5,
-    spare: 2,
+    quota: 2,
+    spare: 0,
+    subtlety: 1,
+  },
+  {
+    // Two tempers, no clock, and two decoy sites next to the real thing so
+    // the difference can be read side by side. A decoy stirs when probed,
+    // belongs to nothing, and is silent — the ear stays honest, and only
+    // the eye can be fooled.
+    id: "jesup",
+    name: "JESUP",
+    fileCode: "0630",
+    tempers: ["WO", "DR"],
+    spacing: 4,
+    lore: "Not everything that moves is data. Some of it is only the file looking back.",
+    seconds: 0,
+    untimed: true,
+    teaches: true,
+    decoys: [2, 0.35],
+    seed: 0x6c22,
+    quota: 1,
+    spare: 0,
     subtlety: 1,
   },
   {
     id: "allentown",
     name: "ALLENTOWN",
     fileCode: "0219",
+    tempers: ["WO", "FC", "DR", "MA"],
+    spacing: 3,
+    lore: "Allentown is refined four times a year and has never been completed twice by the same person.",
     seconds: 110,
+    decoys: [2, 0.35],
     seed: 0x31f9,
-    quota: 5,
-    spare: 2,
+    quota: 2,
+    spare: 0,
     subtlety: 0.86,
+  },
+  {
+    // One temper, one group, nothing else on the screen: it reads as woe,
+    // and while the refiner watches it becomes something else. The lesson
+    // is that a first read is not a read.
+    id: "nanning",
+    name: "NANNING",
+    fileCode: "0905",
+    tempers: ["WO", "FC"],
+    spacing: 5,
+    lore: "A temper is a mood, and a mood is not a promise. Refine what it is, not what it was.",
+    seconds: 0,
+    untimed: true,
+    teaches: true,
+    morphs: [1, 2],
+    seed: 0x7d33,
+    quota: 1,
+    spare: 0,
+    subtlety: 1.05,
   },
   {
     id: "siena",
     name: "SIENA",
     fileCode: "1107",
+    tempers: ["WO", "FC", "DR", "MA"],
+    spacing: 3,
+    lore: "The tempers are quieter here. Not because there are fewer of them.",
     seconds: 100,
+    decoys: [2, 0.35],
+    morphs: [1, 2],
     seed: 0x5bd4,
-    quota: 5,
-    spare: 2,
+    quota: 2,
+    spare: 0,
     subtlety: 0.72,
+  },
+  {
+    // The terminal takes the voices away and says so. Dread and malice are
+    // told apart by sound before they are told apart by motion, so this is
+    // the file where that crutch is removed — with a generous clock, while
+    // there is still room to do it badly.
+    id: "yakima",
+    name: "YAKIMA",
+    fileCode: "0308",
+    tempers: ["DR", "MA"],
+    spacing: 4,
+    lore: "The Board has heard enough. Refine in silence, as Kier did, and do not ask why.",
+    seconds: 150,
+    teaches: true,
+    redact: "audio",
+    seed: 0x8e44,
+    quota: 2,
+    spare: 0,
+    subtlety: 0.9,
   },
   {
     id: "cold-harbor",
     name: "COLD HARBOR",
     fileCode: "0001",
+    tempers: ["WO", "FC", "DR", "MA"],
+    spacing: 3,
+    lore: "Cold Harbor is the last file. You will not be told what it was for.",
     seconds: 90,
+    decoys: [2, 0.35],
+    morphs: [1, 2],
+    redact: "audio",
+    fifth: true,
     seed: 0x0c14,
-    quota: 5,
-    spare: 2,
+    quota: 2,
+    spare: 0,
     subtlety: 0.58,
   },
 ];

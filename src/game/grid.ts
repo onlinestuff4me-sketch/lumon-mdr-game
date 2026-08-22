@@ -1,4 +1,4 @@
-import { COLS, ROWS, CELL_COUNT, TEMPERS } from "./constants";
+import { COLS, ROWS, CELL_COUNT } from "./constants";
 import { mulberry32, randInt, shuffle } from "./rng";
 import type { Cluster, GridNode, Temper } from "./types";
 
@@ -19,20 +19,23 @@ function idx(col: number, row: number): number {
 }
 
 /**
- * True when placing `cell` into `cluster` would leave it touching a
- * *different* cluster (8-neighbourhood). Clusters are kept one cell apart so
- * a marquee can never straddle two of them — the selection rules depend on
- * a box resolving to exactly one temper.
+ * True when placing `cell` into `cluster` would leave it within `spacing`
+ * cells of a *different* cluster. At spacing 1 this is the 8-neighbourhood:
+ * the minimum that stops a marquee straddling two clusters, since the
+ * selection rules depend on a box resolving to exactly one temper. Early
+ * files raise it so clusters sit alone in open ground and can be found and
+ * read one at a time.
  */
 function touchesForeign(
   owner: Int32Array,
   cell: number,
   clusterId: number,
+  spacing: number,
 ): boolean {
   const col = cell % COLS;
   const row = (cell / COLS) | 0;
-  for (let dr = -1; dr <= 1; dr++) {
-    for (let dc = -1; dc <= 1; dc++) {
+  for (let dr = -spacing; dr <= spacing; dr++) {
+    for (let dc = -spacing; dc <= spacing; dc++) {
       if (dr === 0 && dc === 0) continue;
       const c = col + dc;
       const r = row + dr;
@@ -54,8 +57,12 @@ function growCluster(
   seedCell: number,
   clusterId: number,
   target: number,
+  spacing: number,
 ): number[] | null {
-  if (owner[seedCell] !== -1 || touchesForeign(owner, seedCell, clusterId)) {
+  if (
+    owner[seedCell] !== -1 ||
+    touchesForeign(owner, seedCell, clusterId, spacing)
+  ) {
     return null;
   }
   const members = [seedCell];
@@ -79,7 +86,7 @@ function growCluster(
       if (c < 0 || c >= COLS || r < 0 || r >= ROWS) continue;
       const cell = idx(c, r);
       if (owner[cell] !== -1) continue;
-      if (touchesForeign(owner, cell, clusterId)) continue;
+      if (touchesForeign(owner, cell, clusterId, spacing)) continue;
       owner[cell] = clusterId;
       members.push(cell);
       placed = true;
@@ -96,18 +103,59 @@ function growCluster(
 }
 
 /**
- * Build a fresh board. `perTemper` clusters of each temper are seeded, so a
- * full file always contains exactly the digits the quota requires.
+ * Build a fresh board carrying `perTemper` clusters of each temper in
+ * `tempers`, kept at least `spacing` cells apart.
+ *
+ * If the board cannot fit them all at the requested spacing, the spacing is
+ * relaxed a step at a time rather than shipping a file short of clusters —
+ * a missing cluster makes a bin unfillable, whereas slightly closer
+ * clusters are only slightly harder.
  */
-export function createBoard(seed: number, perTemper: number): Board {
+/** What a seeded cluster is for. Decoys and the fifth temper occupy the
+ *  board and answer to a probe, but fill no quota and no bin takes them. */
+export interface Extra {
+  readonly temper: Temper;
+  readonly decoy?: boolean;
+  readonly fifth?: boolean;
+}
+
+export function createBoard(
+  seed: number,
+  tempers: readonly Temper[],
+  perTemper: number,
+  spacing = 1,
+  extras: readonly Extra[] = [],
+): Board {
+  const real = tempers.length * perTemper;
+  for (let s = Math.max(1, spacing); s > 1; s--) {
+    const attempt = seedBoard(seed, tempers, perTemper, s, extras);
+    // Only the real clusters have to fit: a board that cannot hold every
+    // decoy is still winnable, and a board short a real cluster is not.
+    if (attempt.clusters.filter((c) => !c.decoy && !c.fifth).length === real) {
+      return attempt;
+    }
+  }
+  return seedBoard(seed, tempers, perTemper, 1, extras);
+}
+
+function seedBoard(
+  seed: number,
+  tempers: readonly Temper[],
+  perTemper: number,
+  spacing: number,
+  extras: readonly Extra[] = [],
+): Board {
   const rng = mulberry32(seed);
   const owner = new Int32Array(CELL_COUNT).fill(-1);
 
-  const wanted: Temper[] = [];
-  for (const t of TEMPERS) {
-    for (let i = 0; i < perTemper; i++) wanted.push(t);
+  const wanted: Extra[] = [];
+  for (const t of tempers) {
+    for (let i = 0; i < perTemper; i++) wanted.push({ temper: t });
   }
   shuffle(rng, wanted);
+  // Extras are appended after the shuffle, so a saturated board drops a
+  // decoy before it drops anything the player needs.
+  wanted.push(...extras);
 
   const clusters: Cluster[] = [];
   const candidates = shuffle(
@@ -116,13 +164,14 @@ export function createBoard(seed: number, perTemper: number): Board {
   );
 
   let cursor = 0;
-  for (const temper of wanted) {
+  for (const want of wanted) {
+    const { temper } = want;
     const id = clusters.length;
     const target = randInt(rng, MIN_SIZE, MAX_SIZE);
     let members: number[] | null = null;
     let attempts = 0;
     while (!members && cursor < candidates.length && attempts++ < CELL_COUNT) {
-      members = growCluster(rng, owner, candidates[cursor++], id, target);
+      members = growCluster(rng, owner, candidates[cursor++], id, target, spacing);
     }
     if (!members) {
       // The board is saturated; the caller gets fewer clusters and the
@@ -132,6 +181,11 @@ export function createBoard(seed: number, perTemper: number): Board {
     clusters.push({
       id,
       temper,
+      morphTo: null,
+      morphAfter: 0,
+      morphed: false,
+      decoy: want.decoy === true,
+      fifth: want.fifth === true,
       members,
       cx: 0,
       cy: 0,

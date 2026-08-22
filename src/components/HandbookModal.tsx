@@ -2,7 +2,7 @@ import { Vibrate, Volume2, X } from "lucide-react";
 import type { ReactNode } from "react";
 import { TemperSample } from "./TemperSample";
 import type { Pace } from "../game/constants";
-import { PACE } from "../game/constants";
+import { LEVELS, PACE } from "../game/constants";
 import { MIN_CAPTURE, PROBE_RADIUS, TEMPERS, TEMPER_DEFS } from "../game/constants";
 
 interface Props {
@@ -16,6 +16,9 @@ interface Props {
   hapticsSupported: boolean;
   pace: Pace;
   onPace: (pace: Pace) => void;
+  /** Ids of files completed on this device, ever. */
+  archive: ReadonlySet<string>;
+  levelIndex: number;
 }
 
 function Toggle({
@@ -73,7 +76,19 @@ export function HandbookModal({
   hapticsSupported,
   pace,
   onPace,
+  archive,
+  levelIndex,
 }: Props) {
+  // The orientation screens are one sequence, not 21 files: only the last
+  // of them carries an archive row, so the list stays a set of secrets
+  // rather than a progress bar.
+  const files = LEVELS.filter((l) => l.archived !== false);
+  const recovered = files.filter((l) => archive.has(l.id)).length;
+  // A screen inside a sequence belongs to the row that closes it, so
+  // playing orientation screen 5 marks the ORIENTATION row IN PROGRESS
+  // rather than marking nothing at all.
+  const currentRow =
+    LEVELS.slice(levelIndex).find((l) => l.archived !== false)?.id ?? null;
   return (
     <div
       role="dialog"
@@ -167,6 +182,58 @@ export function HandbookModal({
           })}
         </ul>
 
+        <h3 className="crt-text-glow mb-1 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300">
+          PERPETUITY WING · ARCHIVE
+        </h3>
+        <p className="mb-2 text-[9px] leading-snug text-phos-600">
+          One addendum is declassified per refined file. {recovered} of{" "}
+          {files.length} recovered. The remainder are not yours yet.
+        </p>
+        <ol className="space-y-1">
+          {files.map((level) => {
+            const open = archive.has(level.id);
+            const current = level.id === currentRow && !open;
+            return (
+              <li
+                key={level.id}
+                className={`rounded-[3px] border-l-2 py-1.5 pl-2.5 pr-2 ${
+                  open
+                    ? "border-phos-400 bg-phos-900/50"
+                    : current
+                      ? "border-phos-600 bg-phos-900/30"
+                      : "border-phos-800 bg-phos-950/60"
+                }`}
+              >
+                <div className="flex items-baseline justify-between gap-2">
+                  <span
+                    className={`text-[9px] font-bold tracking-[0.18em] ${
+                      open ? "text-phos-300" : "text-phos-700"
+                    }`}
+                  >
+                    {open || current ? (
+                      <>
+                        {level.fileCode} · {level.name}
+                      </>
+                    ) : (
+                      <>████ · {redact(level.name)}</>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-[8px] tracking-[0.16em] text-phos-700">
+                    {open ? "DECLASSIFIED" : current ? "IN PROGRESS" : "SEALED"}
+                  </span>
+                </div>
+                <p
+                  className={`mt-0.5 text-[9px] leading-snug ${
+                    open ? "italic text-phos-400" : "text-phos-800"
+                  }`}
+                >
+                  {open ? level.lore : redact(level.lore, 11)}
+                </p>
+              </li>
+            );
+          })}
+        </ol>
+
         <h3 className="crt-text-glow mb-2 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300">
           TERMINAL SETTINGS
         </h3>
@@ -228,4 +295,19 @@ export function HandbookModal({
       </div>
     </div>
   );
+}
+
+/**
+ * Censors a line the way Lumon would: word shapes survive, words do not.
+ * A row of identical bars would read as a placeholder; preserving the
+ * lengths makes a sealed addendum look like a document that exists and is
+ * being kept from you, which is the point.
+ */
+function redact(text: string, maxWords = Infinity): string {
+  const words = text.split(/\s+/);
+  const shown = words
+    .slice(0, maxWords === Infinity ? words.length : maxWords)
+    .map((w) => "\u2588".repeat(Math.min(9, w.replace(/[^\w]/g, "").length) || 1))
+    .join(" ");
+  return words.length > maxWords ? `${shown} \u2026` : shown;
 }

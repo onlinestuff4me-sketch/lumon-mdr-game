@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getAudio } from "../audio/AudioEngine";
 import { haptics } from "../audio/haptics";
+import { LEVELS } from "../game/constants";
+import { loadArchive, recordCompletion, resumeIndex } from "../game/archive";
 import { computeLayout } from "../game/layout";
 import { useEngine } from "../hooks/useEngine";
 import { BinDeck } from "./BinDeck";
@@ -11,6 +13,8 @@ import { HUD } from "./HUD";
 import { PhaseOverlay } from "./PhaseOverlay";
 import { Viewport } from "./Viewport";
 
+const LEVEL_IDS = LEVELS.map((l) => l.id);
+
 export function GameStage() {
   const { engine, hud } = useEngine();
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -19,8 +23,13 @@ export function GameStage() {
   const rectRef = useRef<DOMRect | null>(null);
   const [size, setSize] = useState({ w: 360, h: 640 });
   const [handbook, setHandbook] = useState(false);
+  const [archive, setArchive] = useState<ReadonlySet<string>>(loadArchive);
 
   const openHandbook = useCallback(() => {
+    // Read the archive here rather than tracking it in an effect: the
+    // drawer is the only thing that renders it, and it is unmounted until
+    // this runs, so opening it is the one moment the value is needed.
+    setArchive(loadArchive());
     // Paused in the same handler that opens the drawer, not in an effect
     // afterwards: the drawer sits above the phase overlay, and a passive
     // effect leaves a frame in which the clock could expire and render the
@@ -107,6 +116,18 @@ export function GameStage() {
     };
   }, [engine]);
 
+  // ── the archive: one addendum declassified per refined file ─────────
+  // Keyed off the completion phase rather than off the NEXT FILE button so
+  // the addendum is filed the moment it is earned; a player who closes the
+  // tab on the completion screen keeps it. Writing to storage is the whole
+  // effect — nothing on screen reads the archive until the handbook opens,
+  // and that path loads it fresh.
+  useEffect(() => {
+    if (hud.phase !== "complete") return;
+    const level = LEVELS[hud.levelIndex];
+    if (level) recordCompletion(level.id);
+  }, [hud.phase, hud.levelIndex]);
+
   // ── page visibility: stop the loop, the drones and the buzzing ──────
   useEffect(() => {
     const onVis = () => engine.setPageVisible(!document.hidden);
@@ -191,9 +212,15 @@ export function GameStage() {
     [engine],
   );
 
-  const layout = computeLayout(size.w, size.h);
+  // Same call the engine makes, with the same active tempers, so the bins
+  // the player sees are the rects the engine hit-tests.
+  const layout = computeLayout(size.w, size.h, hud.activeTempers);
   const live =
     hud.phase === "probe" || hud.phase === "select" || hud.phase === "carry";
+
+  // Recomputed from the archive state, which is refreshed on every path
+  // that can reach the briefing screen.
+  const resumeAt = resumeIndex(archive, LEVEL_IDS);
 
   const start = useCallback(() => {
     void getAudio().unlock();
@@ -221,8 +248,12 @@ export function GameStage() {
 
         <div className="relative flex h-full w-full flex-col">
           <HUD hud={hud} height={layout.hudH} />
+          {/* The coach line sits directly under the HUD, not above the
+              control deck. At the bottom of the screen it was underneath
+              the hand that was holding the phone — unreadable exactly while
+              the player was doing the thing it describes. */}
+          <StatusTicker hud={hud} height={layout.tickerH} />
           <div className="flex-1" />
-          <StatusTicker hud={hud} />
           <ControlDeck
             hud={hud}
             height={layout.deckH}
@@ -274,6 +305,8 @@ export function GameStage() {
             hapticsSupported={haptics.supported}
             pace={hud.pace}
             onPace={(p) => engine.setPace(p)}
+            archive={archive}
+            levelIndex={hud.levelIndex}
           />
         ) : null}
 
@@ -287,17 +320,29 @@ export function GameStage() {
           onStart={start}
           onNext={() => engine.nextLevel()}
           onRestart={() => engine.restart()}
-          onNewQuarter={() => engine.restartQuarter()}
+          onNewQuarter={() => {
+            // Back to the briefing, where the resume link is read — so the
+            // files refined this sitting have to be visible to it.
+            setArchive(loadArchive());
+            engine.restartQuarter();
+          }}
           onHandbook={openHandbook}
-          onSkipCalibration={() => {
+          resumeAt={resumeAt}
+          onResume={(index) => {
             void getAudio().unlock();
             haptics.markActivated();
-            engine.startLevel(1);
+            engine.startLevel(index);
           }}
         />
 
+        {/* Below the coach band, not inside it: at hudH + 6 this badge sat
+            on top of the ticker and clipped the line telling the player what
+            to do — which is exactly the line a first-time player needs. */}
         {live && !hud.audioReady ? (
-          <div className="pointer-events-none absolute inset-x-0 z-40 flex justify-center" style={{ top: layout.hudH + 6 }}>
+          <div
+            className="pointer-events-none absolute inset-x-0 z-40 flex justify-center"
+            style={{ top: layout.hudH + layout.tickerH + 4 }}
+          >
             <span className="rounded-[2px] border border-phos-700 bg-phos-950/85 px-2 py-0.5 text-[8px] tracking-[0.16em] text-phos-600">
               TAP TO ENABLE TERMINAL AUDIO
             </span>
@@ -308,8 +353,16 @@ export function GameStage() {
   );
 }
 
-function StatusTicker({ hud }: { hud: ReturnType<typeof useEngine>["hud"] }) {
-  if (!hud.message) return null;
+function StatusTicker({
+  hud,
+  height,
+}: {
+  hud: ReturnType<typeof useEngine>["hud"];
+  height: number;
+}) {
+  // The band is always reserved, so an arriving message never reflows the
+  // matrix underneath it.
+  if (!hud.message) return <div className="shrink-0" style={{ height }} />;
   const color =
     hud.messageKind === "error"
       ? "text-alarm border-alarm/60"
@@ -317,7 +370,10 @@ function StatusTicker({ hud }: { hud: ReturnType<typeof useEngine>["hud"] }) {
         ? "text-phos-200 border-phos-400/70"
         : "text-phos-400 border-phos-600/70";
   return (
-    <div className="pointer-events-none relative z-20 flex shrink-0 justify-center px-3 pb-1">
+    <div
+      className="pointer-events-none relative z-20 flex shrink-0 items-center justify-center overflow-hidden px-3"
+      style={{ height }}
+    >
       <span
         className={`crt-text-glow max-w-full rounded-[2px] border bg-phos-950/90 px-2 py-1 text-center text-[9px] leading-snug tracking-[0.14em] ${color}`}
       >

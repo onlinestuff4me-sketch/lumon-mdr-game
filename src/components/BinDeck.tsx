@@ -26,6 +26,11 @@ export function BinDeck({
       {bins.map((bin) => {
         const def = TEMPER_DEFS[bin.temper];
         const rect = layout.binRects[bin.temper];
+        // A lone bin spans the whole deck, and stacking a label above a
+        // full-width meter leaves a band of dead space. Keyed on aspect
+        // rather than on the deck's temper count: a two-bin row comes out
+        // the same shape as a 2x2 cell and wants the same stacked layout.
+        const wide = rect.w > rect.h * 5;
         const pct = Math.round(bin.fill * 100);
         const full = bin.fill >= 0.999;
         const flash =
@@ -39,7 +44,11 @@ export function BinDeck({
         return (
           <div
             key={bin.temper}
-            className="absolute flex flex-col justify-between rounded-[3px] border px-1.5 py-1 transition-shadow duration-150"
+            className={`absolute rounded-[3px] border transition-shadow duration-150 ${
+              wide
+                ? "flex items-center gap-2.5 px-3"
+                : "flex flex-col justify-between px-1.5 py-1"
+            }`}
             style={{
               left: rect.x,
               top: rect.y,
@@ -52,33 +61,67 @@ export function BinDeck({
               boxShadow: flash,
             }}
           >
-            <div className="flex items-baseline justify-between">
-              <span
-                className="crt-text-glow text-[10px] font-bold tracking-[0.16em]"
-                style={{ color: def.css }}
-              >
-                {def.code}: {bin.temper}
-              </span>
-              <span className="text-[9px] tabular-nums text-phos-400">
-                {pct}%
-              </span>
-            </div>
-            <div className="text-[7px] leading-tight tracking-[0.1em] text-phos-600">
-              {def.name}
-            </div>
-            <div className="h-[5px] w-full overflow-hidden rounded-[1px] bg-phos-800">
-              <div
-                className="h-full transition-[width] duration-300 ease-out"
-                style={{
-                  width: `${pct}%`,
-                  background: def.css,
-                  boxShadow: `0 0 6px ${def.css}`,
-                }}
-              />
-            </div>
+            {wide ? (
+              <>
+                <span
+                  className="crt-text-glow shrink-0 text-[10px] font-bold tracking-[0.16em]"
+                  style={{ color: def.css }}
+                >
+                  {def.code}: {bin.temper}
+                </span>
+                <span className="shrink-0 text-[8px] tracking-[0.1em] text-phos-600">
+                  {def.name}
+                </span>
+                <Meter pct={pct} colour={def.css} className="h-[6px] flex-1" />
+                <span className="shrink-0 text-[9px] tabular-nums text-phos-400">
+                  {pct}%
+                </span>
+              </>
+            ) : (
+              <>
+                <div className="flex items-baseline justify-between">
+                  <span
+                    className="crt-text-glow text-[10px] font-bold tracking-[0.16em]"
+                    style={{ color: def.css }}
+                  >
+                    {def.code}: {bin.temper}
+                  </span>
+                  <span className="text-[9px] tabular-nums text-phos-400">
+                    {pct}%
+                  </span>
+                </div>
+                <div className="text-[7px] leading-tight tracking-[0.1em] text-phos-600">
+                  {def.name}
+                </div>
+                <Meter pct={pct} colour={def.css} className="h-[5px] w-full" />
+              </>
+            )}
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function Meter({
+  pct,
+  colour,
+  className,
+}: {
+  pct: number;
+  colour: string;
+  className: string;
+}) {
+  return (
+    <div className={`overflow-hidden rounded-[1px] bg-phos-800 ${className}`}>
+      <div
+        className="h-full transition-[width] duration-300 ease-out"
+        style={{
+          width: `${pct}%`,
+          background: colour,
+          boxShadow: `0 0 6px ${colour}`,
+        }}
+      />
     </div>
   );
 }

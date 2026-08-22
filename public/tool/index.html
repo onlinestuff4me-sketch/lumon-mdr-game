@@ -1,0 +1,1296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="description" content="Every number in the MDR onboarding plan on a lever, with live temper specimens and a running pulse timeline.">
+<title>Onboarding Calibration Sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap">
+
+</head>
+<body>
+<style>
+  :root {
+    --paper:      #EDE9E1;
+    --card:       #F8F6F2;
+    --card-sunk:  #E4DFD5;
+    --ink:        #1B1D1C;
+    --ink-mid:    #4A4C48;
+    --ink-soft:   #7A7B74;
+    --rule:       #C9C4B8;
+    --rule-soft:  #DAD5CA;
+    --accent:     #1E5A82;
+    --accent-ink: #FFFFFF;
+    --alarm:      #A8442A;
+    --scope-bg:   #04120C;
+    --scope-grid: #0C2E1F;
+    --phos:       #2FD68A;
+    --phos-dim:   #14724A;
+
+    --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+    --f-body:    "Source Serif 4", Georgia, "Times New Roman", serif;
+    --f-mono:    "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+    --step-0: 0.9375rem;
+    --step-1: 1.0625rem;
+    --step-2: 1.375rem;
+    --step-3: 1.9375rem;
+    --step-4: 2.75rem;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #14181A;
+      --card:       #1C2225;
+      --card-sunk:  #101517;
+      --ink:        #E9E7E0;
+      --ink-mid:    #B4B5AE;
+      --ink-soft:   #86887F;
+      --rule:       #333B3E;
+      --rule-soft:  #262D30;
+      --accent:     #74B6DE;
+      --accent-ink: #0C1519;
+      --alarm:      #D98263;
+      --scope-bg:   #04120C;
+      --scope-grid: #0C2E1F;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:      #14181A;
+    --card:       #1C2225;
+    --card-sunk:  #101517;
+    --ink:        #E9E7E0;
+    --ink-mid:    #B4B5AE;
+    --ink-soft:   #86887F;
+    --rule:       #333B3E;
+    --rule-soft:  #262D30;
+    --accent:     #74B6DE;
+    --accent-ink: #0C1519;
+    --alarm:      #D98263;
+    --scope-bg:   #04120C;
+    --scope-grid: #0C2E1F;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--f-body);
+    font-size: var(--step-1);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sheet {
+    max-width: 62rem;
+    margin: 0 auto;
+    padding: clamp(1.25rem, 4vw, 3rem) clamp(1rem, 4vw, 2.5rem) 5rem;
+  }
+
+  /* ── letterhead ─────────────────────────────────────────── */
+  .letterhead {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.5rem;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 1rem;
+  }
+  .org {
+    font-family: var(--f-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+  }
+  h1 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: var(--step-4);
+    line-height: 1.02;
+    letter-spacing: -0.025em;
+    text-wrap: balance;
+    margin: 0.35rem 0 0;
+  }
+  .docref {
+    font-family: var(--f-mono);
+    font-size: 0.6875rem;
+    line-height: 1.9;
+    letter-spacing: 0.04em;
+    color: var(--ink-soft);
+    text-align: right;
+    white-space: nowrap;
+  }
+  .docref b { color: var(--ink-mid); font-weight: 500; }
+
+  .standfirst {
+    font-size: var(--step-1);
+    color: var(--ink-mid);
+    max-width: 42rem;
+    margin: 1.5rem 0 0;
+  }
+  .standfirst strong { color: var(--ink); font-weight: 600; }
+
+  /* ── derived totals strip ───────────────────────────────── */
+  .totals {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    margin: 2rem 0 0;
+    background: var(--card);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(8.5rem, 1fr));
+  }
+  .totals > div {
+    padding: 0.7rem 0.9rem;
+    border-right: 1px solid var(--rule-soft);
+  }
+  .totals > div:last-child { border-right: 0; }
+  /* Stacked on a phone the strip is three rows tall — too much of the
+     viewport to pin. It scrolls away there instead. */
+  @media (max-width: 48rem) {
+    .totals { position: static; }
+  }
+  .totals dt {
+    font-family: var(--f-mono);
+    font-size: 0.5938rem;
+    font-weight: 500;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 0 0 0.15rem;
+  }
+  .totals dd {
+    margin: 0;
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: var(--step-2);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+  .totals dd small {
+    font-family: var(--f-mono);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    letter-spacing: 0.04em;
+    color: var(--ink-soft);
+  }
+
+  /* ── sections ───────────────────────────────────────────── */
+  section { margin-top: 3.25rem; scroll-margin-top: 5.5rem; }
+
+  .sec-head {
+    display: flex;
+    gap: 0.9rem;
+    align-items: baseline;
+    border-bottom: 1px solid var(--rule);
+    padding-bottom: 0.5rem;
+  }
+  .sec-num {
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--accent);
+    flex: none;
+  }
+  h2 {
+    font-family: var(--f-display);
+    font-weight: 700;
+    font-size: var(--step-3);
+    letter-spacing: -0.02em;
+    line-height: 1.12;
+    margin: 0;
+    flex: 1 1 14rem;
+    text-wrap: balance;
+  }
+  .sec-count {
+    font-family: var(--f-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-variant-numeric: tabular-nums;
+  }
+  .sec-body { margin: 1rem 0 0; color: var(--ink-mid); max-width: 44rem; }
+  .sec-body strong { color: var(--ink); font-weight: 600; }
+
+  h3 {
+    font-family: var(--f-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 2rem 0 0.6rem;
+    padding-bottom: 0.35rem;
+    border-bottom: 1px dashed var(--rule);
+  }
+
+  /* ── lever rows ─────────────────────────────────────────── */
+  .levers {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin-top: 0.75rem;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .lever {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(11rem, 17rem);
+    gap: 0.5rem 1.75rem;
+    align-items: center;
+    padding: 0.85rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  @media (max-width: 40rem) {
+    .lever { grid-template-columns: 1fr; }
+  }
+  .lever-key {
+    font-family: var(--f-mono);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  .lever-key i {
+    font-style: normal;
+    color: var(--ink-soft);
+  }
+  .lever-desc {
+    display: block;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    color: var(--ink-mid);
+    margin-top: 0.2rem;
+    max-width: 38rem;
+  }
+  .lever-control { display: flex; align-items: center; gap: 0.75rem; }
+
+  input[type="range"] {
+    flex: 1;
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    height: 1.5rem;
+    margin: 0;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 2px;
+    background: var(--rule);
+  }
+  input[type="range"]::-moz-range-track {
+    height: 2px;
+    background: var(--rule);
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 0.75rem;
+    height: 1.25rem;
+    margin-top: -0.59rem;
+    border-radius: 1px;
+    background: var(--accent);
+    border: 0;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 0.75rem;
+    height: 1.25rem;
+    border-radius: 1px;
+    background: var(--accent);
+    border: 0;
+  }
+  input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+
+  .readout {
+    font-family: var(--f-mono);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink);
+    min-width: 4.25rem;
+    text-align: right;
+    flex: none;
+  }
+  .readout span { color: var(--ink-soft); font-weight: 400; }
+
+  /* segmented + select */
+  .seg { display: flex; width: 100%; border: 1px solid var(--rule); border-radius: 2px; overflow: hidden; }
+  .seg button {
+    flex: 1;
+    font-family: var(--f-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 0.45rem 0.3rem;
+    background: var(--card);
+    color: var(--ink-soft);
+    border: 0;
+    border-right: 1px solid var(--rule);
+    cursor: pointer;
+  }
+  .seg button:last-child { border-right: 0; }
+  .seg button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+  .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  select {
+    width: 100%;
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+    padding: 0.45rem 0.5rem;
+    background: var(--card);
+    color: var(--ink);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+  }
+  select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+  /* ── specimen scopes ────────────────────────────────────── */
+  .scopes {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+    gap: 0.75rem;
+    margin-top: 1.25rem;
+  }
+  .scope {
+    background: var(--scope-bg);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 0.6rem;
+  }
+  .scope-label {
+    font-family: var(--f-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    color: var(--phos);
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.45rem;
+  }
+  .scope-label em { font-style: normal; color: var(--phos-dim); font-weight: 400; }
+  .scope canvas { display: block; width: 100%; height: 5.5rem; }
+  .caption {
+    font-family: var(--f-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.06em;
+    color: var(--ink-soft);
+    margin: 0.65rem 0 0;
+  }
+  .scope-note {
+    font-family: var(--f-mono);
+    font-size: 0.5938rem;
+    letter-spacing: 0.08em;
+    color: var(--phos-dim);
+    margin-top: 0.4rem;
+    text-transform: uppercase;
+  }
+
+  .pulse-wrap {
+    background: var(--scope-bg);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    padding: 0.8rem;
+    margin-top: 1.25rem;
+  }
+  .pulse-wrap canvas { display: block; width: 100%; height: 4.5rem; }
+
+  /* ── derived queue table ────────────────────────────────── */
+  .tablewrap { overflow-x: auto; margin-top: 1.25rem; }
+  table { border-collapse: collapse; width: 100%; min-width: 34rem; font-size: 0.875rem; }
+  th, td {
+    text-align: left;
+    padding: 0.5rem 0.75rem 0.5rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  th {
+    font-family: var(--f-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+  td.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; color: var(--ink-soft); white-space: nowrap; }
+  td.name { font-family: var(--f-display); font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+  tr.teach td.name { color: var(--accent); }
+  tr.teach td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+  .chip {
+    display: inline-block;
+    font-family: var(--f-mono);
+    font-size: 0.5938rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.1rem 0.35rem;
+    border: 1px solid currentColor;
+    border-radius: 2px;
+    color: var(--ink-soft);
+    margin-right: 0.25rem;
+  }
+  .chip.on { color: var(--accent); }
+  .chip.secret { color: var(--alarm); }
+
+  /* ── notes / warnings ───────────────────────────────────── */
+  .note {
+    border-left: 3px solid var(--accent);
+    background: var(--card);
+    padding: 0.85rem 1rem;
+    margin-top: 1.5rem;
+    font-size: 0.9375rem;
+    color: var(--ink-mid);
+  }
+  .note.warn { border-left-color: var(--alarm); }
+  .note b { color: var(--ink); font-weight: 600; }
+  .note .h {
+    display: block;
+    font-family: var(--f-mono);
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 0.3rem;
+  }
+  .note.warn .h { color: var(--alarm); }
+
+  /* ── export ─────────────────────────────────────────────── */
+  .export-head { display: flex; flex-wrap: wrap; gap: 0.6rem; align-items: center; margin-top: 1.25rem; }
+  button.action {
+    font-family: var(--f-mono);
+    font-size: 0.6875rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.6rem 1rem;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border: 0;
+    border-radius: 2px;
+    cursor: pointer;
+  }
+  button.action.ghost { background: transparent; color: var(--ink-mid); border: 1px solid var(--rule); }
+  button.action:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .flash {
+    font-family: var(--f-mono);
+    font-size: 0.6875rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    opacity: 0;
+    transition: opacity 160ms;
+  }
+  .flash.show { opacity: 1; }
+  pre {
+    margin: 1rem 0 0;
+    padding: 1rem;
+    background: var(--card-sunk);
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    overflow-x: auto;
+    font-family: var(--f-mono);
+    font-size: 0.75rem;
+    line-height: 1.65;
+    color: var(--ink-mid);
+    tab-size: 2;
+  }
+
+  footer {
+    margin-top: 4rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--rule);
+    font-family: var(--f-mono);
+    font-size: 0.625rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: space-between;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: 0.01ms !important; }
+  }
+</style>
+
+<div class="sheet">
+
+  <header class="letterhead">
+    <div>
+      <p class="org">Lumon Industries · Macrodata Refinement</p>
+      <h1>Onboarding Calibration Sheet</h1>
+    </div>
+    <p class="docref">
+      DOC · <b>docs/ONBOARDING.md</b><br>
+      REV · <b id="rev">—</b><br>
+      STATUS · <b>NOT YET BUILT</b>
+    </p>
+  </header>
+
+  <p class="standfirst">
+    Every number in the onboarding plan, with a lever on it. Nothing here is
+    implemented yet — <strong>tune it first, then it gets built.</strong> The
+    specimen windows and the pulse timeline are live: they run the same motion
+    the game runs, at whatever amplitude and timing you set below.
+  </p>
+
+  <dl class="totals" id="totals"></dl>
+
+  <!-- ═══ 1 ═══════════════════════════════════════════════ -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">STAGE 1</span>
+      <h2>One temper, one group</h2>
+      <span class="sec-count" id="c1">—</span>
+    </div>
+    <p class="sec-body">
+      Nothing is hidden. One group per screen, already moving, one full-width
+      bin, no clock and no probe. What is being taught is not a gesture — it is
+      <strong>what each temper looks like</strong>, learned by doing it rather
+      than by reading about it. Three screens per temper because recognition
+      needs repetition in different places on the board.
+    </p>
+
+    <div class="scopes" id="scopes"></div>
+    <p class="caption">
+      Specimens run at stage&nbsp;1 amplitude — drag the subtlety lever and they
+      answer.
+    </p>
+
+    <div class="levers" id="lv-stage1"></div>
+  </section>
+
+  <!-- ═══ 2 ═══════════════════════════════════════════════ -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">STAGE 2</span>
+      <h2>Two tempers, two bins</h2>
+      <span class="sec-count" id="c2">—</span>
+    </div>
+    <p class="sec-body">
+      The first discrimination, and the first time a wrong answer is possible.
+      Pairings are ordered so the easy one comes first and the two genuinely
+      confusable pairs — dread against malice, frolic against malice — come
+      last.
+    </p>
+    <div class="levers" id="lv-stage2"></div>
+  </section>
+
+  <!-- ═══ 3 ═══════════════════════════════════════════════ -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">STAGE 3</span>
+      <h2>Four tempers, four bins</h2>
+      <span class="sec-count" id="c3">—</span>
+    </div>
+    <p class="sec-body">
+      The full deck, one group per temper, still all visible and still no clock.
+      The last step before motion starts hiding.
+    </p>
+    <div class="levers" id="lv-stage3"></div>
+  </section>
+
+  <!-- ═══ 4 ═══════════════════════════════════════════════ -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">RULES</span>
+      <h2>Applying to every orientation screen</h2>
+    </div>
+    <div class="levers" id="lv-rules"></div>
+
+    <div class="note">
+      <span class="h">Generous selection</span>
+      The real game needs <b>4</b> digits inside the box (<b>MIN_CAPTURE</b>).
+      Orientation sets it to <b>1</b>, so dragging over any part of a group
+      lifts the whole thing. A new player should never be told that their
+      correct instinct was a wrong box.
+    </div>
+
+    <div class="note warn" id="ceremony-note">
+      <span class="h">Ceremony cost</span>
+      At <b>full</b> ceremony every one of these screens ends in a 100% banner,
+      an addendum and a NEXT FILE button. That is <b><span id="cer-n">21</span>
+      interruptions</b> in what should feel like one continuous sequence, and
+      <span id="cer-n2">21</span> extra rows in an archive that is meant to hold
+      secrets, not a progress bar.
+    </div>
+  </section>
+
+  <!-- ═══ 5 ═══════════════════════════════════════════════ -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">PROBE</span>
+      <h2>Motion that hides</h2>
+      <span class="sec-count" id="c4">1 FILE</span>
+    </div>
+    <p class="sec-body">
+      One screen, one group, one bin. The group no longer stays visible — it
+      <strong>breathes</strong>, surfacing for a moment and sinking back. The
+      player's instinct is to tap the moving digits and box them; here that is
+      honoured and then redirected, because the first touch summons the lens
+      instead of the marquee.
+    </p>
+
+    <div class="pulse-wrap">
+      <canvas id="pulse" aria-label="Live timeline of the reveal and hidden cycle"></canvas>
+    </div>
+
+    <h3>The pulse</h3>
+    <div class="levers" id="lv-pulse"></div>
+
+    <h3>The handover</h3>
+    <div class="levers" id="lv-hand"></div>
+
+    <div class="note">
+      <span class="h">Why the lens lingers</span>
+      Reaching for a box and getting a magnifier is jarring by design — that is
+      the point at which a new mechanic announces itself. The linger and the
+      shrink are what turn it from a glitch into a <b>tool</b>: it stays long
+      enough to be seen, then closes down with a lifecycle of its own.
+    </div>
+  </section>
+
+  <!-- ═══ 6 ═══════════════════════════════════════════════ -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">ACT III</span>
+      <h2>One new rule at a time</h2>
+      <span class="sec-count" id="c5">—</span>
+    </div>
+    <p class="sec-body">
+      Act III's difficulty is currently two continuous dials — clock down,
+      motion damped — which only makes it the same task, tighter. These
+      mechanics make it a <strong>different task</strong>, and each gets the
+      same three beats orientation uses: taught in isolation, used once, then
+      part of the world.
+    </p>
+
+    <div class="tablewrap">
+      <table id="act3">
+        <thead>
+          <tr><th>#</th><th>File</th><th>Clock</th><th>Carries</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <h3>Decoy agitation</h3>
+    <div class="levers" id="lv-decoy"></div>
+
+    <h3>The morph</h3>
+    <div class="levers" id="lv-morph"></div>
+
+    <h3>Redaction</h3>
+    <div class="levers" id="lv-redact"></div>
+
+    <h3>The fifth temper</h3>
+    <div class="levers" id="lv-fifth"></div>
+
+    <div class="note warn">
+      <span class="h">The one exception</span>
+      Every other mechanic gets a file that explains it, because a rule you
+      cannot learn is just an unfair one. <b>The fifth temper is the opposite
+      case</b> — its entire value is that nothing explains it. No coach line, no
+      handbook entry, no teaching file. It costs a scatter to try and nothing to
+      leave alone, so a player who never works it out loses only the secret. Its
+      one acknowledgement is an archive row with <b>no file code</b> that stays
+      SEALED forever.
+    </div>
+  </section>
+
+  <!-- ═══ 7 ═══════════════════════════════════════════════ -->
+  <section>
+    <div class="sec-head">
+      <span class="sec-num">EXPORT</span>
+      <h2>Hand the settings back</h2>
+    </div>
+    <p class="sec-body">
+      Your changes are kept in this browser. Copy the block below into the chat
+      and it becomes the spec that gets built.
+    </p>
+    <div class="export-head">
+      <button class="action" id="copy">Copy configuration</button>
+      <button class="action ghost" id="reset">Reset to defaults</button>
+      <span class="flash" id="flash">Copied</span>
+    </div>
+    <pre id="json">—</pre>
+  </section>
+
+  <footer>
+    <span>Lumon Industries · Perpetuity Wing</span>
+    <span>The work is mysterious and important</span>
+  </footer>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const STORE = "lumon.onboarding.levers.v1";
+  const TEMPERS = {
+    WO: { code: "01", name: "WOE",    blurb: "droops under weight" },
+    FC: { code: "02", name: "FROLIC", blurb: "bounces, spinning" },
+    DR: { code: "03", name: "DREAD",  blurb: "shivers sideways" },
+    MA: { code: "04", name: "MALICE", blurb: "pulses outward" },
+  };
+
+  // ── lever definitions ────────────────────────────────────────────
+  // Each entry: path, label, descriptor, and a control spec.
+  const num = (min, max, step, unit) => ({ kind: "range", min, max, step, unit: unit || "" });
+  const pick = (options) => ({ kind: "select", options });
+  const seg  = (options) => ({ kind: "seg", options });
+
+  const LEVERS = [
+    ["lv-stage1", [
+      ["stage1.screensPerTemper", 3, num(1, 6, 1, " screens"),
+       "Screens spent on each temper before moving to the next. Lower is a faster onboarding with less recognition drilled in."],
+      ["stage1.groupsPerScreen", 1, num(1, 3, 1, " groups"),
+       "Groups on the board. Above 1 the screen stops being “here is one thing, look at it”."],
+      ["stage1.temperOrder", "WO,FC,DR,MA", pick([
+        ["WO,FC,DR,MA", "WO · FC · DR · MA  (numbered order)"],
+        ["WO,DR,FC,MA", "WO · DR · FC · MA  (slow pair first)"],
+        ["MA,DR,FC,WO", "MA · DR · FC · WO  (loudest first)"],
+       ]),
+       "The sequence tempers are introduced in. Woe leads by default because its droop is the slowest and most legible."],
+      ["stage1.subtlety", 1.35, num(0.6, 2, 0.05, "×"),
+       "Motion amplitude. Deliberately louder than any real file — this has to be noticeable to someone who does not yet know to look for motion."],
+    ]],
+    ["lv-stage2", [
+      ["stage2.screens", 4, num(1, 8, 1, " screens"),
+       "Screens in this stage."],
+      ["stage2.groupsPerScreen", 2, num(2, 4, 1, " groups"),
+       "One group per temper on the deck by default."],
+      ["stage2.pairings", "chosen", seg([["chosen", "Chosen"], ["random", "Random"]]),
+       "Chosen runs WO+FC, DR+MA, WO+DR, FC+MA — easy discrimination first, the two confusable pairs last. Random reseeds each play."],
+      ["stage2.subtlety", 1.25, num(0.6, 2, 0.05, "×"),
+       "Slightly quieter than stage 1."],
+      ["stage2.spacing", 6, num(3, 8, 1, " cells"),
+       "Minimum clear cells between groups, so each is still read on its own."],
+    ]],
+    ["lv-stage3", [
+      ["stage3.screens", 5, num(1, 8, 1, " screens"),
+       "Screens in this stage."],
+      ["stage3.groupsPerScreen", 4, num(2, 6, 1, " groups"),
+       "One per temper by default."],
+      ["stage3.subtlety", 1.15, num(0.6, 2, 0.05, "×"),
+       "Quieter again — the last step before motion starts hiding."],
+      ["stage3.spacing", 5, num(3, 8, 1, " cells"),
+       "Minimum clear cells between groups."],
+    ]],
+    ["lv-rules", [
+      ["orientation.minOverlapDigits", 1, num(1, 4, 1, " digits"),
+       "How many of a group's digits the box must touch to lift the whole group. The real game needs 4."],
+      ["orientation.ceremony", "none", seg([["none", "None"], ["brief", "Brief"], ["full", "Full"]]),
+       "What happens between screens. None flashes and auto-advances; brief shows a one-line REFINED; full runs the normal 100% / addendum / NEXT FILE screen."],
+      ["orientation.autoAdvanceMs", 900, num(200, 3000, 100, " ms"),
+       "Pause after the last group is binned before the next screen loads."],
+      ["orientation.wrongBinPenalty", "scatter", seg([["scatter", "Scatter"], ["nudge", "Nudge"]]),
+       "Scatter matches the real game. Nudge refuses the drop and says so, without scattering the digits."],
+      ["orientation.archiveRows", 1, num(1, 21, 1, " rows"),
+       "Archive entries the whole orientation sequence occupies. One keeps the archive a set of secrets rather than a progress bar."],
+    ]],
+    ["lv-pulse", [
+      ["probeIntro.revealDurationS", 2.0, num(0.5, 6, 0.1, "s"),
+       "How long the group stays visibly agitated each time it surfaces."],
+      ["probeIntro.hiddenWaitS", 5.0, num(1, 12, 0.5, "s"),
+       "Gap between the end of one reveal and the start of the next."],
+      ["probeIntro.tapCooldownS", 5.0, num(0, 12, 0.5, "s"),
+       "Quiet time required after the player's last touch before a reveal may fire, so a reveal never happens under a finger that is already down."],
+      ["probeIntro.revealSubtlety", 0.8, num(0.2, 1.6, 0.05, "×"),
+       "Motion amplitude of a reveal. Below the orientation levels: this should read as a hint, not an announcement."],
+      ["probeIntro.revealRampS", 0.35, num(0, 1.5, 0.05, "s"),
+       "Fade in and out of each reveal. A hard cut reads as a rendering glitch rather than as something surfacing."],
+    ]],
+    ["lv-hand", [
+      ["probeIntro.forceProbeOnTap", 1, seg([[1, "On"], [0, "Off"]]),
+       "The first touch puts the terminal into PROBE rather than SELECT — the player reaches for the box and gets the lens. This is the moment the mechanic introduces itself."],
+      ["probeIntro.lensLingerS", 1.0, num(0, 3, 0.1, "s"),
+       "How long the lens holds at full size after the finger lifts. Without this the player never sees what they just summoned."],
+      ["probeIntro.lensShrinkS", 0.4, num(0.1, 1.5, 0.05, "s"),
+       "How long the lens takes to shrink away afterwards. The shrink is what makes it read as a tool with a lifecycle."],
+      ["probeIntro.armSelectAfterProbe", 1, seg([[1, "On"], [0, "Off"]]),
+       "Once the group has been held and identified, SELECT arms itself, as it does in the real game."],
+    ]],
+    ["lv-decoy", [
+      ["decoys.perBoard", 2, num(0, 6, 1, " sites"),
+       "Decoy sites on a board that carries them — digits that stir when probed and belong to no group."],
+      ["decoys.agitation", 0.35, num(0.1, 0.9, 0.05, "×"),
+       "How strongly a decoy stirs, as a fraction of a real group. Too high and it is indistinguishable; too low and it is invisible."],
+      ["decoys.silent", 1, seg([[1, "Silent"], [0, "Audible"]]),
+       "Silent decoys make no sound and no buzz, so the ear stays honest and only the eye can be fooled."],
+    ]],
+    ["lv-morph", [
+      ["morph.perBoard", 1, num(0, 4, 1, " groups"),
+       "Morphing groups on a board that carries them."],
+      ["morph.holdBeforeS", 2.0, num(0.5, 6, 0.1, "s"),
+       "How long a morphing group shows its first temper before it changes."],
+      ["morph.transitionS", 0.6, num(0.1, 2, 0.05, "s"),
+       "How long the change itself takes."],
+      ["morph.snapshotAtLift", 1, seg([[1, "On"], [0, "Off"]]),
+       "A packet's temper is fixed when it lifts, so a morph after selection cannot invalidate a correct read. Turning this off makes the mechanic much crueller."],
+    ]],
+    ["lv-redact", [
+      ["redaction.channel", "audio", pick([
+        ["audio", "AUDIO — read motion without the voices"],
+        ["haptics", "HAPTICS — read without the buzz"],
+        ["lens", "LENS — read without magnification"],
+       ]),
+       "Which channel a redacted file takes away. Audio is the hardest and the most interesting: dread and malice are told apart by sound first."],
+      ["redaction.restoreSetting", 1, seg([[1, "On"], [0, "Off"]]),
+       "The player's own setting is restored afterwards. A tutorial must never silently change a preference."],
+    ]],
+    ["lv-fifth", [
+      ["fifthTemper.motion", "borrowed", pick([
+        ["borrowed", "BORROWED — takes the motion of the last temper you binned"],
+        ["inert", "INERT — no motion of its own at all"],
+        ["drift", "DRIFT — drifts outward and never returns"],
+       ]),
+       "Borrowed is the strongest: it always looks like something you know, and it is always wrong."],
+      ["fifthTemper.taught", 0, seg([[0, "Never"], [1, "Teach it"]]),
+       "Whether it gets a teaching file. Off by design — the whole value of this one is that nothing explains it."],
+      ["fifthTemper.appearsOn", "cold-harbor", pick([
+        ["cold-harbor", "COLD HARBOR only"],
+        ["siena,cold-harbor", "SIENA and COLD HARBOR"],
+        ["none", "Cut it entirely"],
+       ]),
+       "Which files carry it. Later is better: it should arrive after the player is fluent enough to know it is wrong."],
+    ]],
+  ];
+
+  // ── state ────────────────────────────────────────────────────────
+  const DEFAULTS = {};
+  for (const [, rows] of LEVERS) for (const [key, def] of rows) DEFAULTS[key] = def;
+  let state = { ...DEFAULTS };
+
+  try {
+    const raw = localStorage.getItem(STORE);
+    if (raw) {
+      const saved = JSON.parse(raw);
+      if (saved && typeof saved === "object") {
+        for (const k of Object.keys(DEFAULTS)) if (k in saved) state[k] = saved[k];
+      }
+    }
+  } catch { /* storage unavailable — this session only */ }
+
+  const save = () => {
+    try { localStorage.setItem(STORE, JSON.stringify(state)); } catch { /* ignore */ }
+  };
+
+  const get = (k) => state[k];
+  const nf = (v) => (Math.round(v * 100) / 100).toString();
+
+  // ── control rendering ────────────────────────────────────────────
+  function renderLever(host, key, spec, desc) {
+    const row = document.createElement("div");
+    row.className = "lever";
+
+    const left = document.createElement("div");
+    const dot = key.lastIndexOf(".");
+    left.innerHTML =
+      `<div class="lever-key"><i>${key.slice(0, dot + 1)}</i>${key.slice(dot + 1)}</div>` +
+      `<span class="lever-desc"></span>`;
+    left.querySelector(".lever-desc").textContent = desc;
+
+    const ctrl = document.createElement("div");
+    ctrl.className = "lever-control";
+
+    if (spec.kind === "range") {
+      const input = document.createElement("input");
+      input.type = "range";
+      input.min = spec.min; input.max = spec.max; input.step = spec.step;
+      input.value = get(key);
+      input.setAttribute("aria-label", key);
+      const out = document.createElement("span");
+      out.className = "readout";
+      const paint = () => {
+        out.innerHTML = `${nf(Number(input.value))}<span>${spec.unit}</span>`;
+      };
+      input.addEventListener("input", () => {
+        state[key] = Number(input.value);
+        paint(); save(); refresh();
+      });
+      paint();
+      ctrl.append(input, out);
+    } else if (spec.kind === "seg") {
+      const wrap = document.createElement("div");
+      wrap.className = "seg";
+      for (const [val, label] of spec.options) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = label;
+        const isOn = () => String(get(key)) === String(val);
+        b.setAttribute("aria-pressed", String(isOn()));
+        b.addEventListener("click", () => {
+          state[key] = typeof val === "number" ? val : val;
+          for (const sib of wrap.children) sib.setAttribute("aria-pressed", "false");
+          b.setAttribute("aria-pressed", "true");
+          save(); refresh();
+        });
+        wrap.append(b);
+      }
+      ctrl.append(wrap);
+    } else {
+      const sel = document.createElement("select");
+      sel.setAttribute("aria-label", key);
+      for (const [val, label] of spec.options) {
+        const o = document.createElement("option");
+        o.value = val; o.textContent = label;
+        if (String(get(key)) === String(val)) o.selected = true;
+        sel.append(o);
+      }
+      sel.addEventListener("change", () => { state[key] = sel.value; save(); refresh(); });
+      ctrl.append(sel);
+    }
+
+    row.append(left, ctrl);
+    host.append(row);
+  }
+
+  for (const [hostId, rows] of LEVERS) {
+    const host = document.getElementById(hostId);
+    for (const [key, , spec, desc] of rows) renderLever(host, key, spec, desc);
+  }
+
+  // ── derived values ───────────────────────────────────────────────
+  function derive() {
+    const s1 = get("stage1.screensPerTemper") * 4;
+    const s2 = get("stage2.screens");
+    const s3 = get("stage3.screens");
+    const orientation = s1 + s2 + s3;
+
+    // Rough play time: a group costs a look, a box and a carry; a screen
+    // costs the advance pause on top.
+    const perGroup = 5.5;
+    const secs =
+      s1 * (get("stage1.groupsPerScreen") * perGroup) +
+      s2 * (get("stage2.groupsPerScreen") * perGroup) +
+      s3 * (get("stage3.groupsPerScreen") * perGroup) +
+      orientation * (get("orientation.autoAdvanceMs") / 1000) +
+      (get("orientation.ceremony") === "full" ? orientation * 4
+        : get("orientation.ceremony") === "brief" ? orientation * 1.2 : 0);
+
+    const teachFiles = 3 + (Number(get("fifthTemper.taught")) ? 1 : 0);
+    const act3 = 4 + teachFiles;
+    const realFiles = 1 /* probe */ + 1 /* calibration */ + 4 /* act I */ + 4 /* act II */ + act3;
+    return { s1, s2, s3, orientation, secs, teachFiles, act3, realFiles };
+  }
+
+  function mmss(s) {
+    const m = Math.floor(s / 60);
+    return `${m}:${String(Math.round(s - m * 60)).padStart(2, "0")}`;
+  }
+
+  const totalsEl = document.getElementById("totals");
+  function paintTotals(d) {
+    const cells = [
+      ["Orientation", `${d.orientation}<small> screens</small>`],
+      ["Onboarding time", `${mmss(d.secs)}<small> approx</small>`],
+      ["Teaching files", `${d.teachFiles}<small> in act III</small>`],
+      ["Real files", `${d.realFiles}<small> after onboarding</small>`],
+      ["Queue total", `${d.orientation + d.realFiles}<small> screens</small>`],
+    ];
+    totalsEl.innerHTML = cells
+      .map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`)
+      .join("");
+  }
+
+  // ── act III derived table ────────────────────────────────────────
+  const act3body = document.querySelector("#act3 tbody");
+  function paintAct3(d) {
+    const fifthOn = get("fifthTemper.appearsOn") !== "none";
+    const rows = [];
+    const carries = [];
+    rows.push(["TUMWATER", "120s", "<span class='chip'>baseline</span>", false]);
+    if (get("decoys.perBoard") > 0) {
+      rows.push(["TEACH · DECOYS", "none", "<span class='chip on'>decoys</span>", true]);
+      carries.push("<span class='chip on'>decoys</span>");
+    }
+    rows.push(["ALLENTOWN", "110s", carries.join("") || "<span class='chip'>baseline</span>", false]);
+    if (get("morph.perBoard") > 0) {
+      rows.push(["TEACH · THE MORPH", "none", "<span class='chip on'>morph</span>", true]);
+      carries.push("<span class='chip on'>morph</span>");
+    }
+    rows.push(["SIENA", "100s", carries.join("") || "<span class='chip'>baseline</span>", false]);
+    rows.push(["TEACH · REDACTION", "150s",
+      `<span class='chip on'>${String(get("redaction.channel")).toUpperCase()} CUT</span>`, true]);
+    carries.push(`<span class='chip on'>${String(get("redaction.channel")).toUpperCase()} CUT</span>`);
+    if (Number(get("fifthTemper.taught")) && fifthOn) {
+      rows.push(["TEACH · THE FIFTH", "none", "<span class='chip secret'>fifth temper</span>", true]);
+    }
+    rows.push(["COLD HARBOR", "90s",
+      carries.join("") + (fifthOn ? "<span class='chip secret'>fifth temper</span>" : ""), false]);
+
+    act3body.innerHTML = rows.map(([name, clock, chips, teach], i) =>
+      `<tr class="${teach ? "teach" : ""}"><td class="num">${i + 1}</td>` +
+      `<td class="name">${name}</td><td class="num">${clock}</td><td>${chips}</td></tr>`
+    ).join("");
+  }
+
+  // ── specimen scopes ──────────────────────────────────────────────
+  const scopeHost = document.getElementById("scopes");
+  const scopes = [];
+  for (const key of Object.keys(TEMPERS)) {
+    const t = TEMPERS[key];
+    const box = document.createElement("div");
+    box.className = "scope";
+    box.innerHTML =
+      `<div class="scope-label"><span>${t.code} ${key}</span><em>${t.name}</em></div>` +
+      `<canvas></canvas>` +
+      `<div class="scope-note">${t.blurb}</div>`;
+    scopeHost.append(box);
+    scopes.push({ key, canvas: box.querySelector("canvas") });
+  }
+
+  // A small board: a 5x4 field of digits with a 5-digit group inside it.
+  const FIELD = [];
+  let seed = 7;
+  const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 7; c++) {
+    FIELD.push({ c, r, d: Math.floor(rnd() * 10) });
+  }
+  const GROUP = new Set([9, 10, 11, 16, 17]);
+
+  function sizeCanvas(cv) {
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const w = cv.clientWidth, h = cv.clientHeight;
+    if (!w || !h) return null;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) {
+      cv.width = Math.round(w * dpr);
+      cv.height = Math.round(h * dpr);
+    }
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w, h };
+  }
+
+  // The four displacement functions, matching the game's motion.ts in shape.
+  function offset(temper, t, i, amp) {
+    const ph = i * 1.7;
+    switch (temper) {
+      case "WO": return { dx: 0, dy: amp * 3.2 * (0.5 + 0.5 * Math.sin(t * 1.5 + ph * 0.3)), rot: 0, sc: 1 };
+      case "FC": {
+        const b = Math.abs(Math.sin(t * 3.4 + ph * 0.5));
+        return { dx: 0, dy: -amp * 3.4 * b, rot: amp * 0.26 * Math.sin(t * 3.4 + ph), sc: 1 };
+      }
+      case "DR": return { dx: amp * 1.9 * Math.sin(t * 30 + ph) + amp * 0.8 * Math.sin(t * 11.3 + ph), dy: 0, rot: 0, sc: 1 };
+      default: {
+        const p = 0.5 + 0.5 * Math.sin(t * 4.2);
+        return { dx: 0, dy: 0, rot: 0, sc: 1 + amp * 0.32 * p, glow: p };
+      }
+    }
+  }
+
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function drawScope(s, t) {
+    const m = sizeCanvas(s.canvas);
+    if (!m) return;
+    const { ctx, w, h } = m;
+    ctx.clearRect(0, 0, w, h);
+
+    const cw = w / 7.6, ch = h / 4.6;
+    const ox = (w - cw * 7) / 2 + cw / 2;
+    const oy = (h - ch * 4) / 2 + ch / 2;
+    const amp = Number(get("stage1.subtlety"));
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const fs = Math.min(cw, ch) * 0.78;
+
+    FIELD.forEach((n, i) => {
+      const inGroup = GROUP.has(i);
+      const o = inGroup ? offset(s.key, t, i, amp) : { dx: 0, dy: 0, rot: 0, sc: 1 };
+      const x = ox + n.c * cw + o.dx;
+      const y = oy + n.r * ch + o.dy;
+
+      ctx.save();
+      ctx.translate(x, y);
+      if (o.rot) ctx.rotate(o.rot);
+      if (o.sc !== 1) ctx.scale(o.sc, o.sc);
+      ctx.font = `600 ${fs}px "IBM Plex Mono", monospace`;
+      if (inGroup) {
+        const g = 0.75 + 0.25 * (o.glow ?? 1);
+        ctx.shadowColor = "rgba(47,214,138,0.9)";
+        ctx.shadowBlur = 8 * g;
+        ctx.fillStyle = "#D9FBEA";
+      } else {
+        ctx.fillStyle = "rgba(47,214,138,0.30)";
+      }
+      ctx.fillText(String(n.d), 0, 0);
+      ctx.restore();
+    });
+  }
+
+  // ── pulse timeline ───────────────────────────────────────────────
+  const pulseCv = document.getElementById("pulse");
+  function drawPulse(t) {
+    const m = sizeCanvas(pulseCv);
+    if (!m) return;
+    const { ctx, w, h } = m;
+    ctx.clearRect(0, 0, w, h);
+
+    const reveal = Number(get("probeIntro.revealDurationS"));
+    const hidden = Number(get("probeIntro.hiddenWaitS"));
+    const period = reveal + hidden;
+    const ramp = Number(get("probeIntro.revealRampS"));
+    // Inset so the first and last second labels are not clipped by the edge.
+    const PAD = 12;
+    const pxPerSec = (w - PAD * 2) / (period * 2);   // show two full cycles
+    const baseY = h - 16;
+    const topY = 12;
+    const sx = (sec) => PAD + sec * pxPerSec;
+
+    // grid: one tick per second
+    ctx.strokeStyle = "#0C2E1F";
+    ctx.lineWidth = 1;
+    ctx.font = '500 9px "IBM Plex Mono", monospace';
+    ctx.fillStyle = "#14724A";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    for (let s = 0; s <= period * 2; s++) {
+      const x = Math.round(sx(s)) + 0.5;
+      ctx.beginPath(); ctx.moveTo(x, topY); ctx.lineTo(x, baseY); ctx.stroke();
+      if (s % 2 === 0) ctx.fillText(`${s}s`, x, baseY + 3);
+    }
+
+    // envelope
+    const env = (sec) => {
+      const p = ((sec % period) + period) % period;
+      if (p >= reveal) return 0;
+      if (ramp <= 0) return 1;
+      if (p < ramp) return p / ramp;
+      if (p > reveal - ramp) return Math.max(0, (reveal - p) / ramp);
+      return 1;
+    };
+
+    const trace = () => {
+      ctx.beginPath();
+      for (let px = PAD; px <= w - PAD; px++) {
+        const sec = (px - PAD) / pxPerSec;
+        const y = baseY - env(sec) * (baseY - topY);
+        px === PAD ? ctx.moveTo(px, y) : ctx.lineTo(px, y);
+      }
+    };
+    trace();
+    ctx.lineTo(w - PAD, baseY); ctx.lineTo(PAD, baseY); ctx.closePath();
+    ctx.fillStyle = "rgba(47,214,138,0.16)";
+    ctx.fill();
+
+    trace();
+    ctx.strokeStyle = "#2FD68A";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // playhead
+    const head = reduce ? reveal * 0.5 : (t % (period * 2));
+    const hx = sx(head);
+    ctx.strokeStyle = "rgba(217,251,234,0.75)";
+    ctx.beginPath(); ctx.moveTo(hx, topY - 4); ctx.lineTo(hx, baseY); ctx.stroke();
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = "#D9FBEA";
+    const lead = `REVEAL ${nf(reveal)}s`;
+    ctx.fillText(lead, 2, 0);
+    ctx.fillStyle = "#14724A";
+    ctx.fillText(`· HIDDEN ${nf(hidden)}s · PERIOD ${nf(period)}s`, 2 + ctx.measureText(lead).width + 6, 0);
+  }
+
+  // ── json export ──────────────────────────────────────────────────
+  const jsonEl = document.getElementById("json");
+  function nest() {
+    const out = {};
+    for (const k of Object.keys(state)) {
+      const [group, leaf] = k.split(".");
+      (out[group] ||= {});
+      let v = state[k];
+      if (k === "stage1.temperOrder") v = String(v).split(",");
+      else if (k === "fifthTemper.appearsOn") v = v === "none" ? [] : String(v).split(",");
+      else if (typeof v === "number" && (k.endsWith("silent") || k.endsWith("taught") ||
+               k.startsWith("probeIntro.force") || k.startsWith("probeIntro.arm") ||
+               k.endsWith("snapshotAtLift") || k.endsWith("restoreSetting"))) v = Boolean(v);
+      out[group][leaf] = v;
+    }
+    return out;
+  }
+
+  // ── refresh ──────────────────────────────────────────────────────
+  function refresh() {
+    const d = derive();
+    paintTotals(d);
+    paintAct3(d);
+    document.getElementById("c1").textContent = `${d.s1} SCREENS`;
+    document.getElementById("c2").textContent = `${d.s2} SCREENS`;
+    document.getElementById("c3").textContent = `${d.s3} SCREENS`;
+    document.getElementById("c5").textContent = `${d.act3} FILES`;
+    document.getElementById("cer-n").textContent = d.orientation;
+    document.getElementById("cer-n2").textContent = d.orientation;
+    // The warning only earns its space when the setting it warns about is on.
+    document.getElementById("ceremony-note").hidden =
+      get("orientation.ceremony") === "none";
+    jsonEl.textContent = JSON.stringify(nest(), null, 2);
+    const changed = Object.keys(DEFAULTS).filter((k) => String(state[k]) !== String(DEFAULTS[k])).length;
+    document.getElementById("rev").textContent = changed ? `${changed} ADJUSTED` : "DEFAULTS";
+  }
+
+  // ── buttons ──────────────────────────────────────────────────────
+  const flash = document.getElementById("flash");
+  document.getElementById("copy").addEventListener("click", async () => {
+    const text = JSON.stringify(nest(), null, 2);
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch { /* fall through */ }
+    if (!ok) {
+      const r = document.createRange();
+      r.selectNodeContents(jsonEl);
+      const sel = window.getSelection();
+      sel.removeAllRanges(); sel.addRange(r);
+    }
+    flash.textContent = ok ? "Copied" : "Selected — press ⌘C";
+    flash.classList.add("show");
+    setTimeout(() => flash.classList.remove("show"), 1800);
+  });
+
+  document.getElementById("reset").addEventListener("click", () => {
+    state = { ...DEFAULTS };
+    save();
+    document.querySelectorAll(".levers").forEach((el) => (el.innerHTML = ""));
+    for (const [hostId, rows] of LEVERS) {
+      const host = document.getElementById(hostId);
+      for (const [key, , spec, desc] of rows) renderLever(host, key, spec, desc);
+    }
+    refresh();
+  });
+
+  // ── loop ─────────────────────────────────────────────────────────
+  let start = null;
+  function frame(ts) {
+    if (start === null) start = ts;
+    const t = reduce ? 0.4 : (ts - start) / 1000;
+    for (const s of scopes) drawScope(s, t);
+    drawPulse(t);
+    requestAnimationFrame(frame);
+  }
+
+  refresh();
+  requestAnimationFrame(frame);
+  window.addEventListener("resize", () => { /* canvases resize themselves next frame */ });
+})();
+</script>
+</body>
+</html>
