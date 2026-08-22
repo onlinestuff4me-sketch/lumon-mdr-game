@@ -50,7 +50,8 @@ export function PhaseOverlay({
           <p className="mt-3 text-[10px] leading-relaxed text-phos-400">
             You begin on <span className="text-phos-200">CALIBRATION</span>:
             no clock, one cluster of each temper, and the terminal names each
-            one as you find it. Learn the four, then the shift starts.
+            one as you find it. Four files then teach one temper apiece, four
+            pair them up, and the last four are the job itself.
           </p>
           <p className="mt-3 text-[9px] leading-relaxed tracking-[0.1em] text-phos-600">
             HEADPHONES AND HAPTICS RECOMMENDED.
@@ -66,7 +67,7 @@ export function PhaseOverlay({
             onClick={onSkipCalibration}
             className="mt-3 text-[9px] tracking-[0.2em] text-phos-600 underline-offset-4"
           >
-            SKIP TO TUMWATER
+            SKIP CALIBRATION
           </button>
         </>
       ) : null}
@@ -94,6 +95,9 @@ export function PhaseOverlay({
             </div>
             <p className="mt-1 text-[10px] italic leading-relaxed text-phos-300">
               {hud.lore}
+            </p>
+            <p className="mt-1.5 text-[8px] tracking-[0.18em] text-phos-600">
+              FILED · HANDBOOK &gt; ARCHIVE
             </p>
           </div>
           {hud.untimed ? null : (

@@ -35,12 +35,17 @@ of them 404s every asset on the other.
 
 The queue runs in three acts, so the job is learned rather than sprung on
 you. **CALIBRATION** meets all four tempers, one cluster each, spread wide,
-no clock. **Act I** is four files of a *single* temper — one bin on the deck,
-nothing to confuse it against, still no clock. **Act II** puts two tempers in
-a file and starts the shift clock, which is where the real skill lives:
-telling one from another. **Act III** is the job as Lumon specifies it, all
-four at once on a crowded board. Thirteen files, and each one hands back a
-line of the story on completion.
+no clock, and the terminal names each one as you find it. **Act I** is four
+files of a *single* temper — three groups of it, one bin spanning the whole
+deck, nothing to confuse it against, still no clock. **Act II** puts two
+tempers in a file, two groups each, and starts the shift clock; this is
+where the real skill lives, telling one from another. **Act III** is the job
+as Lumon specifies it, all four at once on a crowded board, with the clock
+tightening and the motion damping file by file. Thirteen files, and each one
+hands back a line of the story on completion.
+
+The full table, what each act teaches and why each Act II pairing was chosen
+are in [docs/PROGRESSION.md](docs/PROGRESSION.md).
 
 1. **PROBE** — hold a finger on the matrix. A lens floats above your
    fingertip, magnifying the digits under it so your thumb never covers the
@@ -51,15 +56,16 @@ line of the story on completion.
 2. **SELECT** — double-tap anywhere, or hit the SELECT switch, then drag a
    dashed box around the agitated digits. Capture four or more and the
    cluster lifts off the grid as a data packet.
-3. **REFINE** — drag the packet into one of the four temper bins. Correct
-   assignments fill that bin by 20%; a mistake buzzes, glitches red and
-   scatters the digits back to the grid. Fill all four bins to 100% to
-   complete the file.
+3. **REFINE** — drag the packet into a temper bin. A correct assignment
+   fills that bin by a share of its quota — a third in Act I, a half after
+   it; a mistake buzzes, glitches red and scatters the digits back to the
+   grid unrefined, where they can be found again. Fill every bin on the
+   deck to 100% to complete the file.
 
 Later files damp the cluster motion, so the tells get subtler, and they let
-the clusters crowd: Act I keeps them five or six cells apart, Act II four,
-Act III two or one. A file with fewer tempers also gets a shorter bin deck
-and a taller board.
+the clusters crowd: Act I keeps them five clear cells apart, Act II four,
+Act III three. A file with fewer tempers also gets a single-row bin deck
+and hands the reclaimed height back to the board.
 
 Shift length is a setting, in the handbook. **EXTENDED** is the default and
 doubles the clock; **STANDARD** is the 120 / 110 / 100 / 90 seconds the
@@ -69,7 +75,10 @@ and the clock bites the player who is guessing.
 
 The handbook shows a live animated sample of each temper beside its
 description, and the shift clock stops while it is open — so checking what
-dread actually looks like, mid-file, is free.
+dread actually looks like, mid-file, is free. It also carries the
+**archive**: the thirteen files with their addenda, the ones you have
+refined declassified and the rest redacted word by word. It persists, so
+the count of recovered addenda is the closest thing here to a save file.
 
 ## The four tempers
 
@@ -147,9 +156,16 @@ here rather than quietly applied.
   amplitude keeps the tremor visible at any frame rate while 30 Hz stays
   dominant wherever the display can show it.
 
-Nothing the brief fixes numerically was touched to make the game winnable:
-+20% per correct bin, the 90-120 second shifts and the 80px probe radius
-are all exactly as specified. What changed instead is the cost of a
+- **Bin fill is a share of a per-file quota, not a flat +20%.** The brief's
+  20% assumes five clusters per bin on every file, which only makes sense
+  once all four bins are on the deck. A teaching file with one temper and
+  three groups of it fills a third at a time; Act II and Act III fill a half.
+  Twenty refinements is the right size for a file that is the job, and much
+  too long for a file whose only purpose is to show you what dread feels
+  like.
+
+The 90-120 second shifts and the 80px probe radius are exactly as
+specified. What changed instead is the cost of a
 *gesture*. Identifying a cluster at 0.9 proximity meant landing within 16px
 of one specific glyph, aimed blind from 40px below; at 0.55 the target is
 about 37px, roughly one thumb. Measured over every cluster on the board,
@@ -172,9 +188,17 @@ On a scripted iPhone-13 viewport in headless Chromium:
   13.2 MB), and no Web Audio nodes allocated at all during twelve seconds of
   continuous probing across all four tempers — the voices are built once.
 - A full file completes end to end under script with no orphaned nodes.
+- **Latch accuracy 768/768 across all thirteen boards.** Every cluster on
+  every file probed at its centroid and at ±8px and ±14px on both axes,
+  through the real pointer API and the real reticle taper: the cluster that
+  latches is the cluster nearest the reticle, every time, including on the
+  Act III boards where clusters sit three cells apart.
+- **DRANESVILLE plays to 100% with hand-speed gestures** — probe, marquee
+  and carry all walked along their real paths at 700px/s — filling its one
+  bin 0 → 33 → 67 → 100.
 ### Is a file actually winnable?
 
-Twenty correct assignments against a 90-120 second clock is the brief's
+Eight correct assignments against a 90-120 second clock is Act III's
 arithmetic, and it deserved more than an assertion. So there is a bot that
 plays like a thumb. It sweeps the grid serpentine at a set speed and only
 "sees" a cluster when the game agitates one under it — no teleporting to
@@ -199,6 +223,14 @@ human sometimes does, and recovers in a couple of seconds.
 The ~0.6s per refinement a scripted harness achieves by calling engine
 methods directly is engine-side cost, not player time, and is not the
 number to quote.
+
+**These runs predate the three-act ramp** and were played against the older
+Act III file, which needed twenty refinements to reach 100%. The current one
+needs eight against the same clock, and one serpentine sweep still finds the
+board either way — so the search half of the cost is roughly unchanged while
+the refinement half drops by 60%. The margins above are therefore a floor,
+not a current measurement, and the row that mattered — hesitant, on Cold
+Harbor, losing at 80% — is the one the ramp exists to fix.
 
 ## Notes on the browser
 

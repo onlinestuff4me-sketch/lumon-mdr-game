@@ -26,9 +26,11 @@ export function BinDeck({
       {bins.map((bin) => {
         const def = TEMPER_DEFS[bin.temper];
         const rect = layout.binRects[bin.temper];
-        // A single-row deck is wide and shallow, so the label, the name and
-        // the meter sit on one line instead of stacking into dead space.
-        const short = rect.h < 46;
+        // A lone bin spans the whole deck, and stacking a label above a
+        // full-width meter leaves a band of dead space. Keyed on aspect
+        // rather than on the deck's temper count: a two-bin row comes out
+        // the same shape as a 2x2 cell and wants the same stacked layout.
+        const wide = rect.w > rect.h * 5;
         const pct = Math.round(bin.fill * 100);
         const full = bin.fill >= 0.999;
         const flash =
@@ -43,8 +45,8 @@ export function BinDeck({
           <div
             key={bin.temper}
             className={`absolute rounded-[3px] border transition-shadow duration-150 ${
-              short
-                ? "flex items-center gap-2 px-2"
+              wide
+                ? "flex items-center gap-2.5 px-3"
                 : "flex flex-col justify-between px-1.5 py-1"
             }`}
             style={{
@@ -59,7 +61,7 @@ export function BinDeck({
               boxShadow: flash,
             }}
           >
-            {short ? (
+            {wide ? (
               <>
                 <span
                   className="crt-text-glow shrink-0 text-[10px] font-bold tracking-[0.16em]"

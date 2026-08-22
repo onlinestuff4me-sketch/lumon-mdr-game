@@ -34,11 +34,17 @@ export const TICKER_FRAC = 0.042;
 /** Sized so the mode switches clear 44pt after padding and borders — iOS
  *  HIG's minimum, and Material's 48dp is within a hair of it. */
 export const DECK_FRAC = 0.086;
-/** Bin deck height for a two-row (four bin) deck. A one-row deck needs a
- *  little over half of it, and the grid gets the difference — early files
- *  are the ones that most want an open board. */
+/** Bin deck height for a two-row (four bin) deck. */
 export const BINS_FRAC = 0.175;
-export const BINS_FRAC_ONE_ROW = 0.1;
+/**
+ * One-row deck height, tuned so a single-row bin comes out the *same
+ * height* as one bin of the 2x2 deck rather than a squat strip — the fill
+ * meter has to read at a glance in Act I, where the whole point of the file
+ * is watching that one bar climb. It is the two-row height minus one row
+ * and one gap, which lands within a pixel of a normal bin at every stage
+ * size, and the grid gets the difference: early files want an open board.
+ */
+export const BINS_FRAC_ONE_ROW = 0.08;
 
 const BIN_GAP_FRAC = 0.022;
 const BIN_PAD_FRAC = 0.03;

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getAudio } from "../audio/AudioEngine";
 import { haptics } from "../audio/haptics";
+import { LEVELS } from "../game/constants";
+import { loadArchive, recordCompletion } from "../game/archive";
 import { computeLayout } from "../game/layout";
 import { useEngine } from "../hooks/useEngine";
 import { BinDeck } from "./BinDeck";
@@ -19,8 +21,14 @@ export function GameStage() {
   const rectRef = useRef<DOMRect | null>(null);
   const [size, setSize] = useState({ w: 360, h: 640 });
   const [handbook, setHandbook] = useState(false);
+  const [archive, setArchive] = useState<ReadonlySet<string>>(loadArchive);
+
 
   const openHandbook = useCallback(() => {
+    // Read the archive here rather than tracking it in an effect: the
+    // drawer is the only thing that renders it, and it is unmounted until
+    // this runs, so opening it is the one moment the value is needed.
+    setArchive(loadArchive());
     // Paused in the same handler that opens the drawer, not in an effect
     // afterwards: the drawer sits above the phase overlay, and a passive
     // effect leaves a frame in which the clock could expire and render the
@@ -106,6 +114,18 @@ export function GameStage() {
       engine.detach();
     };
   }, [engine]);
+
+  // ── the archive: one addendum declassified per refined file ─────────
+  // Keyed off the completion phase rather than off the NEXT FILE button so
+  // the addendum is filed the moment it is earned; a player who closes the
+  // tab on the completion screen keeps it. Writing to storage is the whole
+  // effect — nothing on screen reads the archive until the handbook opens,
+  // and that path loads it fresh.
+  useEffect(() => {
+    if (hud.phase !== "complete") return;
+    const level = LEVELS[hud.levelIndex];
+    if (level) recordCompletion(level.id);
+  }, [hud.phase, hud.levelIndex]);
 
   // ── page visibility: stop the loop, the drones and the buzzing ──────
   useEffect(() => {
@@ -280,6 +300,8 @@ export function GameStage() {
             hapticsSupported={haptics.supported}
             pace={hud.pace}
             onPace={(p) => engine.setPace(p)}
+            archive={archive}
+            levelIndex={hud.levelIndex}
           />
         ) : null}
 
