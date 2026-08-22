@@ -26,6 +26,11 @@ GitHub Pages. Pages itself has to be switched on once by hand — Settings ->
 Pages -> Source: GitHub Actions — because the Actions token is not permitted
 to create a Pages site.
 
+The build uses a **relative base**, so one artifact works wherever it is
+mounted: GitHub Pages serves a project site from `/<repo>/`, Vercel serves
+the same repo from the root of its own domain. A hardcoded prefix for one
+of them 404s every asset on the other.
+
 ## The loop
 
 You start on **CALIBRATION**: no clock, one cluster of each temper, and the
