@@ -65,10 +65,18 @@ The full deck, one group per temper, still all visible, still no clock.
 | `stage3.subtlety` | 1.15 | Quieter again — the last step before motion starts hiding. |
 | `stage3.spacing` | 5 | |
 
+### Where the group sits
+
+| Lever | Default | What it does |
+|---|---|---|
+| `stage1.focus` | `centre` → `mid` → `edge` | Screens 1–4 put their group in the middle of the board, where it cannot be missed; 5–12 push it halfway out; 13–21 put it near the edges, so finding it becomes part of the task before the probe ever arrives. Implemented by ranking the board generator's *candidate cells*, not by moving a finished cluster, so spacing, size and no-shared-cells all still hold. Measured mean offset from centre: **0.08 → 0.47 → 0.84** on a 0–1 scale. |
+
 ### Rules that apply to all of Part 1
 
 | Lever | Default | What it does |
 |---|---|---|
+| `orientation.tapToSelect` | true | **A tap anywhere on a group lifts the whole group**, no box required. Drag-to-box is not a discoverable gesture on its own — playtesting found people tapping the digits and nothing happening. Hit-tested against live glyph positions with a 22px pad, so an agitated digit can be tapped where it is seen. A tap on empty board does nothing, and a tap on a decoy answers `NO TEMPER DETECTED` exactly as a box would: a tap must never reveal what a box would not. |
+| `orientation.binHint` | on single-bin screens | Faint chevrons run from a held packet down to the bin, so the second half of the gesture is discoverable too. Two rules keep it a hint rather than an answer: it is only ever enabled where a **single bin** is on the deck, so it points at the one place a packet can go; and it waits **1.1s** first, so anyone who already knows the gesture has dropped the packet long before it appears. |
 | `orientation.minOverlapDigits` | 1 | How many of a group's digits a selection box must touch to lift the **whole** group. At 1, dragging over any part of a group takes all of it. The real game requires 4 (`MIN_CAPTURE`); this is the "generous selection" rule, and it exists so a new player is never told their correct instinct was a wrong box. |
 | `orientation.ceremony` | `none` | What happens between screens. `none` = a REFINED flash and auto-advance; `full` = the normal 100% / addendum / NEXT FILE screen. ▸ Screens 1–20 are `none`; screen 21 is `full`, so the sequence ends properly and releases the one addendum it is worth. |
 | `orientation.autoAdvanceMs` | 900 | Pause after the last group is binned before the next screen loads. |
@@ -76,6 +84,18 @@ The full deck, one group per temper, still all visible, still no clock.
 | `orientation.wrongBinPenalty` | `scatter` | What a wrong bin does. `scatter` matches the real game; `nudge` would refuse the drop and say so without scattering. |
 
 ---
+
+### The reticle offset, per gesture
+
+The 68px lift exists so a 36px lens clears the thumb. A marquee corner is a
+hairline with nothing to hide behind it, and lifting it that far started the
+box well above the finger drawing it.
+
+| Gesture | Offset | Why |
+|---|---|---|
+| PROBE | −68px | The lens has to clear the thumb — being looked at is its whole job. |
+| **SELECT** | **−22px** | Just clear of the contact patch, so the finger is not covering the corner it is placing. |
+| CARRY | −68px | The packet is a box the size of the lens, and covering it with a thumb has the same cost. |
 
 ## Part 2 — THE PROBE FILE: motion that hides
 

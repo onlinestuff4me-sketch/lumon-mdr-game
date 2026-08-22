@@ -11,6 +11,7 @@ import {
   PROBE_RADIUS,
   REPRIMAND,
   RETICLE_OFFSET_Y,
+  MARQUEE_OFFSET_Y,
   TEMPER_DEFS,
   TAP_MAX_MS,
   TAP_SLOP,
@@ -238,6 +239,9 @@ export class GameEngine {
   private advanceAt = -1;
   /** The player's own audio setting, held while a file redacts it. */
   private mutedBeforeRedaction: boolean | null = null;
+  /** Elapsed time the current packet was lifted, so the bin hint can wait
+   *  for hesitation rather than nagging a player who already knows. */
+  packetHeldAt = 0;
 
   /** Cluster ids currently pulsing from a rejected drop. */
   glitchUntil = 0;
@@ -475,6 +479,7 @@ export class GameEngine {
       level.quota + level.spare,
       level.spacing,
       boardExtras(level),
+      level.focus ?? null,
     );
 
     // If the board saturated before every cluster was placed, lower the
@@ -502,6 +507,7 @@ export class GameEngine {
         level.quota + level.spare,
         level.spacing,
         boardExtras(level),
+        level.focus ?? null,
       );
       tally();
       scarcest = Math.min(...active.map((t) => counts[t]));
@@ -785,16 +791,25 @@ export class GameEngine {
    * Monotonic in y throughout, so dragging downward always moves the
    * reticle downward.
    */
-  private reticleFor(x: number, y: number): { x: number; y: number } {
+  private reticleFor(
+    x: number,
+    y: number,
+    kind: Gesture["kind"] = "probe",
+  ): { x: number; y: number } {
     const l = this.layout;
+    // The 68px lift exists so a 36px lens clears the thumb. A marquee
+    // corner is a hairline with nothing to hide behind it, and lifting it
+    // that far put the box well above the finger drawing it — so selection
+    // gets its own, much smaller offset.
+    const base = kind === "marquee" ? MARQUEE_OFFSET_Y : RETICLE_OFFSET_Y;
     const taperEnd = l.grid.y + l.grid.h;
-    const band = Math.max(l.deckH, Math.abs(RETICLE_OFFSET_Y) + 16);
+    const band = Math.max(l.deckH, Math.abs(base) + 16);
     const taperStart = taperEnd - band;
-    let offset = RETICLE_OFFSET_Y;
+    let offset = base;
     if (y >= taperEnd) {
       offset = 0;
     } else if (y > taperStart) {
-      offset = RETICLE_OFFSET_Y * (1 - (y - taperStart) / band);
+      offset = base * (1 - (y - taperStart) / band);
     }
     return {
       x: Math.max(0, Math.min(l.w, x)),
@@ -852,15 +867,16 @@ export class GameEngine {
     // than being allowed to hijack the in-flight gesture.
     if (this.gesture) return;
 
-    const r = this.reticleFor(x, y);
-    this.lastTouchAt = this.elapsed;
-    this.lensHoldUntil = -1;
-    this.reticle.scale = 1;
-    const kind: Gesture["kind"] = this.packet
+    const kindNow: Gesture["kind"] = this.packet
       ? "carry"
       : this.mode === "select"
         ? "marquee"
         : "probe";
+    const r = this.reticleFor(x, y, kindNow);
+    this.lastTouchAt = this.elapsed;
+    this.lensHoldUntil = -1;
+    this.reticle.scale = 1;
+    const kind = kindNow;
 
     this.gesture = {
       id,
@@ -931,9 +947,18 @@ export class GameEngine {
       // and buzzes at you on the way out.
       if (!isTap) this.resolveMarquee();
     } else if (g.kind === "carry" && this.packet) {
-      this.resolveDrop(this.reticleFor(x, y));
+      this.resolveDrop(this.reticleFor(x, y, "carry"));
     } else if (g.kind === "probe") {
       this.armSelectIfIdentified(g, dt);
+    }
+
+    // A tap on a group takes the whole group. Drag-to-box is not a
+    // discoverable gesture on its own — playtesting found people tapping
+    // the digits and nothing happening — so on the teaching screens the
+    // instinct is simply honoured. Tried before registerTap, since a
+    // successful lift is not a mode toggle.
+    if (isTap && !this.packet && LEVELS[this.levelIndex].tapToSelect) {
+      if (this.tapLift(this.reticleFor(x, y, "marquee"))) return;
     }
 
     if (isTap) this.registerTap(g.startX, g.startY);
@@ -1111,6 +1136,47 @@ export class GameEngine {
       return;
     }
 
+    this.liftCluster(cluster, box.x + box.w / 2, box.y + box.h / 2);
+  }
+
+  /**
+   * Lifts whichever unrefined group the tap landed on, if any.
+   *
+   * Hit-tested against *live* glyph positions with a generous pad, the same
+   * way the marquee is, so an agitated digit can be tapped where it is seen
+   * rather than where its cell is. Decoys and the fifth are eligible: a tap
+   * must not quietly reveal what a box would not.
+   */
+  private tapLift(at: { x: number; y: number }): boolean {
+    const pad = 22;
+    let best: Cluster | null = null;
+    let bestD = Infinity;
+    for (const n of this.board.nodes) {
+      if (n.cluster < 0 || n.lifted || n.retired) continue;
+      const c = this.board.clusters[n.cluster];
+      if (c.refined) continue;
+      const d = Math.hypot(at.x - (n.hx + n.dx), at.y - (n.hy + n.dy));
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    if (!best || bestD > pad) return false;
+    if (best.decoy) {
+      this.say("NO TEMPER DETECTED", "error", 1.8);
+      getAudio().buzz();
+      haptics.reject();
+      this.glitchUntil = this.elapsed + 0.25;
+      return true;
+    }
+    this.liftCluster(best, best.cx, best.cy);
+    this.marquee.active = false;
+    return true;
+  }
+
+  /** Lifts a whole cluster into a carried packet. The one path a packet is
+   *  ever created by, whether a box or a tap asked for it. */
+  private liftCluster(cluster: Cluster, x: number, y: number): void {
     const digits: number[] = [];
     for (const i of cluster.members) {
       const n = this.board.nodes[i];
@@ -1123,10 +1189,11 @@ export class GameEngine {
       temper: cluster.temper,
       clusterId: cluster.id,
       digits,
-      x: box.x + box.w / 2,
-      y: box.y + box.h / 2,
+      x,
+      y,
       birth: 0,
     };
+    this.packetHeldAt = this.elapsed;
     this.latchedId = -1;
     this.phase = "carry";
     // Back to whatever mode this file lives in. On the orientation screens

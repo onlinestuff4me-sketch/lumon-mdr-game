@@ -37,10 +37,12 @@ The queue runs in three acts behind a training sequence, so the job is
 learned rather than sprung on you. **ORIENTATION** is 21 short screens in
 which nothing is hidden: every group is already moving, and all you do is
 box it and bin it. Three screens per temper teach what each one looks like,
-four put two tempers on the deck, five put up all four. Boxing is generous
-there — touching any one digit takes the whole group — and the screens
-advance themselves, so it reads as one continuous sequence rather than 21
-files. **BELLINGHAM** then takes the visibility away: the group surfaces for
+four put two tempers on the deck, five put up all four. Selecting is generous there —
+a tap anywhere on a group takes the whole group, and so does a box touching
+any one of its digits — faint arrows point a held packet at the bin if you
+hesitate, and the screens advance themselves, so it reads as one continuous
+sequence rather than 21 files. The group starts in the middle of the board
+and works its way outwards as you go. **BELLINGHAM** then takes the visibility away: the group surfaces for
 two seconds and sinks for five, and your first touch summons the lens
 instead of the box, which lingers and shrinks so you can see what it is.
 **CALIBRATION** then meets all four tempers, one cluster each, spread wide,

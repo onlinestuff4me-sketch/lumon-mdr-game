@@ -17,6 +17,17 @@ export const PROBE_RADIUS = 80;
  * contact patch entirely.
  */
 export const RETICLE_OFFSET_Y = -68;
+/**
+ * The same lift, for a marquee corner instead of the lens.
+ *
+ * Much smaller, because the two are hiding from different things. The lens
+ * has to clear a thumb because its whole job is to be looked at. A marquee
+ * corner is a hairline: it needs to sit just clear of the contact patch so
+ * the finger is not covering the corner it is placing, and no further —
+ * playtesting the shared 68px found the box starting well above where the
+ * finger was pointing.
+ */
+export const MARQUEE_OFFSET_Y = -22;
 /** Minimum captured members for a marquee to resolve into a packet. */
 export const MIN_CAPTURE = 4;
 /** Double-tap window (ms) and slop (px) for the mode toggle gesture. */
@@ -156,6 +167,10 @@ function orientationScreens(): LevelDef[] {
   groups.forEach((tempers, i) => {
     const stage = i < 12 ? 0 : i < 16 ? 1 : 2;
     const last = i === groups.length - 1;
+    // The first screens put their group in the middle of the board, where
+    // it cannot be missed. Later ones push it outwards, so finding it
+    // becomes part of the task before the probe ever arrives.
+    const focus = i < 4 ? "centre" : i < 12 ? "mid" : "edge";
     out.push({
       id: `orientation-${String(i + 1).padStart(2, "0")}`,
       name: "ORIENTATION",
@@ -180,6 +195,11 @@ function orientationScreens(): LevelDef[] {
       autoAdvanceMs: 900,
       archived: last,
       stage: [i + 1, groups.length],
+      focus,
+      tapToSelect: true,
+      // Only where a single bin is on the deck, so the arrows point at the
+      // one place a packet can go and give nothing away.
+      binHint: tempers.length === 1,
       seed: (0x0b1e + i * 0x1d37) >>> 0,
       quota: 1,
       spare: 0,
@@ -224,6 +244,9 @@ export const LEVELS: readonly LevelDef[] = [
     },
     lensLingerS: 1,
     lensShrinkS: 0.4,
+    focus: "mid",
+    tapToSelect: true,
+    binHint: true,
     seed: 0x2f11,
     quota: 1,
     spare: 0,

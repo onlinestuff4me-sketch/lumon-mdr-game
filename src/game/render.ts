@@ -1,7 +1,7 @@
-import { TEMPER_DEFS } from "./constants";
+import { LEVELS, TEMPER_DEFS } from "./constants";
 import type { GameEngine } from "./engine";
 import type { PaletteKey } from "./glyphAtlas";
-import type { GridNode, Temper } from "./types";
+import type { GridNode, Packet, Temper } from "./types";
 
 /** Scratch list of flashing nodes, reused so the render pass allocates
  *  nothing. Malice flashes a whole cluster at once, and toggling
@@ -308,6 +308,8 @@ export function renderOverlay(
   const packet = e.packet;
   if (!packet) return;
 
+  drawBinHint(ctx, e, packet);
+
   const def = TEMPER_DEFS[packet.temper];
   // Without assist the packet stays anonymous — binning it is the refiner's
   // judgement call, not a colour match.
@@ -443,4 +445,79 @@ function roundRect(
   ctx.arcTo(x, y + h, x, y, r);
   ctx.arcTo(x, y, x + w, y, r);
   ctx.closePath();
+}
+
+/**
+ * Faint chevrons running from a held packet down to the bin.
+ *
+ * Two rules keep it a hint rather than an answer. It is only ever enabled on
+ * files with a *single* bin, so it points at the one place a packet can go
+ * and gives nothing away. And it waits out a delay first, so a refiner who
+ * already knows the gesture has dropped the packet long before it appears —
+ * the hint arrives only for someone who has hesitated.
+ */
+const HINT_DELAY_S = 1.1;
+
+function drawBinHint(
+  ctx: CanvasRenderingContext2D,
+  e: GameEngine,
+  packet: Packet,
+): void {
+  const level = LEVELS[e.levelIndex];
+  if (!level.binHint) return;
+  const held = e.elapsed - e.packetHeldAt;
+  if (held < HINT_DELAY_S) return;
+
+  const rect = e.layout.binRects[packet.temper];
+  if (!rect || rect.w <= 0) return;
+  const tx = rect.x + rect.w / 2;
+  const ty = rect.y + rect.h / 2;
+  const dx = tx - packet.x;
+  const dy = ty - packet.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 60) return;                       // already there
+
+  const ux = dx / dist;
+  const uy = dy / dist;
+  const start = 46;                            // clear of the packet frame
+  const span = dist - start - 18;
+  if (span <= 0) return;
+
+  // Fade in over half a second, and pulse gently so it reads as an
+  // instruction rather than as part of the chrome.
+  const fade = Math.min(1, (held - HINT_DELAY_S) / 0.5);
+  const t = e.elapsed;
+  const angle = Math.atan2(dy, dx);
+
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "#8ff3c4";
+  const COUNT = 3;
+  for (let i = 0; i < COUNT; i++) {
+    // Each chevron slides along the path and wraps, so the row reads as
+    // motion towards the bin rather than as three static marks.
+    const p = ((t * 0.55 + i / COUNT) % 1);
+    const d = start + p * span;
+    const cx = packet.x + ux * d;
+    const cy = packet.y + uy * d;
+    // Brightest in the middle of its travel; nothing pops in or out.
+    // Measured against a real board: at 0.5 peak alpha these vanished into
+    // the digit field they have to be read over.
+    ctx.globalAlpha = fade * 0.8 * Math.sin(Math.PI * p);
+    ctx.lineWidth = 3;
+    ctx.shadowColor = "rgba(143,243,196,0.9)";
+    ctx.shadowBlur = 8;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(angle);
+    ctx.beginPath();
+    ctx.moveTo(-9, -9);
+    ctx.lineTo(2, 0);
+    ctx.lineTo(-9, 9);
+    ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
 }

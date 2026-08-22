@@ -125,17 +125,53 @@ export function createBoard(
   perTemper: number,
   spacing = 1,
   extras: readonly Extra[] = [],
+  focus: Focus = null,
 ): Board {
   const real = tempers.length * perTemper;
   for (let s = Math.max(1, spacing); s > 1; s--) {
-    const attempt = seedBoard(seed, tempers, perTemper, s, extras);
+    const attempt = seedBoard(seed, tempers, perTemper, s, extras, focus);
     // Only the real clusters have to fit: a board that cannot hold every
     // decoy is still winnable, and a board short a real cluster is not.
     if (attempt.clusters.filter((c) => !c.decoy && !c.fifth).length === real) {
       return attempt;
     }
   }
-  return seedBoard(seed, tempers, perTemper, 1, extras);
+  return seedBoard(seed, tempers, perTemper, 1, extras, focus);
+}
+
+export type Focus = "centre" | "mid" | "edge" | null;
+
+/**
+ * Ranks candidate cells so a group lands where the file wants it. Ordering
+ * the *candidates* rather than nudging a finished cluster keeps every other
+ * guarantee intact — spacing, size, no shared cells — because the grower is
+ * still free to refuse any seed it cannot use.
+ *
+ * The shuffled order is kept as the tie-break and a jitter term is added, so
+ * two files with the same focus do not put their group in the same place.
+ */
+function rankByFocus(
+  cells: number[],
+  focus: Focus,
+  rng: () => number,
+): number[] {
+  if (!focus) return cells;
+  const cx = (COLS - 1) / 2;
+  const cy = (ROWS - 1) / 2;
+  const score = new Map<number, number>();
+  for (const i of cells) {
+    const nx = ((i % COLS) - cx) / cx;
+    const ny = (((i / COLS) | 0) - cy) / cy;
+    // Chebyshev rather than Euclidean: the board is much taller than it is
+    // wide, and a radial measure would call the whole top and bottom "edge"
+    // while treating most of the width as centre.
+    const r = Math.max(Math.abs(nx), Math.abs(ny)) + (rng() - 0.5) * 0.18;
+    score.set(
+      i,
+      focus === "centre" ? r : focus === "edge" ? -r : Math.abs(r - 0.55),
+    );
+  }
+  return [...cells].sort((a, b) => score.get(a)! - score.get(b)!);
 }
 
 function seedBoard(
@@ -144,6 +180,7 @@ function seedBoard(
   perTemper: number,
   spacing: number,
   extras: readonly Extra[] = [],
+  focus: Focus = null,
 ): Board {
   const rng = mulberry32(seed);
   const owner = new Int32Array(CELL_COUNT).fill(-1);
@@ -158,9 +195,13 @@ function seedBoard(
   wanted.push(...extras);
 
   const clusters: Cluster[] = [];
-  const candidates = shuffle(
+  const candidates = rankByFocus(
+    shuffle(
+      rng,
+      Array.from({ length: CELL_COUNT }, (_, i) => i),
+    ),
+    focus,
     rng,
-    Array.from({ length: CELL_COUNT }, (_, i) => i),
   );
 
   let cursor = 0;
