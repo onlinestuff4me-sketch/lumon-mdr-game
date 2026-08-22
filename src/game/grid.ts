@@ -1,4 +1,4 @@
-import { COLS, ROWS, CELL_COUNT, TEMPERS } from "./constants";
+import { COLS, ROWS, CELL_COUNT } from "./constants";
 import { mulberry32, randInt, shuffle } from "./rng";
 import type { Cluster, GridNode, Temper } from "./types";
 
@@ -19,20 +19,23 @@ function idx(col: number, row: number): number {
 }
 
 /**
- * True when placing `cell` into `cluster` would leave it touching a
- * *different* cluster (8-neighbourhood). Clusters are kept one cell apart so
- * a marquee can never straddle two of them — the selection rules depend on
- * a box resolving to exactly one temper.
+ * True when placing `cell` into `cluster` would leave it within `spacing`
+ * cells of a *different* cluster. At spacing 1 this is the 8-neighbourhood:
+ * the minimum that stops a marquee straddling two clusters, since the
+ * selection rules depend on a box resolving to exactly one temper. Early
+ * files raise it so clusters sit alone in open ground and can be found and
+ * read one at a time.
  */
 function touchesForeign(
   owner: Int32Array,
   cell: number,
   clusterId: number,
+  spacing: number,
 ): boolean {
   const col = cell % COLS;
   const row = (cell / COLS) | 0;
-  for (let dr = -1; dr <= 1; dr++) {
-    for (let dc = -1; dc <= 1; dc++) {
+  for (let dr = -spacing; dr <= spacing; dr++) {
+    for (let dc = -spacing; dc <= spacing; dc++) {
       if (dr === 0 && dc === 0) continue;
       const c = col + dc;
       const r = row + dr;
@@ -54,8 +57,12 @@ function growCluster(
   seedCell: number,
   clusterId: number,
   target: number,
+  spacing: number,
 ): number[] | null {
-  if (owner[seedCell] !== -1 || touchesForeign(owner, seedCell, clusterId)) {
+  if (
+    owner[seedCell] !== -1 ||
+    touchesForeign(owner, seedCell, clusterId, spacing)
+  ) {
     return null;
   }
   const members = [seedCell];
@@ -79,7 +86,7 @@ function growCluster(
       if (c < 0 || c >= COLS || r < 0 || r >= ROWS) continue;
       const cell = idx(c, r);
       if (owner[cell] !== -1) continue;
-      if (touchesForeign(owner, cell, clusterId)) continue;
+      if (touchesForeign(owner, cell, clusterId, spacing)) continue;
       owner[cell] = clusterId;
       members.push(cell);
       placed = true;
@@ -96,15 +103,38 @@ function growCluster(
 }
 
 /**
- * Build a fresh board. `perTemper` clusters of each temper are seeded, so a
- * full file always contains exactly the digits the quota requires.
+ * Build a fresh board carrying `perTemper` clusters of each temper in
+ * `tempers`, kept at least `spacing` cells apart.
+ *
+ * If the board cannot fit them all at the requested spacing, the spacing is
+ * relaxed a step at a time rather than shipping a file short of clusters —
+ * a missing cluster makes a bin unfillable, whereas slightly closer
+ * clusters are only slightly harder.
  */
-export function createBoard(seed: number, perTemper: number): Board {
+export function createBoard(
+  seed: number,
+  tempers: readonly Temper[],
+  perTemper: number,
+  spacing = 1,
+): Board {
+  for (let s = Math.max(1, spacing); s > 1; s--) {
+    const attempt = seedBoard(seed, tempers, perTemper, s);
+    if (attempt.clusters.length === tempers.length * perTemper) return attempt;
+  }
+  return seedBoard(seed, tempers, perTemper, 1);
+}
+
+function seedBoard(
+  seed: number,
+  tempers: readonly Temper[],
+  perTemper: number,
+  spacing: number,
+): Board {
   const rng = mulberry32(seed);
   const owner = new Int32Array(CELL_COUNT).fill(-1);
 
   const wanted: Temper[] = [];
-  for (const t of TEMPERS) {
+  for (const t of tempers) {
     for (let i = 0; i < perTemper; i++) wanted.push(t);
   }
   shuffle(rng, wanted);
@@ -122,7 +152,7 @@ export function createBoard(seed: number, perTemper: number): Board {
     let members: number[] | null = null;
     let attempts = 0;
     while (!members && cursor < candidates.length && attempts++ < CELL_COUNT) {
-      members = growCluster(rng, owner, candidates[cursor++], id, target);
+      members = growCluster(rng, owner, candidates[cursor++], id, target, spacing);
     }
     if (!members) {
       // The board is saturated; the caller gets fewer clusters and the

@@ -191,7 +191,9 @@ export function GameStage() {
     [engine],
   );
 
-  const layout = computeLayout(size.w, size.h);
+  // Same call the engine makes, with the same active tempers, so the bins
+  // the player sees are the rects the engine hit-tests.
+  const layout = computeLayout(size.w, size.h, hud.activeTempers);
   const live =
     hud.phase === "probe" || hud.phase === "select" || hud.phase === "carry";
 
@@ -221,8 +223,12 @@ export function GameStage() {
 
         <div className="relative flex h-full w-full flex-col">
           <HUD hud={hud} height={layout.hudH} />
+          {/* The coach line sits directly under the HUD, not above the
+              control deck. At the bottom of the screen it was underneath
+              the hand that was holding the phone — unreadable exactly while
+              the player was doing the thing it describes. */}
+          <StatusTicker hud={hud} height={layout.tickerH} />
           <div className="flex-1" />
-          <StatusTicker hud={hud} />
           <ControlDeck
             hud={hud}
             height={layout.deckH}
@@ -308,8 +314,16 @@ export function GameStage() {
   );
 }
 
-function StatusTicker({ hud }: { hud: ReturnType<typeof useEngine>["hud"] }) {
-  if (!hud.message) return null;
+function StatusTicker({
+  hud,
+  height,
+}: {
+  hud: ReturnType<typeof useEngine>["hud"];
+  height: number;
+}) {
+  // The band is always reserved, so an arriving message never reflows the
+  // matrix underneath it.
+  if (!hud.message) return <div className="shrink-0" style={{ height }} />;
   const color =
     hud.messageKind === "error"
       ? "text-alarm border-alarm/60"
@@ -317,7 +331,10 @@ function StatusTicker({ hud }: { hud: ReturnType<typeof useEngine>["hud"] }) {
         ? "text-phos-200 border-phos-400/70"
         : "text-phos-400 border-phos-600/70";
   return (
-    <div className="pointer-events-none relative z-20 flex shrink-0 justify-center px-3 pb-1">
+    <div
+      className="pointer-events-none relative z-20 flex shrink-0 items-center justify-center overflow-hidden px-3"
+      style={{ height }}
+    >
       <span
         className={`crt-text-glow max-w-full rounded-[2px] border bg-phos-950/90 px-2 py-1 text-center text-[9px] leading-snug tracking-[0.14em] ${color}`}
       >

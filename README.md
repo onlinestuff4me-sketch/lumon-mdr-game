@@ -33,11 +33,16 @@ of them 404s every asset on the other.
 
 ## The loop
 
-You start on **CALIBRATION**: no clock, one cluster of each temper, and the
-terminal names each one the moment you find it. Learn the four, then the
-shift starts. It can be skipped from the briefing screen.
+The queue runs in three acts, so the job is learned rather than sprung on
+you. **CALIBRATION** meets all four tempers, one cluster each, spread wide,
+no clock. **Act I** is four files of a *single* temper — one bin on the deck,
+nothing to confuse it against, still no clock. **Act II** puts two tempers in
+a file and starts the shift clock, which is where the real skill lives:
+telling one from another. **Act III** is the job as Lumon specifies it, all
+four at once on a crowded board. Thirteen files, and each one hands back a
+line of the story on completion.
 
-1. **PROBE** — hold a finger on the matrix. A lens floats ~40px above your
+1. **PROBE** — hold a finger on the matrix. A lens floats above your
    fingertip, magnifying the digits under it so your thumb never covers the
    thing you are reading. Within 80px of a hidden cluster the digits stir:
    they move, they make a noise, the phone buzzes. Intensity scales with
@@ -51,9 +56,10 @@ shift starts. It can be skipped from the briefing screen.
    scatters the digits back to the grid. Fill all four bins to 100% to
    complete the file.
 
-Four files, each tighter than the last: **Tumwater**, **Allentown**,
-**Siena**, **Cold Harbor**. Later files damp the cluster motion, so the
-tells get subtler.
+Later files damp the cluster motion, so the tells get subtler, and they let
+the clusters crowd: Act I keeps them five or six cells apart, Act II four,
+Act III two or one. A file with fewer tempers also gets a shorter bin deck
+and a taller board.
 
 Shift length is a setting, in the handbook. **EXTENDED** is the default and
 doubles the clock; **STANDARD** is the 120 / 110 / 100 / 90 seconds the

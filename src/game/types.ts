@@ -92,6 +92,16 @@ export interface LevelDef {
   readonly seconds: number;
   /** Deterministic seed so a level always lays out the same way. */
   readonly seed: number;
+  /** Which tempers appear in this file. Early files carry one temper, so
+   *  the player learns a single signature at a time; only the bins for
+   *  these tempers are shown. */
+  readonly tempers: readonly Temper[];
+  /** Minimum clear cells between two clusters. Early files space them far
+   *  apart so each one can be found and read on its own; later files let
+   *  them crowd. */
+  readonly spacing: number;
+  /** One line of Lumon, released on completing the file. */
+  readonly lore: string;
   /** Packets required per bin to reach 100%. */
   readonly quota: number;
   /** Clusters seeded per temper. Kept above the quota so one cluster that

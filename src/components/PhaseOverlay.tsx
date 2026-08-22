@@ -74,7 +74,7 @@ export function PhaseOverlay({
       {hud.phase === "complete" ? (
         <>
           <p className="text-[9px] tracking-[0.3em] text-phos-600">
-            FILE {level.name} #{level.fileCode}
+            FILE {hud.levelIndex + 1} OF {LEVELS.length} · {level.name}
           </p>
           <h1 className="crt-text-glow mt-2 text-[20px] font-bold tracking-[0.2em] text-phos-200">
             100%
@@ -86,6 +86,16 @@ export function PhaseOverlay({
           <p className="mt-4 text-[10px] leading-relaxed text-phos-400">
             {PRAISE[hud.levelIndex % PRAISE.length]}
           </p>
+
+          {/* One line of the story, released per completed file. */}
+          <div className="mt-4 w-full max-w-[280px] rounded-[3px] border border-phos-700 bg-phos-900/40 px-3 py-2.5">
+            <div className="text-[8px] tracking-[0.24em] text-phos-600">
+              PERPETUITY WING · ADDENDUM {hud.levelIndex + 1}
+            </div>
+            <p className="mt-1 text-[10px] italic leading-relaxed text-phos-300">
+              {hud.lore}
+            </p>
+          </div>
           {hud.untimed ? null : (
             <p className="mt-2 text-[9px] tracking-[0.14em] text-phos-600">
               TIME REMAINING: {Math.ceil(hud.timeLeft)}s

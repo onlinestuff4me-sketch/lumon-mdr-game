@@ -33,7 +33,9 @@ export function HUD({ hud, height }: { hud: HudSnapshot; height: number }) {
           FILE: {hud.levelName} #{hud.fileCode}
         </span>
         <span className="crt-text-glow tabular-nums">
-          PROGRESS: {String(pct).padStart(3, " ")}%
+          {hud.activeTempers.length < 4
+            ? `${hud.activeTempers.join("/")} · ${pct}%`
+            : `PROGRESS: ${pct}%`}
         </span>
       </div>
       {/* Overall refinement meter. */}

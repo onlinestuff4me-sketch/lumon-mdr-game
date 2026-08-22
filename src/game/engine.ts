@@ -62,6 +62,8 @@ export interface HudSnapshot {
   pace: Pace;
   untimed: boolean;
   teaching: boolean;
+  activeTempers: readonly Temper[];
+  lore: string;
   isLastLevel: boolean;
 }
 
@@ -83,6 +85,7 @@ function sameSnapshot(a: HudSnapshot, b: HudSnapshot): boolean {
     a.muted !== b.muted ||
     a.hapticsOn !== b.hapticsOn ||
     a.assist !== b.assist ||
+    a.activeTempers !== b.activeTempers ||
     Math.ceil(a.timeLeft) !== Math.ceil(b.timeLeft) ||
     Math.round(a.progress * 100) !== Math.round(b.progress * 100)
   ) {
@@ -199,6 +202,10 @@ export class GameEngine {
   private snapshotDirty = true;
   /** Reused each frame so the hot loop allocates nothing. */
   private peak: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
+  /** The tempers this file uses — one, two or all four. */
+  get activeTempers(): readonly Temper[] {
+    return LEVELS[this.levelIndex].tempers;
+  }
   private snapshotAt = 0;
   private nextTockAt = 0;
 
@@ -216,7 +223,12 @@ export class GameEngine {
 
   constructor() {
     this.layout = computeLayout(360, 640);
-    this.board = createBoard(LEVELS[0].seed, LEVELS[0].quota + LEVELS[0].spare);
+    this.board = createBoard(
+      LEVELS[0].seed,
+      LEVELS[0].tempers,
+      LEVELS[0].quota + LEVELS[0].spare,
+      LEVELS[0].spacing,
+    );
     this.bins = this.freshBins();
 
     const saved = loadSettings();
@@ -332,7 +344,7 @@ export class GameEngine {
 
   private buildSnapshot(): HudSnapshot {
     const level = LEVELS[this.levelIndex];
-    const bins: BinView[] = TEMPERS.map((t) => {
+    const bins: BinView[] = level.tempers.map((t) => {
       const b = this.bins[t];
       const fresh = this.elapsed - b.lastHitAt < 0.5;
       return {
@@ -343,7 +355,8 @@ export class GameEngine {
       };
     });
     const progress =
-      bins.reduce((sum, b) => sum + Math.min(1, b.fill), 0) / TEMPERS.length;
+      bins.reduce((sum, b) => sum + Math.min(1, b.fill), 0) /
+      Math.max(1, bins.length);
     return {
       phase: this.phase,
       paused: this.paused,
@@ -366,6 +379,8 @@ export class GameEngine {
       pace: this.pace,
       untimed: level.untimed === true,
       teaching: level.teaches === true,
+      activeTempers: level.tempers,
+      lore: level.lore,
       isLastLevel: this.levelIndex >= LEVELS.length - 1,
     };
   }
@@ -388,25 +403,33 @@ export class GameEngine {
     const clamped = Math.max(0, Math.min(LEVELS.length - 1, index));
     const level = LEVELS[clamped];
     this.levelIndex = clamped;
-    this.board = createBoard(level.seed, level.quota + level.spare);
+    this.board = createBoard(
+      level.seed,
+      level.tempers,
+      level.quota + level.spare,
+      level.spacing,
+    );
 
     // If the board saturated before every cluster was placed, lower the
     // quota to what actually exists so a file is always completable.
     const counts: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
     for (const c of this.board.clusters) counts[c.temper]++;
+    const active = level.tempers;
     // A temper with no clusters means a bin that can never fill, so a
     // saturated board is re-seeded rather than clamped. Flooring the quota
     // at 1 would ship exactly the uncompletable file this guard exists to
     // prevent, so the loop keeps trying fresh seeds instead.
-    let scarcest = Math.min(...TEMPERS.map((t) => counts[t]));
+    let scarcest = Math.min(...active.map((t) => counts[t]));
     for (let attempt = 1; scarcest <= 0 && attempt <= 8; attempt++) {
       this.board = createBoard(
         (level.seed + attempt * 0x9e37) >>> 0,
+        level.tempers,
         level.quota + level.spare,
+        level.spacing,
       );
       for (const t of TEMPERS) counts[t] = 0;
       for (const c of this.board.clusters) counts[c.temper]++;
-      scarcest = Math.min(...TEMPERS.map((t) => counts[t]));
+      scarcest = Math.min(...active.map((t) => counts[t]));
     }
     this.quota = Math.max(1, Math.min(level.quota, scarcest));
     // Every temper must be able to reach 100%: if the board saturated
@@ -432,7 +455,7 @@ export class GameEngine {
     this.nextTockAt = level.untimed ? -1 : 10;
     this.phase = "probe";
     this.releaseGesture();
-    this.relayout();
+    this.refreshLayout();
     this.say(`FILE ${level.name} #${level.fileCode} LOADED`, "info", 2.6);
     getAudio().boot();
     this.emit(true);
@@ -556,7 +579,7 @@ export class GameEngine {
     }
     this.sized = true;
     this.dpr = nextDpr;
-    this.layout = computeLayout(w, h);
+    this.layout = computeLayout(w, h, this.activeTempers);
     this.relayout();
 
     for (const canvas of [this.gridCanvas, this.overlayCanvas]) {
@@ -583,6 +606,13 @@ export class GameEngine {
       this.packet.x = Math.min(this.layout.w, Math.max(0, this.packet.x));
       this.packet.y = Math.min(this.layout.h, Math.max(0, this.packet.y));
     }
+  }
+
+  /** Rebuild stage geometry. Must run on a level change as well as a
+   *  resize: the number of bins is a property of the file, not the screen. */
+  private refreshLayout(): void {
+    this.layout = computeLayout(this.layout.w, this.layout.h, this.activeTempers);
+    this.relayout();
   }
 
   private relayout(): void {
@@ -615,7 +645,7 @@ export class GameEngine {
   private reticleFor(x: number, y: number): { x: number; y: number } {
     const l = this.layout;
     const taperEnd = l.grid.y + l.grid.h;
-    const band = Math.max(48, l.deckH);
+    const band = Math.max(l.deckH, Math.abs(RETICLE_OFFSET_Y) + 16);
     const taperStart = taperEnd - band;
     let offset = RETICLE_OFFSET_Y;
     if (y >= taperEnd) {
@@ -833,7 +863,7 @@ export class GameEngine {
   }
 
   private binAt(x: number, y: number): Temper | null {
-    for (const t of TEMPERS) {
+    for (const t of this.activeTempers) {
       if (pointInRect(x, y, this.layout.binRects[t])) return t;
     }
     return null;
@@ -1015,7 +1045,7 @@ export class GameEngine {
   }
 
   private checkCompletion(): void {
-    for (const t of TEMPERS) {
+    for (const t of this.activeTempers) {
       if (this.bins[t].fill < 0.999) return;
     }
     this.phase = "complete";
