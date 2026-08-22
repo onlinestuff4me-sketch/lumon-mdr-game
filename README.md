@@ -9,13 +9,22 @@ sound synthesised at runtime — there are no audio files in this repository.
 
 ## Play
 
+**https://onlinestuff4me-sketch.github.io/lumon-mdr-game/**
+
+Best on a phone with the sound on and haptics enabled. On a desktop the
+terminal letterboxes to a centred 9:16 slab and works with a mouse.
+
+Locally:
+
 ```bash
 npm install
 npm run dev      # http://localhost:5173
 ```
 
-Best on a phone with the sound on and haptics enabled. On a desktop the
-terminal letterboxes to a centred 9:16 slab and works with a mouse.
+`.github/workflows/deploy.yml` typechecks, lints, builds and publishes to
+GitHub Pages. Pages itself has to be switched on once by hand — Settings ->
+Pages -> Source: GitHub Actions — because the Actions token is not permitted
+to create a Pages site.
 
 ## The loop
 
