@@ -99,4 +99,10 @@ export interface LevelDef {
   readonly spare: number;
   /** Multiplier on cluster motion amplitude — later files are subtler. */
   readonly subtlety: number;
+  /** No shift clock. Used by the calibration file, where the point is to
+   *  learn the four tempers rather than to race. */
+  readonly untimed?: boolean;
+  /** Name the temper in the ticker as soon as a cluster is identified.
+   *  This is the whole teaching mechanism of the calibration file. */
+  readonly teaches?: boolean;
 }

@@ -3,21 +3,26 @@ import { haptics } from "../audio/haptics";
 import {
   COLS,
   DOUBLE_TAP_MS,
+  PACE,
+  TIME_CREDIT,
   LEVELS,
   MIN_CAPTURE,
   PRAISE,
   PROBE_RADIUS,
   REPRIMAND,
   RETICLE_OFFSET_Y,
+  TEMPER_DEFS,
   TAP_MAX_MS,
   TAP_SLOP,
   TEMPERS,
 } from "./constants";
 import { createBoard, layoutBoard, type Board } from "./grid";
+import { loadSettings, saveSettings } from "./settings";
 import { computeLayout, pointInRect, type Rect, type StageLayout } from "./layout";
 import { GlyphAtlas } from "./glyphAtlas";
 import { applyTemperMotion, settleNode } from "./motion";
 import { renderGrid, renderOverlay } from "./render";
+import type { Pace } from "./constants";
 import type {
   BinState,
   GamePhase,
@@ -54,6 +59,9 @@ export interface HudSnapshot {
   muted: boolean;
   hapticsOn: boolean;
   assist: boolean;
+  pace: Pace;
+  untimed: boolean;
+  teaching: boolean;
   isLastLevel: boolean;
 }
 
@@ -179,7 +187,8 @@ export class GameEngine {
   private overlayCtx: CanvasRenderingContext2D | null = null;
   private raf = 0;
   private lastFrame = 0;
-  private dpr = 1;
+  /** Device pixel ratio the canvases are sized at; read by the renderer. */
+  dpr = 1;
   private running = false;
   private disposed = false;
   /** False until a real measurement has sized the canvases. */
@@ -202,12 +211,35 @@ export class GameEngine {
   hapticsOn = true;
   /** Accessibility aid: paint agitated clusters in their temper colour. */
   assist = false;
+  /** Shift length. See PACE — the brief's 90-120s is `standard`. */
+  pace: Pace = "extended";
 
   constructor() {
     this.layout = computeLayout(360, 640);
     this.board = createBoard(LEVELS[0].seed, LEVELS[0].quota + LEVELS[0].spare);
     this.bins = this.freshBins();
+
+    const saved = loadSettings();
+    this.pace = saved.pace;
+    this.muted = saved.muted;
+    this.hapticsOn = saved.hapticsOn;
+    this.assist = saved.assist;
+    haptics.setEnabled(saved.hapticsOn);
+    // Push the restored mute into the audio singleton now: it only creates
+    // an AudioContext on unlock, so this is just a flag, but without it a
+    // restored mute would not apply until the player toggled something.
+    getAudio().setMuted(saved.muted);
+
     this.snapshot = this.buildSnapshot();
+  }
+
+  private persist(): void {
+    saveSettings({
+      pace: this.pace,
+      muted: this.muted,
+      hapticsOn: this.hapticsOn,
+      assist: this.assist,
+    });
   }
 
   // ── lifecycle ───────────────────────────────────────────────────────
@@ -331,6 +363,9 @@ export class GameEngine {
       muted: this.muted,
       hapticsOn: this.hapticsOn && haptics.supported,
       assist: this.assist,
+      pace: this.pace,
+      untimed: level.untimed === true,
+      teaching: level.teaches === true,
       isLastLevel: this.levelIndex >= LEVELS.length - 1,
     };
   }
@@ -386,12 +421,15 @@ export class GameEngine {
     this.mode = "probe";
     this.paused = false;
     this.pausedSilenced = false;
-    this.totalTime = level.seconds;
-    this.timeLeft = level.seconds;
+    const seconds = level.untimed
+      ? Infinity
+      : level.seconds * PACE[this.pace].scale;
+    this.totalTime = seconds;
+    this.timeLeft = seconds;
     this.elapsed = 0;
     this.latchedId = -1;
     this.glitchUntil = 0;
-    this.nextTockAt = 10;
+    this.nextTockAt = level.untimed ? -1 : 10;
     this.phase = "probe";
     this.releaseGesture();
     this.relayout();
@@ -438,6 +476,7 @@ export class GameEngine {
   setMuted(muted: boolean): void {
     this.muted = muted;
     getAudio().setMuted(muted);
+    this.persist();
     this.snapshotDirty = true;
     this.emit(true);
   }
@@ -455,8 +494,21 @@ export class GameEngine {
     this.emit(true);
   }
 
+  setPace(pace: Pace): void {
+    if (this.pace === pace) return;
+    this.pace = pace;
+    // Applies from the next file; rescaling a clock mid-shift would either
+    // gift or steal time depending on which way it moved.
+    getAudio().click();
+    this.say(`SHIFT LENGTH: ${PACE[pace].label} — FROM THE NEXT FILE`, "info", 2.4);
+    this.persist();
+    this.snapshotDirty = true;
+    this.emit(true);
+  }
+
   setAssist(on: boolean): void {
     this.assist = on;
+    this.persist();
     this.snapshotDirty = true;
     this.emit(true);
   }
@@ -464,6 +516,7 @@ export class GameEngine {
   setHaptics(on: boolean): void {
     this.hapticsOn = on;
     haptics.setEnabled(on);
+    this.persist();
     this.snapshotDirty = true;
     this.emit(true);
   }
@@ -545,26 +598,48 @@ export class GameEngine {
 
   /**
    * The reticle sits ~40px above the contact point so the thumb never hides
-   * it while probing the matrix. The offset tapers to zero across the
-   * control deck, so that over the bins the packet is exactly under the
-   * finger: at full strength the bottom row of bins would need a touch 40px
-   * below the last pixel of the screen, and even the top row would only be
-   * reachable by pressing somewhere that looks wrong. The taper is
-   * monotonic in y, so dragging downward always moves the packet downward.
+   * it while probing the matrix, and the offset tapers to zero as the
+   * finger nears the bottom of the grid.
+   *
+   * The taper has to finish *at the grid's own bottom edge*, not lower down
+   * at the bins. The control deck sits above the input surface so it can
+   * take its own taps, which means a touch on the deck never reaches the
+   * board at all — so if the offset were still -40px at the last row of the
+   * matrix, the bottom 40px of the grid (two whole rows) could not be
+   * probed or boxed by any touch the game can receive. Below the grid the
+   * offset stays zero, which is what keeps every bin reachable.
+   *
+   * Monotonic in y throughout, so dragging downward always moves the
+   * reticle downward.
    */
   private reticleFor(x: number, y: number): { x: number; y: number } {
     const l = this.layout;
-    const taperEnd = l.h - l.binsH;
-    const taperStart = taperEnd - l.deckH;
+    const taperEnd = l.grid.y + l.grid.h;
+    const band = Math.max(48, l.deckH);
+    const taperStart = taperEnd - band;
     let offset = RETICLE_OFFSET_Y;
     if (y >= taperEnd) {
       offset = 0;
-    } else if (y > taperStart && l.deckH > 0) {
-      offset = RETICLE_OFFSET_Y * (1 - (y - taperStart) / l.deckH);
+    } else if (y > taperStart) {
+      offset = RETICLE_OFFSET_Y * (1 - (y - taperStart) / band);
     }
     return {
       x: Math.max(0, Math.min(l.w, x)),
       y: Math.max(0, Math.min(l.h, y + offset)),
+    };
+  }
+
+  /**
+   * Marquee corners are pinned to the board. Dragging past an edge should
+   * sweep the edge, the way it does in every drawing tool — not stop short
+   * of the outermost digits or wander off over the chrome.
+   */
+  private clampToBoard(p: { x: number; y: number }): { x: number; y: number } {
+    const g = this.layout.grid;
+    const m = 16; // generous enough to enclose a drooping or bursting glyph
+    return {
+      x: Math.max(g.x - m, Math.min(g.x + g.w + m, p.x)),
+      y: Math.max(g.y - m, Math.min(g.y + g.h + m, p.y)),
     };
   }
 
@@ -628,11 +703,12 @@ export class GameEngine {
     this.reticle.active = true;
 
     if (kind === "marquee") {
+      const b = this.clampToBoard(r);
       this.marquee.active = true;
-      this.marquee.x0 = r.x;
-      this.marquee.y0 = r.y;
-      this.marquee.x1 = r.x;
-      this.marquee.y1 = r.y;
+      this.marquee.x0 = b.x;
+      this.marquee.y0 = b.y;
+      this.marquee.x1 = b.x;
+      this.marquee.y1 = b.y;
     } else if (kind === "carry" && this.packet) {
       this.packet.x = r.x;
       this.packet.y = r.y;
@@ -652,8 +728,9 @@ export class GameEngine {
     this.reticle.y = r.y;
 
     if (g.kind === "marquee") {
-      this.marquee.x1 = r.x;
-      this.marquee.y1 = r.y;
+      const b = this.clampToBoard(r);
+      this.marquee.x1 = b.x;
+      this.marquee.y1 = b.y;
     } else if (g.kind === "carry" && this.packet) {
       this.packet.x = r.x;
       this.packet.y = r.y;
@@ -895,7 +972,19 @@ export class GameEngine {
       };
       getAudio().chime();
       haptics.success();
-      this.say(PRAISE[(this.elapsed | 0) % PRAISE.length], "praise", 1.9);
+      if (Number.isFinite(this.timeLeft)) {
+        // Competence buys time. The clock still bites, but it bites the
+        // player who is guessing rather than the one who is learning.
+        this.timeLeft += TIME_CREDIT;
+        this.nextTockAt = Math.min(10, Math.floor(this.timeLeft) - 1);
+        this.say(
+          `${PRAISE[(this.elapsed | 0) % PRAISE.length]}  +${TIME_CREDIT}s`,
+          "praise",
+          1.9,
+        );
+      } else {
+        this.say(PRAISE[(this.elapsed | 0) % PRAISE.length], "praise", 1.9);
+      }
       this.packet = null;
       this.phase = "probe";
       this.checkCompletion();
@@ -975,7 +1064,7 @@ export class GameEngine {
     this.elapsed += dt;
     const live = this.isLive();
 
-    if (live) {
+    if (live && Number.isFinite(this.timeLeft)) {
       // ...but the shift clock runs on unclamped wall time. Otherwise a
       // janky device silently gifts the player the difference: at 15 fps a
       // "90 second" file would last about two minutes.
@@ -1101,6 +1190,18 @@ export class GameEngine {
     }
 
     if (latchCandidate >= 0) {
+      const teaching = LEVELS[this.levelIndex].teaches === true;
+      if (teaching && latchCandidate !== this.latchedId) {
+        // The calibration file names what you have found the moment you
+        // find it. Four tempers learned by feeling them, not by reading a
+        // description and hoping.
+        const def = TEMPER_DEFS[this.board.clusters[latchCandidate].temper];
+        this.say(
+          `${def.code} ${def.name} — ${def.signature.toUpperCase()}`,
+          "info",
+          3.2,
+        );
+      }
       this.latchedId = latchCandidate;
       // Recorded unconditionally, not only when the latch changes: re-probing
       // an already-latched cluster is the same gesture from the player's side

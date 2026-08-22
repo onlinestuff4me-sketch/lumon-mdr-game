@@ -7,7 +7,8 @@ function clock(seconds: number): string {
 }
 
 export function HUD({ hud, height }: { hud: HudSnapshot; height: number }) {
-  const urgent = hud.timeLeft <= 15 && hud.phase !== "complete";
+  const urgent =
+    !hud.untimed && hud.timeLeft <= 15 && hud.phase !== "complete";
   const pct = Math.round(hud.progress * 100);
 
   return (
@@ -24,7 +25,7 @@ export function HUD({ hud, height }: { hud: HudSnapshot; height: number }) {
               : "crt-text-glow text-phos-300"
           }
         >
-          [SHIFT: {clock(hud.timeLeft)}]
+          [SHIFT: {hud.untimed ? "--:--" : clock(hud.timeLeft)}]
         </span>
       </div>
       <div className="mt-0.5 flex items-baseline justify-between text-[10px] tracking-[0.14em] text-phos-400">

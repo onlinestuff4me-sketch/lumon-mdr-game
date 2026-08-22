@@ -72,7 +72,44 @@ export const TEMPER_DEFS: Record<Temper, TemperDef> = {
 /** Idle phosphor colour for inert digits. */
 export const IDLE_RGB: readonly [number, number, number] = [47, 214, 138];
 
+/**
+ * Shift length. The brief specifies 90-120 seconds, which is STANDARD and
+ * is what a refiner who already knows the four tempers plays on. A first
+ * pass is spent *learning* the tempers, and a clock that punishes learning
+ * is the wrong kind of hard, so EXTENDED is the default until someone
+ * chooses otherwise.
+ */
+export type Pace = "extended" | "standard";
+
+export const PACE: Record<Pace, { label: string; hint: string; scale: number }> = {
+  extended: {
+    label: "EXTENDED",
+    hint: "Double the shift. Room to learn what each temper feels like.",
+    scale: 2,
+  },
+  standard: {
+    label: "STANDARD",
+    hint: "The shift as Lumon specifies it. Assumes you know the tempers.",
+    scale: 1,
+  },
+};
+
+/** Seconds credited back to the shift for each correctly refined packet. */
+export const TIME_CREDIT = 5;
+
 export const LEVELS: readonly LevelDef[] = [
+  {
+    id: "calibration",
+    name: "CALIBRATION",
+    fileCode: "0000",
+    seconds: 0,
+    untimed: true,
+    teaches: true,
+    seed: 0x1e55,
+    quota: 1,
+    spare: 0,
+    subtlety: 1.15,
+  },
   {
     id: "tumwater",
     name: "TUMWATER",

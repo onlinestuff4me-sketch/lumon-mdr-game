@@ -72,6 +72,52 @@ export function renderGrid(ctx: CanvasRenderingContext2D, e: GameEngine): void {
   if (e.reticle.active && !e.packet && !e.marquee.active) drawReticle(ctx, e);
 }
 
+/** Lens radius and magnification for the probe reticle. */
+const LENS_R = 36;
+const LENS_ZOOM = 1.75;
+
+/**
+ * Curvature falloff for the glass, cached.
+ *
+ * `createRadialGradient` in a per-frame path is expensive enough to show
+ * up in a frame budget, but the sheen cannot simply be baked into a tile
+ * and blitted: it both darkens (at the rim) and lightens (the specular),
+ * and a source-over tile would lay that darkening flatly over the
+ * magnified digits instead of letting the highlight add to them. So the
+ * gradient object is built once in lens-local coordinates and painted
+ * through a translate, which keeps the compositing live and the
+ * allocation out of the loop.
+ */
+let bulge: CanvasGradient | null = null;
+
+function lensBulge(ctx: CanvasRenderingContext2D): CanvasGradient {
+  if (bulge) return bulge;
+  const g = ctx.createRadialGradient(
+    -LENS_R * 0.3,
+    -LENS_R * 0.35,
+    LENS_R * 0.1,
+    0,
+    0,
+    LENS_R,
+  );
+  g.addColorStop(0, "rgba(214,255,236,0.16)");
+  g.addColorStop(0.55, "rgba(214,255,236,0.03)");
+  g.addColorStop(1, "rgba(0,0,0,0.34)");
+  bulge = g;
+  return g;
+}
+
+/**
+ * The probe reticle is a lens: a piece of ground glass held over the
+ * matrix.
+ *
+ * The magnified digits are *re-drawn from the atlas* at the larger size
+ * rather than sampled from the canvas and upscaled — a lens that blurs
+ * what it magnifies is a smudge, not glass, and this way the glyphs stay
+ * as crisp under the lens as outside it. Only the nodes that fall inside
+ * the lens are touched, so this costs a couple of dozen extra blits and
+ * only while a finger is down.
+ */
 function drawReticle(ctx: CanvasRenderingContext2D, e: GameEngine): void {
   const { x, y } = e.reticle;
   const t = e.elapsed;
@@ -85,47 +131,112 @@ function drawReticle(ctx: CanvasRenderingContext2D, e: GameEngine): void {
     }
   }
   const color = hot && e.assist ? TEMPER_DEFS[hot].css : "#2fd68a";
+  const atlas = e.atlas;
 
   ctx.save();
+
+  // ── the glass itself ────────────────────────────────────────────────
+  ctx.beginPath();
+  ctx.arc(x, y, LENS_R, 0, Math.PI * 2);
+  ctx.clip();
+
+  // Ground under the lens: the board colour, lifted a little so the glass
+  // reads as holding light rather than as a hole.
+  ctx.fillStyle = "#03120b";
+  ctx.fillRect(x - LENS_R, y - LENS_R, LENS_R * 2, LENS_R * 2);
+
+  // Magnified content. Everything within LENS_R / ZOOM of the centre maps
+  // out to the rim.
+  const reach = LENS_R / LENS_ZOOM + 14;
+  for (const n of e.board.nodes) {
+    if (n.retired || n.lifted) continue;
+    const nx = n.hx + n.dx;
+    const ny = n.hy + n.dy;
+    if (Math.abs(nx - x) > reach || Math.abs(ny - y) > reach) continue;
+
+    const mx = x + (nx - x) * LENS_ZOOM;
+    const my = y + (ny - y) * LENS_ZOOM;
+    const scale = n.scale * LENS_ZOOM;
+    const a = n.agitation;
+    if (a <= 0.04 && n.flash <= 0.02) {
+      atlas.draw(ctx, "idle", n.digit, mx, my, 0.95, n.rot, scale);
+      continue;
+    }
+    const temper = e.board.clusters[n.cluster]?.temper;
+    const key: PaletteKey = e.assist && temper ? temper : "stir";
+    atlas.draw(ctx, "idle", n.digit, mx, my, 0.95 * (1 - a), n.rot, scale);
+    atlas.draw(ctx, key, n.digit, mx, my, Math.min(1, a * 1.15), n.rot, scale);
+  }
+
+  // Curvature, then the specular streak added on top of it.
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = lensBulge(ctx);
+  ctx.fillRect(-LENS_R, -LENS_R, LENS_R * 2, LENS_R * 2);
+
+  // A hair of drift so the glass feels held rather than pinned.
+  ctx.globalCompositeOperation = "lighter";
+  ctx.globalAlpha = 0.5;
+  ctx.beginPath();
+  ctx.ellipse(
+    -LENS_R * 0.34,
+    -LENS_R * 0.46 + Math.sin(t * 0.9) * 0.8,
+    LENS_R * 0.42,
+    LENS_R * 0.13,
+    -0.6,
+    0,
+    Math.PI * 2,
+  );
+  ctx.fillStyle = "rgba(226,255,242,0.5)";
+  ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // ── rim and reading ─────────────────────────────────────────────────
+  ctx.save();
+  // Bezel: a dark seat under a bright edge reads as thickness.
+  ctx.strokeStyle = "rgba(1,10,6,0.9)";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.arc(x, y, LENS_R + 1.5, 0, Math.PI * 2);
+  ctx.stroke();
+
   ctx.strokeStyle = color;
-
-  // Outer probe ring, breathing with proximity. The halo is a second wide,
-  // faint stroke rather than a shadowBlur: canvas shadows are a software
-  // blur on mobile Safari, and this one would run every frame the finger
-  // is down — which is the whole of the primary interaction.
-  const ring = 26 + hotValue * 6 + Math.sin(t * 3) * 1.5;
-  ctx.globalAlpha = (0.35 + 0.5 * hotValue) * 0.3;
-  ctx.lineWidth = 5;
+  ctx.globalAlpha = 0.3 + 0.35 * hotValue;
+  ctx.lineWidth = 4;
   ctx.beginPath();
-  ctx.arc(x, y, ring, 0, Math.PI * 2);
+  ctx.arc(x, y, LENS_R, 0, Math.PI * 2);
   ctx.stroke();
-  ctx.globalAlpha = 0.35 + 0.5 * hotValue;
-  ctx.lineWidth = 1.4;
+  ctx.globalAlpha = 0.75 + 0.25 * hotValue;
+  ctx.lineWidth = 1.3;
   ctx.beginPath();
-  ctx.arc(x, y, ring, 0, Math.PI * 2);
+  ctx.arc(x, y, LENS_R, 0, Math.PI * 2);
   ctx.stroke();
 
-  // Signal-strength arc.
+  // Signal-strength arc, riding just outside the rim.
   if (hotValue > 0.03) {
-    ctx.globalAlpha = 0.9;
-    ctx.lineWidth = 2.4;
+    ctx.globalAlpha = 0.95;
+    ctx.lineWidth = 2.6;
     ctx.beginPath();
-    ctx.arc(x, y, 33, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * hotValue);
+    ctx.arc(x, y, LENS_R + 6, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * hotValue);
     ctx.stroke();
   }
 
-  // Crosshair.
-  ctx.globalAlpha = 0.85;
+  // Crosshair ticks, kept outside the glass so they never sit over a digit.
+  ctx.globalAlpha = 0.8;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(x - 14, y);
-  ctx.lineTo(x - 5, y);
-  ctx.moveTo(x + 5, y);
-  ctx.lineTo(x + 14, y);
-  ctx.moveTo(x, y - 14);
-  ctx.lineTo(x, y - 5);
-  ctx.moveTo(x, y + 5);
-  ctx.lineTo(x, y + 14);
+  for (const [dx, dy] of [
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+  ] as const) {
+    ctx.moveTo(x + dx * (LENS_R + 3), y + dy * (LENS_R + 3));
+    ctx.lineTo(x + dx * (LENS_R + 10), y + dy * (LENS_R + 10));
+  }
   ctx.stroke();
   ctx.restore();
   ctx.globalAlpha = 1;

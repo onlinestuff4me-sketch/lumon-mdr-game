@@ -1,5 +1,8 @@
 import { Vibrate, Volume2, X } from "lucide-react";
 import type { ReactNode } from "react";
+import { TemperSample } from "./TemperSample";
+import type { Pace } from "../game/constants";
+import { PACE } from "../game/constants";
 import { MIN_CAPTURE, PROBE_RADIUS, TEMPERS, TEMPER_DEFS } from "../game/constants";
 
 interface Props {
@@ -11,6 +14,8 @@ interface Props {
   hapticsOn: boolean;
   onHaptics: (on: boolean) => void;
   hapticsSupported: boolean;
+  pace: Pace;
+  onPace: (pace: Pace) => void;
 }
 
 function Toggle({
@@ -66,6 +71,8 @@ export function HandbookModal({
   hapticsOn,
   onHaptics,
   hapticsSupported,
+  pace,
+  onPace,
 }: Props) {
   return (
     <div
@@ -136,22 +143,25 @@ export function HandbookModal({
             const def = TEMPER_DEFS[t];
             return (
               <li
+                className="flex items-center gap-2.5 rounded-[3px] border-l-2 bg-phos-900/50 py-1.5 pl-2.5 pr-2"
                 key={t}
-                className="rounded-[3px] border-l-2 bg-phos-900/50 py-1.5 pl-2.5 pr-2"
                 style={{ borderColor: def.css }}
               >
-                <div
-                  className="text-[10px] font-bold tracking-[0.18em]"
-                  style={{ color: def.css }}
-                >
-                  {def.code} · {def.name} ({t})
+                <div className="min-w-0 flex-1">
+                  <div
+                    className="text-[10px] font-bold tracking-[0.18em]"
+                    style={{ color: def.css }}
+                  >
+                    {def.code} · {def.name} ({t})
+                  </div>
+                  <div className="text-[9px] leading-snug text-phos-400">
+                    {def.blurb}
+                  </div>
+                  <div className="text-[9px] italic leading-snug text-phos-600">
+                    {def.signature}
+                  </div>
                 </div>
-                <div className="text-[9px] leading-snug text-phos-400">
-                  {def.blurb}
-                </div>
-                <div className="text-[9px] italic leading-snug text-phos-600">
-                  {def.signature}
-                </div>
+                <TemperSample temper={t} />
               </li>
             );
           })}
@@ -160,6 +170,33 @@ export function HandbookModal({
         <h3 className="crt-text-glow mb-2 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300">
           TERMINAL SETTINGS
         </h3>
+        <div className="mb-2 rounded-[3px] border border-phos-700 bg-phos-900/40 px-2.5 py-2">
+          <div className="text-[10px] font-bold tracking-[0.16em] text-phos-300">
+            SHIFT LENGTH
+          </div>
+          <div className="mt-1.5 flex gap-1.5">
+            {(Object.keys(PACE) as Pace[]).map((key) => (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={pace === key}
+                onClick={() => onPace(key)}
+                className={`flex-1 rounded-[3px] border px-2 py-1.5 text-[9px] font-bold tracking-[0.14em] transition-colors ${
+                  pace === key
+                    ? "crt-text-glow border-phos-400 bg-phos-600/40 text-phos-200"
+                    : "border-phos-700 text-phos-500"
+                }`}
+              >
+                {PACE[key].label}
+              </button>
+            ))}
+          </div>
+          <p className="mt-1.5 text-[9px] leading-snug text-phos-600">
+            {PACE[pace].hint} Applies from the next file. Every correct
+            assignment also credits {5} seconds back to the clock.
+          </p>
+        </div>
+
         <div className="divide-y divide-phos-800 rounded-[3px] border border-phos-700 bg-phos-900/40 px-2.5 py-1">
           <Toggle
             on={!muted}

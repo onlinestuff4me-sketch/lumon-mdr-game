@@ -6,7 +6,7 @@ export function CRTOverlay({ glitch = false }: { glitch?: boolean }) {
   return (
     <div
       aria-hidden
-      className="motion-guard pointer-events-none absolute inset-0 z-40"
+      className="motion-guard pointer-events-none absolute inset-0 z-50"
       style={{ contain: "strict" }}
     >
       <div className="crt-scanlines absolute inset-0 opacity-70" />

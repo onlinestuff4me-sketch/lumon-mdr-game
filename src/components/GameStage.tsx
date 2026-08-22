@@ -239,7 +239,7 @@ export function GameStage() {
 
         <canvas
           ref={overlayRef}
-          className="pointer-events-none absolute inset-0 z-30 h-full w-full"
+          className="pointer-events-none absolute inset-0 z-45 h-full w-full"
           aria-hidden
         />
 
@@ -272,6 +272,8 @@ export function GameStage() {
             hapticsOn={hud.hapticsOn}
             onHaptics={(on) => engine.setHaptics(on)}
             hapticsSupported={haptics.supported}
+            pace={hud.pace}
+            onPace={(p) => engine.setPace(p)}
           />
         ) : null}
 
@@ -287,6 +289,11 @@ export function GameStage() {
           onRestart={() => engine.restart()}
           onNewQuarter={() => engine.restartQuarter()}
           onHandbook={openHandbook}
+          onSkipCalibration={() => {
+            void getAudio().unlock();
+            haptics.markActivated();
+            engine.startLevel(1);
+          }}
         />
 
         {live && !hud.audioReady ? (
@@ -312,7 +319,7 @@ function StatusTicker({ hud }: { hud: ReturnType<typeof useEngine>["hud"] }) {
   return (
     <div className="pointer-events-none relative z-20 flex shrink-0 justify-center px-3 pb-1">
       <span
-        className={`crt-text-glow max-w-full truncate rounded-[2px] border bg-phos-950/90 px-2 py-1 text-[9px] tracking-[0.14em] ${color}`}
+        className={`crt-text-glow max-w-full rounded-[2px] border bg-phos-950/90 px-2 py-1 text-center text-[9px] leading-snug tracking-[0.14em] ${color}`}
       >
         {hud.message}
       </span>

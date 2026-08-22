@@ -28,11 +28,16 @@ to create a Pages site.
 
 ## The loop
 
-1. **PROBE** — hold a finger on the matrix. A reticle floats ~40px above
-   your fingertip so your thumb never covers it. Within 80px of a hidden
-   cluster the digits stir: they move, they make a noise, the phone buzzes.
-   Intensity scales with distance. Once you have positively identified a
-   cluster it stays stirred for a while, so you have time for step 2.
+You start on **CALIBRATION**: no clock, one cluster of each temper, and the
+terminal names each one the moment you find it. Learn the four, then the
+shift starts. It can be skipped from the briefing screen.
+
+1. **PROBE** — hold a finger on the matrix. A lens floats ~40px above your
+   fingertip, magnifying the digits under it so your thumb never covers the
+   thing you are reading. Within 80px of a hidden cluster the digits stir:
+   they move, they make a noise, the phone buzzes. Intensity scales with
+   distance. Once you have positively identified a cluster it stays stirred
+   for a while, so you have time for step 2.
 2. **SELECT** — double-tap anywhere, or hit the SELECT switch, then drag a
    dashed box around the agitated digits. Capture four or more and the
    cluster lifts off the grid as a data packet.
@@ -41,9 +46,19 @@ to create a Pages site.
    scatters the digits back to the grid. Fill all four bins to 100% to
    complete the file.
 
-Four files, each tighter than the last: **Tumwater** (120s), **Allentown**
-(110s), **Siena** (100s), **Cold Harbor** (90s). Later files damp the
-cluster motion, so the tells get subtler.
+Four files, each tighter than the last: **Tumwater**, **Allentown**,
+**Siena**, **Cold Harbor**. Later files damp the cluster motion, so the
+tells get subtler.
+
+Shift length is a setting, in the handbook. **EXTENDED** is the default and
+doubles the clock; **STANDARD** is the 120 / 110 / 100 / 90 seconds the
+brief specifies, and assumes you already know the four tempers. Either way
+each correct assignment credits five seconds back, so competence buys time
+and the clock bites the player who is guessing.
+
+The handbook shows a live animated sample of each temper beside its
+description, and the shift clock stops while it is open — so checking what
+dread actually looks like, mid-file, is free.
 
 ## The four tempers
 

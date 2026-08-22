@@ -9,6 +9,7 @@ interface Props {
   onRestart: () => void;
   onNewQuarter: () => void;
   onHandbook: () => void;
+  onSkipCalibration: () => void;
 }
 
 const BTN =
@@ -21,6 +22,7 @@ export function PhaseOverlay({
   onRestart,
   onNewQuarter,
   onHandbook,
+  onSkipCalibration,
 }: Props) {
   if (hud.phase === "probe" || hud.phase === "select" || hud.phase === "carry") {
     return null;
@@ -45,6 +47,11 @@ export function PhaseOverlay({
             Welcome, refiner. Probe the file for numbers that feel wrong, and
             bin them by the temper they evoke.
           </p>
+          <p className="mt-3 text-[10px] leading-relaxed text-phos-400">
+            You begin on <span className="text-phos-200">CALIBRATION</span>:
+            no clock, one cluster of each temper, and the terminal names each
+            one as you find it. Learn the four, then the shift starts.
+          </p>
           <p className="mt-3 text-[9px] leading-relaxed tracking-[0.1em] text-phos-600">
             HEADPHONES AND HAPTICS RECOMMENDED.
             <br />
@@ -52,7 +59,14 @@ export function PhaseOverlay({
           </p>
           <button type="button" className={BTN} onClick={onStart}>
             <Play size={12} strokeWidth={2.6} />
-            BEGIN SHIFT
+            BEGIN CALIBRATION
+          </button>
+          <button
+            type="button"
+            onClick={onSkipCalibration}
+            className="mt-3 text-[9px] tracking-[0.2em] text-phos-600 underline-offset-4"
+          >
+            SKIP TO TUMWATER
           </button>
         </>
       ) : null}
@@ -72,9 +86,11 @@ export function PhaseOverlay({
           <p className="mt-4 text-[10px] leading-relaxed text-phos-400">
             {PRAISE[hud.levelIndex % PRAISE.length]}
           </p>
-          <p className="mt-2 text-[9px] tracking-[0.14em] text-phos-600">
-            TIME REMAINING: {Math.ceil(hud.timeLeft)}s
-          </p>
+          {hud.untimed ? null : (
+            <p className="mt-2 text-[9px] tracking-[0.14em] text-phos-600">
+              TIME REMAINING: {Math.ceil(hud.timeLeft)}s
+            </p>
+          )}
           {hud.isLastLevel ? (
             <>
               <p className="crt-text-glow mt-4 text-[11px] font-bold leading-relaxed tracking-[0.16em] text-phos-200">
