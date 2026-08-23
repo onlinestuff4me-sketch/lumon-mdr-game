@@ -23,3 +23,9 @@ dist-ssr
 *.sln
 *.sw?
 dist-test
+
+# Throwaway sweep and analysis scripts written into the repo root while
+# investigating a bug. They import from test/harness.mjs, live for the
+# length of one investigation, and are not part of the suite — anything
+# worth keeping goes into test/ instead.
+.*.mjs
