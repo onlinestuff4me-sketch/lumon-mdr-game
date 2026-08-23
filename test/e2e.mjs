@@ -364,6 +364,32 @@ section("reticle and hint");
 
   check("and it still carries to the bin", await carryToBin(page, origin, g));
 }
+{
+  // Press on a group and drag: one motion, group to bin, no box in between.
+  await load(page, 0);
+  const g = await findGroup(page);
+  const from = await touchFor(page, g.one, "marquee");
+  const to = await touchFor(page, { x: g.bin.x + g.bin.w / 2, y: g.bin.y + g.bin.h / 2 }, "carry");
+  await drag(page, origin, from, to);
+  const s = await state(page);
+  check("pressing a group and dragging carries it straight to the bin",
+    s.progress === 100, `${s.progress}%  ${s.message}`);
+  check("gesture released", !s.gestureOpen);
+}
+{
+  // Starting on empty board still draws a box, so boxing stays available.
+  await load(page, 24);
+  const g = await findGroup(page);
+  const pad = 26;
+  await drag(
+    page, origin,
+    await touchFor(page, { x: g.min.x - pad, y: g.min.y - pad }, "marquee"),
+    await touchFor(page, { x: g.max.x + pad, y: g.max.y + pad }, "marquee"),
+  );
+  const s = await state(page);
+  check("a drag starting on empty board still boxes", s.carrying, String(s.message));
+  if (s.carrying) check("and that packet carries too", await carryToBin(page, origin, g));
+}
 
 // ═══ 6. nothing threw ════════════════════════════════════════════════
 section("console");

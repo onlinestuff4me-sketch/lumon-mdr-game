@@ -132,6 +132,8 @@ interface Gesture {
    *  began, so picking it up does not teleport it. */
   grabX: number;
   grabY: number;
+  /** The group this gesture started on top of, or -1. */
+  startCluster: number;
 }
 
 const RISE = 11;
@@ -154,6 +156,9 @@ const LATCH_ENTER = 0.55;
  *  by box or by tap. Below it the refiner has not identified anything and
  *  is guessing at the shape of the board. */
 const ARM_SELECT_MIN_AGITATION = 0.22;
+/** How close a touch must land to a glyph to count as being *on* its group,
+ *  for both tap-to-lift and press-and-drag. */
+const TAP_PAD = 22;
 /** Residual agitation a latched cluster keeps once the finger lifts. */
 const LATCH_FLOOR = 0.5;
 /** Live proximity required at release for SELECT to auto-arm. */
@@ -873,6 +878,7 @@ export class GameEngine {
         ? "marquee"
         : "probe";
     const r = this.reticleFor(x, y, kindNow);
+    const start = this.nearestCluster(r);
     this.lastTouchAt = this.elapsed;
     this.lensHoldUntil = -1;
     this.reticle.scale = 1;
@@ -893,7 +899,8 @@ export class GameEngine {
       // cluster past the lift threshold — so judging a tap by the agitation
       // it caused would let blind tapping lift a group the player never
       // found. This is the board before they touched it.
-      startAgitation: this.nearestCluster(r)?.cluster.agitation ?? 0,
+      startAgitation: start?.cluster.agitation ?? 0,
+      startCluster: start && start.dist <= TAP_PAD ? start.cluster.id : -1,
       ...this.grabOffset(r),
     };
 
@@ -928,6 +935,28 @@ export class GameEngine {
     const r = this.reticleFor(x, y, g.kind);
     this.reticle.x = r.x;
     this.reticle.y = r.y;
+
+    // Press on a group and drag, and you are carrying it — no box, no
+    // second gesture. Starting on empty board still draws a marquee, which
+    // is the same rule every selection surface uses and leaves boxing
+    // available for the groups a single grab cannot take.
+    if (
+      g.kind === "marquee" &&
+      g.moved &&
+      !this.packet &&
+      g.startCluster >= 0 &&
+      g.startAgitation >= ARM_SELECT_MIN_AGITATION &&
+      LEVELS[this.levelIndex].tapToSelect
+    ) {
+      const c = this.board.clusters[g.startCluster];
+      if (c && !c.refined && !c.decoy) {
+        this.marquee.active = false;
+        this.liftCluster(c, r.x, r.y);
+        g.kind = "carry";
+        g.grabX = 0;
+        g.grabY = 0;
+      }
+    }
 
     if (g.kind === "marquee") {
       const b = this.clampToBoard(r);
@@ -1219,7 +1248,6 @@ export class GameEngine {
   }
 
   private tapLift(at: { x: number; y: number }, wasAgitated: number): boolean {
-    const TAP_PAD = 22;
     const near = this.nearestCluster(at);
     const best = near?.cluster ?? null;
     if (!best || near!.dist > TAP_PAD) return false;

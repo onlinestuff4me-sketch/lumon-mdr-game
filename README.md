@@ -43,9 +43,13 @@ five put up all four. Every stage opens on the temper you saw most recently,
 and each paired screen keeps one temper from the screen before it.
 Selecting is generous there — a tap anywhere on a group takes the whole
 group, and so does a box touching any one of its digits — faint arrows and a
-lit-up bin show a held packet where to go, and the screens advance themselves, so it reads as one continuous
-sequence rather than 21 files. The group starts in the middle of the board
-and works its way outwards as you go. **BELLINGHAM** then takes the visibility away: the group surfaces for
+lit-up bin show a held packet where to go, and pressing on a group and
+dragging carries it straight to the bin in one motion. The screens advance
+themselves, so it reads as one continuous sequence rather than 29 files, and
+the group starts in the middle of the board and works its way outwards as
+you go.
+
+**BELLINGHAM** then takes the visibility away: the group surfaces for
 two seconds and sinks for five, and your first touch summons the lens
 instead of the box, which lingers and shrinks so you can see what it is.
 **CALIBRATION** then meets all four tempers, one cluster each, spread wide,
