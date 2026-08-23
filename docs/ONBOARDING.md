@@ -1,6 +1,6 @@
 # Onboarding and the phased introduction of mechanics
 
-> Status: implemented. The queue is 38 screens — 21 orientation, one probe
+> Status: implemented. The queue is 46 screens — 21 orientation, one probe
 > file, calibration, four Act I, four Act II, and seven in Act III — across
 > 18 archive rows. The tuning sheet that produced these numbers is served
 > at **`/tool`** alongside the game.
@@ -19,7 +19,7 @@ diverged from the plan, it is marked ▸.
 
 ## Part 1 — ORIENTATION: reading the tempers by eye
 
-Twenty-one screens in three stages, before the probe exists. No clock, no
+Twenty-nine screens in four stages, before the probe exists. No clock, no
 hiding: every group is **already moving**, and all the player does is see
 it, box it, and bin it. What is being taught is not a gesture — it is *what
 each temper looks like*, learned by doing rather than by reading.
@@ -41,7 +41,20 @@ product of this stage, and recognition needs repetition in different places
 on the board. Three is also short enough that a repeat player is not
 punished — twelve screens at roughly 6–8 seconds each is about 90 seconds.
 
-### Stage 2 · two tempers, two groups (4 screens)
+### Stage B · two groups, still one temper (8 screens)
+
+Two things to find, before two things to tell apart. Each screen carries two
+groups of a single temper and a single bin, so the fill meter moves in
+halves. It opens on **malice** — the temper stage A has just finished with —
+and cycles backwards through the four twice: MA, DR, FC, WO, MA, DR, FC, WO.
+
+| Lever | Default | What it does |
+|---|---|---|
+| `stageB.screens` | 8 | Two full cycles of the four tempers. |
+| `stageB.groupsPerScreen` | 2 | Both of the same temper; `quota: 2`. |
+| `stageB.opensOn` | most recent | The temper the previous stage ended on, so the first new demand lands on something just seen. |
+
+### Stage C · two tempers, two groups (4 screens)
 
 The first discrimination: two bins on the deck, one group of each, and a
 wrong answer is now possible for the first time.
@@ -50,11 +63,11 @@ wrong answer is now possible for the first time.
 |---|---|---|
 | `stage2.screens` | 4 | Screens in this stage. |
 | `stage2.groupsPerScreen` | 2 | One group per temper on the deck. |
-| `stage2.pairings` | WO+FC, DR+MA, WO+DR, FC+MA | Which two tempers each screen shows. Mirrors Act II's pairings, so the easy discrimination comes first and the two genuinely confusable pairs (dread/malice, frolic/malice) come later. |
+| `stageC.pairings` | derived | **Chained on recall, not fixed.** The first screen carries the two tempers the player has most recently seen; every screen after it keeps one temper from the screen before and introduces one new one. Every temper still appears exactly twice. At the current stage-B ordering that resolves to WO+FC → FC+DR → DR+MA → MA+WO. |
 | `stage2.subtlety` | 1.25 | Slightly quieter than stage 1. |
 | `stage2.spacing` | 6 | Minimum clear cells between groups, so each is read on its own. |
 
-### Stage 3 · four tempers, four groups (5 screens)
+### Stage D · four tempers, four groups (5 screens)
 
 The full deck, one group per temper, still all visible, still no clock.
 
@@ -76,7 +89,7 @@ The full deck, one group per temper, still all visible, still no clock.
 | Lever | Default | What it does |
 |---|---|---|
 | `orientation.tapToSelect` | true | **A tap anywhere on a group lifts the whole group**, no box required. Drag-to-box is not a discoverable gesture on its own — playtesting found people tapping the digits and nothing happening. Hit-tested against live glyph positions with a 22px pad, so an agitated digit can be tapped where it is seen. A tap on empty board does nothing, and a tap on a decoy answers `NO TEMPER DETECTED` exactly as a box would: a tap must never reveal what a box would not. |
-| `orientation.binHint` | on single-bin screens | Faint chevrons run from a held packet down to the bin, so the second half of the gesture is discoverable too. Two rules keep it a hint rather than an answer: it is only ever enabled where a **single bin** is on the deck, so it points at the one place a packet can go; and it waits **1.1s** first, so anyone who already knows the gesture has dropped the packet long before it appears. |
+| `orientation.binHint` | on single-bin screens | Faint chevrons run from a held packet down to the bin, **and the destination bin lights up**, so the second half of the gesture is discoverable too. Only ever enabled where a **single bin** is on the deck, so it points at the one place a packet can go and gives nothing away. It appears **with the packet**: an earlier version waited 1.1s for the player to hesitate, which meant the arrows arrived after the moment they were needed — the question "where does this go?" is asked the instant the box shows up. |
 | `orientation.minOverlapDigits` | 1 | How many of a group's digits a selection box must touch to lift the **whole** group. At 1, dragging over any part of a group takes all of it. The real game requires 4 (`MIN_CAPTURE`); this is the "generous selection" rule, and it exists so a new player is never told their correct instinct was a wrong box. |
 | `orientation.ceremony` | `none` | What happens between screens. `none` = a REFINED flash and auto-advance; `full` = the normal 100% / addendum / NEXT FILE screen. ▸ Screens 1–20 are `none`; screen 21 is `full`, so the sequence ends properly and releases the one addendum it is worth. |
 | `orientation.autoAdvanceMs` | 900 | Pause after the last group is binned before the next screen loads. |
@@ -95,7 +108,7 @@ box well above the finger drawing it.
 |---|---|---|
 | PROBE | −68px | The lens has to clear the thumb — being looked at is its whole job. |
 | **SELECT** | **−22px** | Just clear of the contact patch, so the finger is not covering the corner it is placing. |
-| CARRY | −68px | The packet is a box the size of the lens, and covering it with a thumb has the same cost. |
+| CARRY | −68px, plus a grab offset | The packet keeps its position relative to the finger for the whole drag, clamped to 56px. It used to snap to the reticle on the first move, which threw the box a lens-height up the screen the instant a thumb touched it — the player taps the digits, the box appears where they are, and then it jumps away from the hand about to drag it. The drop is now tested at the packet, not at the reticle. |
 
 ## Part 2 — THE PROBE FILE: motion that hides
 

@@ -74,7 +74,7 @@ section("gesture lifecycle");
 // ═══ 2. reachability: every part of the board and deck ═══════════════
 section("reachability");
 {
-  await load(page, 22);            // calibration: four tempers, probe mode
+  await load(page, 30);            // calibration: four tempers, probe mode
   const reach = await page.evaluate(() => {
     const e = window.__mdr;
     const L = e.layout;
@@ -109,7 +109,7 @@ section("reachability");
 section("playthroughs");
 {
   // Orientation, tap-only, all the way through a stage-3 screen.
-  await load(page, 16);
+  await load(page, 24);
   let guard = 0;
   while ((await state(page)).progress < 100 && guard++ < 10) {
     const g = await findGroup(page);
@@ -119,12 +119,12 @@ section("playthroughs");
     await carryToBin(page, origin, g);
   }
   const s = await state(page);
-  check("orientation 17/21 reaches 100% by tapping alone", s.progress === 100,
+  check("orientation 25/29 reaches 100% by tapping alone", s.progress === 100,
     `${s.progress}% after ${guard} attempts`);
 }
 {
   // A real file, boxed and carried — the marquee path must still work.
-  await load(page, 23);
+  await load(page, 31);
   let guard = 0;
   while ((await state(page)).progress < 100 && guard++ < 12) {
     let g = await findGroup(page);
@@ -171,7 +171,7 @@ section("mechanics");
   eq("and drives no audio (probe stays 0)", still.probe, 0);
 }
 {
-  await load(page, 32);            // JESUP — decoys
+  await load(page, 40);            // JESUP — decoys
   const d = await findGroup(page, "decoy");
   check("decoy seeded", !!d);
   if (d) {
@@ -208,7 +208,7 @@ section("mechanics");
   }
 }
 {
-  await load(page, 37);            // COLD HARBOR — the fifth
+  await load(page, 45);            // COLD HARBOR — the fifth
   const f = await findGroup(page, "fifth");
   check("fifth temper seeded on cold harbor", !!f);
   if (f) {
@@ -220,9 +220,9 @@ section("mechanics");
   }
 }
 {
-  await load(page, 36);            // YAKIMA — redaction
+  await load(page, 44);            // YAKIMA — redaction
   const red = (await state(page)).muted;
-  await load(page, 31);
+  await load(page, 38);            // MOONBEAM — not redacted
   const restored = (await state(page)).muted;
   check("redacted file mutes", red);
   check("the next file restores audio", !restored);
@@ -232,7 +232,7 @@ section("mechanics");
   // BELLINGHAM opens in PROBE and also allows tap-to-select, so the tap must
   // be hit-tested with the offset the lens is actually drawn at. Aiming the
   // lens at the group and tapping has to lift it.
-  await load(page, 21);
+  await load(page, 29);
   const surfaced = await page.evaluate(async () => {
     for (let i = 0; i < 50; i++) {
       if (window.__mdr.board.clusters[0].agitation > 0.4) return true;
@@ -254,7 +254,7 @@ section("mechanics");
   // A tap must refuse exactly what a box refuses. On the pulse file the
   // group is hidden five seconds out of seven; blind-tapping while it is
   // down would lift it with no probing and take the lesson with it.
-  await load(page, 21);
+  await load(page, 29);
   const sank = await page.evaluate(async () => {
     for (let i = 0; i < 60; i++) {
       if (window.__mdr.board.clusters[0].agitation < 0.05) return true;
@@ -272,7 +272,7 @@ section("mechanics");
 }
 {
   // The morph must not consume a quota cluster — that softlocks NANNING.
-  await load(page, 34);
+  await load(page, 42);
   const supply = await page.evaluate(() => {
     const e = window.__mdr;
     const counts = {};
@@ -307,7 +307,7 @@ section("mechanics");
 {
   // A redacted file's forced mute must never reach saved settings.
   await page.evaluate(() => window.__mdr.setMuted(false));
-  await load(page, 36);
+  await load(page, 44);
   await page.evaluate(() => window.__mdr.setAssist(true));
   const stored = await page.evaluate(() => {
     try { return JSON.parse(localStorage.getItem("lumon.mdr.settings.v1") ?? "{}").muted; }
@@ -334,14 +334,61 @@ section("reticle and hint");
 
   await load(page, 0);
   const g = await findGroup(page);
-  await tap(page, origin, await touchFor(page, g.one, "marquee"));
-  const early = await page.evaluate(() => window.__mdr.elapsed - window.__mdr.packetHeldAt);
-  check("bin hint is silent immediately after a lift", early < 1.1, `${early.toFixed(2)}s`);
-  await page.waitForTimeout(1500);
-  const late = await page.evaluate(() => window.__mdr.elapsed - window.__mdr.packetHeldAt);
-  check("bin hint appears once the player hesitates", late > 1.1, `${late.toFixed(2)}s`);
-  check("and the packet is still draggable while hinting",
-    await carryToBin(page, origin, g));
+  const at = await touchFor(page, g.one, "marquee");
+  await tap(page, origin, at);
+  const held = await state(page);
+  check("the packet lifts", held.carrying);
+
+  // The arrows are for the moment the box appears and the player asks
+  // "where does this go?", so they must not wait.
+  const hint = await page.evaluate(() => ({
+    delay: window.__mdr.elapsed - window.__mdr.packetHeldAt,
+    target: window.__mdr.getSnapshot().bins.filter((b) => b.target).map((b) => b.temper),
+  }));
+  check("the bin hint is showing immediately", hint.delay >= 0, `${hint.delay.toFixed(2)}s held`);
+  eq("and exactly one bin is marked as the target", hint.target, [g.temper]);
+
+  // Touching the packet must not throw it up the screen away from the thumb
+  // that is about to drag it.
+  const jump = await page.evaluate(async ({ x, y }) => {
+    const e = window.__mdr;
+    const before = { x: e.packet.x, y: e.packet.y };
+    e.pointerDown(1, x, y);
+    e.pointerMove(1, x, y);
+    await new Promise((r) => setTimeout(r, 60));
+    const after = { x: e.packet.x, y: e.packet.y };
+    e.pointerUp(1, x, y);
+    return Math.round(Math.hypot(after.x - before.x, after.y - before.y));
+  }, { x: at.x, y: at.y });
+  check("touching the packet does not teleport it", jump <= 4, `${jump}px jump`);
+
+  check("and it still carries to the bin", await carryToBin(page, origin, g));
+}
+{
+  // Press on a group and drag: one motion, group to bin, no box in between.
+  await load(page, 0);
+  const g = await findGroup(page);
+  const from = await touchFor(page, g.one, "marquee");
+  const to = await touchFor(page, { x: g.bin.x + g.bin.w / 2, y: g.bin.y + g.bin.h / 2 }, "carry");
+  await drag(page, origin, from, to);
+  const s = await state(page);
+  check("pressing a group and dragging carries it straight to the bin",
+    s.progress === 100, `${s.progress}%  ${s.message}`);
+  check("gesture released", !s.gestureOpen);
+}
+{
+  // Starting on empty board still draws a box, so boxing stays available.
+  await load(page, 24);
+  const g = await findGroup(page);
+  const pad = 26;
+  await drag(
+    page, origin,
+    await touchFor(page, { x: g.min.x - pad, y: g.min.y - pad }, "marquee"),
+    await touchFor(page, { x: g.max.x + pad, y: g.max.y + pad }, "marquee"),
+  );
+  const s = await state(page);
+  check("a drag starting on empty board still boxes", s.carrying, String(s.message));
+  if (s.carrying) check("and that packet carries too", await carryToBin(page, origin, g));
 }
 
 // ═══ 6. nothing threw ════════════════════════════════════════════════

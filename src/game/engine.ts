@@ -47,6 +47,9 @@ export interface BinView {
   hit: number;
   /** True while a carried packet hovers this bin. */
   hover: boolean;
+  /** True while this is the bin the held packet belongs in, on the files
+   *  that teach the drag. */
+  target: boolean;
 }
 
 export interface HudSnapshot {
@@ -125,6 +128,12 @@ interface Gesture {
   /** Agitation of the nearest group at the instant the finger landed — the
    *  board before this touch changed it. */
   startAgitation: number;
+  /** Where the carried packet sat relative to the reticle when this drag
+   *  began, so picking it up does not teleport it. */
+  grabX: number;
+  grabY: number;
+  /** The group this gesture started on top of, or -1. */
+  startCluster: number;
 }
 
 const RISE = 11;
@@ -147,6 +156,9 @@ const LATCH_ENTER = 0.55;
  *  by box or by tap. Below it the refiner has not identified anything and
  *  is guessing at the shape of the board. */
 const ARM_SELECT_MIN_AGITATION = 0.22;
+/** How close a touch must land to a glyph to count as being *on* its group,
+ *  for both tap-to-lift and press-and-drag. */
+const TAP_PAD = 22;
 /** Residual agitation a latched cluster keeps once the finger lifts. */
 const LATCH_FLOOR = 0.5;
 /** Live proximity required at release for SELECT to auto-arm. */
@@ -402,6 +414,10 @@ export class GameEngine {
       return {
         temper: t,
         fill: b.fill,
+        // Where this packet is meant to go. Only on the files that already
+        // show the arrows — a single bin on the deck, so it points at the
+        // one place a packet can land and gives nothing away.
+        target: level.binHint === true && this.packet?.temper === t,
         hit: fresh ? (b.lastHitOk ? 1 : -1) : 0,
         hover: this.hoverBin === t,
       };
@@ -862,6 +878,7 @@ export class GameEngine {
         ? "marquee"
         : "probe";
     const r = this.reticleFor(x, y, kindNow);
+    const start = this.nearestCluster(r);
     this.lastTouchAt = this.elapsed;
     this.lensHoldUntil = -1;
     this.reticle.scale = 1;
@@ -882,7 +899,9 @@ export class GameEngine {
       // cluster past the lift threshold — so judging a tap by the agitation
       // it caused would let blind tapping lift a group the player never
       // found. This is the board before they touched it.
-      startAgitation: this.nearestCluster(r)?.cluster.agitation ?? 0,
+      startAgitation: start?.cluster.agitation ?? 0,
+      startCluster: start && start.dist <= TAP_PAD ? start.cluster.id : -1,
+      ...this.grabOffset(r),
     };
 
     this.reticle.x = r.x;
@@ -917,14 +936,39 @@ export class GameEngine {
     this.reticle.x = r.x;
     this.reticle.y = r.y;
 
+    // Press on a group and drag, and you are carrying it — no box, no
+    // second gesture. Starting on empty board still draws a marquee, which
+    // is the same rule every selection surface uses and leaves boxing
+    // available for the groups a single grab cannot take.
+    if (
+      g.kind === "marquee" &&
+      g.moved &&
+      !this.packet &&
+      g.startCluster >= 0 &&
+      g.startAgitation >= ARM_SELECT_MIN_AGITATION &&
+      LEVELS[this.levelIndex].tapToSelect
+    ) {
+      const c = this.board.clusters[g.startCluster];
+      if (c && !c.refined && !c.decoy) {
+        this.marquee.active = false;
+        this.liftCluster(c, r.x, r.y);
+        g.kind = "carry";
+        g.grabX = 0;
+        g.grabY = 0;
+      }
+    }
+
     if (g.kind === "marquee") {
       const b = this.clampToBoard(r);
       this.marquee.x1 = b.x;
       this.marquee.y1 = b.y;
     } else if (g.kind === "carry" && this.packet) {
-      this.packet.x = r.x;
-      this.packet.y = r.y;
-      const bin = this.binAt(r.x, r.y);
+      this.packet.x = r.x + g.grabX;
+      this.packet.y = r.y + g.grabY;
+      // The drop lands where the packet is, not where the reticle is —
+      // otherwise the box and the thing it is being tested against are in
+      // two different places.
+      const bin = this.binAt(this.packet.x, this.packet.y);
       if (bin !== this.hoverBin) {
         this.hoverBin = bin;
         if (bin) haptics.tap();
@@ -949,7 +993,7 @@ export class GameEngine {
       // and buzzes at you on the way out.
       if (!isTap) this.resolveMarquee();
     } else if (g.kind === "carry" && this.packet) {
-      this.resolveDrop(this.reticleFor(x, y, "carry"));
+      this.resolveDrop({ x: this.packet.x, y: this.packet.y });
     } else if (g.kind === "probe") {
       this.armSelectIfIdentified(g, dt);
     }
@@ -1160,6 +1204,29 @@ export class GameEngine {
    * rather than where its cell is. Decoys and the fifth are eligible: a tap
    * must not quietly reveal what a box would not.
    */
+  /**
+   * How far the packet is from the reticle as a drag begins.
+   *
+   * A packet used to snap to the reticle on the first move, which threw it
+   * a lens-height up the screen the instant a finger touched it — the
+   * player taps the digits, the box appears where they are, and then it
+   * jumps away from the thumb that is about to drag it. Holding the offset
+   * means the packet simply follows the finger from wherever it already is.
+   *
+   * Clamped, so pressing far from the packet pulls it towards the finger
+   * instead of dragging it from across the board.
+   */
+  private grabOffset(r: { x: number; y: number }): { grabX: number; grabY: number } {
+    const p = this.packet;
+    if (!p) return { grabX: 0, grabY: 0 };
+    const dx = p.x - r.x;
+    const dy = p.y - r.y;
+    const d = Math.hypot(dx, dy);
+    const max = 56;
+    if (d <= max) return { grabX: dx, grabY: dy };
+    return { grabX: (dx / d) * max, grabY: (dy / d) * max };
+  }
+
   /** The unrefined group nearest a board point, hit-tested against live
    *  glyph positions the way the marquee is. */
   private nearestCluster(
@@ -1181,7 +1248,6 @@ export class GameEngine {
   }
 
   private tapLift(at: { x: number; y: number }, wasAgitated: number): boolean {
-    const TAP_PAD = 22;
     const near = this.nearestCluster(at);
     const best = near?.cluster ?? null;
     if (!best || near!.dist > TAP_PAD) return false;

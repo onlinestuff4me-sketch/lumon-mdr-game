@@ -39,6 +39,20 @@
   100% { transform: translateY(1200%); opacity: 0; }
 }
 
+/* The bin a held packet belongs in, on the files that teach the drag. A
+   slow breath rather than a blink: it has to read as "waiting for this"
+   without competing with the digits the player is meant to be looking at. */
+@keyframes bin-await {
+  0%, 100% { filter: brightness(1); }
+  50%      { filter: brightness(1.35); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes bin-await {
+    0%, 100% { filter: brightness(1.18); }
+  }
+}
+
 @keyframes glitch-shift {
   0%, 100% { transform: translate3d(0, 0, 0); }
   20% { transform: translate3d(-4px, 1px, 0); }

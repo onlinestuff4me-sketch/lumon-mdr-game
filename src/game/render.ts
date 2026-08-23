@@ -477,13 +477,13 @@ function roundRect(
 /**
  * Faint chevrons running from a held packet down to the bin.
  *
- * Two rules keep it a hint rather than an answer. It is only ever enabled on
- * files with a *single* bin, so it points at the one place a packet can go
- * and gives nothing away. And it waits out a delay first, so a refiner who
- * already knows the gesture has dropped the packet long before it appears —
- * the hint arrives only for someone who has hesitated.
+ * It is only ever enabled on files with a *single* bin, so it points at the
+ * one place a packet can go and gives nothing away. It appears with the
+ * packet: waiting for the player to hesitate meant the arrows arrived after
+ * the moment they were needed, which is when the box first shows up and the
+ * question "where does this go?" is actually being asked.
  */
-const HINT_DELAY_S = 1.1;
+const HINT_DELAY_S = 0;
 
 function drawBinHint(
   ctx: CanvasRenderingContext2D,

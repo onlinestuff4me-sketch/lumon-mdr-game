@@ -1,6 +1,6 @@
 # The queue
 
-Thirty-eight screens: a 21-screen orientation sequence, a file that
+Forty-six screens: a 29-screen orientation sequence, a file that
 introduces the probe, calibration, and then three acts. Orientation and the
 probe file are specified in [ONBOARDING.md](ONBOARDING.md) — this document
 covers everything from CALIBRATION onwards. The design goal is that a refiner should
@@ -16,9 +16,9 @@ the engine.
 
 | # | File | Act | Tempers | Bins | Groups / temper | Groups | Spacing | Per match | Clock | Subtlety |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1–21 | ORIENTATION | — | 1 → 2 → 4 | 1 → 2 → 4 | 1 | 1–4 | 6/6/5 | +100% | none | 1.35→1.15 |
-| 22 | BELLINGHAM | — | WO | 1 | 1 | 1 | 6 | +100% | none | pulsed |
-| 23 | CALIBRATION | — | 4 | 4 | 1 | 4 | 4 | +100% | none | 1.15 |
+| 1–29 | ORIENTATION | — | 1 → 1 → 2 → 4 | 1 → 1 → 2 → 4 | 1–2 | 1–4 | 6/6/6/5 | +100% / +50% | none | 1.35→1.15 |
+| 30 | BELLINGHAM | — | WO | 1 | 1 | 1 | 6 | +100% | none | pulsed |
+| 31 | CALIBRATION | — | 4 | 4 | 1 | 4 | 4 | +100% | none | 1.15 |
 | 24 | DRANESVILLE | I | WO | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
 | 25 | SUNSET PARK | I | FC | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
 | 26 | CAIRNS | I | DR | 1 | 3 | 3 | 5 | +33% | none | 1.10 |

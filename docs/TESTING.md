@@ -43,7 +43,7 @@ reimplemented, because a test that duplicates the code it checks drifts from
 it and then agrees with itself. An earlier version of this file did exactly
 that and reported three phantom failures.
 
-Across all 38 screens:
+Across all 46 screens:
 
 - every active temper seeds at least `quota` clusters, and no temper is
   seeded that has no bin
@@ -58,7 +58,7 @@ Across all 38 screens:
 - `binHint` is never set on a multi-bin file, where it would point at the
   answer
 - the last screen never auto-advances, which would stall the queue
-- orientation is 21 screens, one archive row, three per temper in order
+- orientation is 29 screens in four stages with one archive row: three per temper, then eight of two-groups-one-temper opening on the temper just seen, then four paired screens each sharing a temper with the one before, then five of all four
 - every Act III mechanic first appears on its own teaching file, and the
   fifth temper appears only on Cold Harbor and is never taught
 - groups move outwards across orientation: measured mean offset from centre
@@ -86,7 +86,7 @@ that ships, has no handle.
 | morph supply | After the morph fires, every bin on NANNING is still fillable. |
 | ceremony | A self-advancing screen shows no 100% banner, and advances. |
 | settings | Changing any setting during a redacted file does not persist that file's forced mute. |
-| reticle and hint | Offsets are −68 / −22 / −68 for probe / select / carry; the bin hint is silent immediately after a lift and appears once the player hesitates, and the packet stays draggable while it shows. |
+| reticle and hint | Offsets are −68 / −22 / −68 for probe / select / carry; the bin hint and the highlighted target bin are showing the moment the packet lifts; touching the packet moves it 0px, so a drag never teleports the box away from the thumb; and it still carries to the bin. |
 | console | No page errors in any of it. |
 
 ---
@@ -100,8 +100,8 @@ that ships, has no handle.
   and iOS gesture interception are not exercised.
 - **Visual regression.** No screenshot diffing. Renderer changes — the
   anomaly swell, the after-image, the lens shrink — are checked by eye.
-- **The other 35 screens.** Playthroughs cover two. The data suite covers all
-  38 structurally, but only two are played.
+- **The other 43 screens.** Playthroughs cover two. The data suite covers all
+  46 structurally, but only two are played.
 - **Performance.** The frame budget is measured by hand, not asserted.
 
 ---
