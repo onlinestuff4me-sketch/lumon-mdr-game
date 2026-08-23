@@ -220,9 +220,19 @@ export async function tap(page, origin, at) {
 }
 
 /** Load a file. Allowed as *setup* — never to make progress inside a test. */
+/**
+ * Load a file and wait for it to be ready to play, not for a fixed time.
+ *
+ * A file arrives behind a scan pass, and an orientation screen's groups
+ * then take two seconds to come up to full motion — so a fixed delay is
+ * either a flake or a lie about what the refiner is looking at. The engine
+ * says when it has settled, which keeps these waits correct if either
+ * timing changes.
+ */
 export const load = async (page, index) => {
   await page.evaluate((i) => window.__mdr.startLevel(i), index);
-  await page.waitForTimeout(350);
+  await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });
+  await page.waitForTimeout(60);
 };
 
 export const setMode = (page, mode) =>

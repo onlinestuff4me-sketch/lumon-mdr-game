@@ -176,6 +176,25 @@ const PACKET_TOUCH_PAD = 16;
  */
 const STALE_GESTURE_MS = 4000;
 /**
+ * The file-change transition, in seconds. A CRT does not cut between
+ * pictures: one scan pass takes the old one off and the next paints the
+ * new one back on. Erasing is quicker than drawing because that is how it
+ * reads — and because this runs between all twenty-nine orientation
+ * screens, so every frame of it is a frame the refiner is waiting.
+ */
+const WIPE_OUT_S = 0.24;
+const WIPE_IN_S = 0.44;
+/**
+ * How long an orientation screen's groups take to come up to full motion.
+ *
+ * They used to be at full amplitude on the first frame, which gives the
+ * refiner nothing to notice — the anomaly is already there when the screen
+ * arrives, so it is scenery rather than an event. Easing it in over two
+ * seconds means the board is still, and then something on it starts to
+ * move, which is the thing the whole sequence is teaching.
+ */
+const EMERGE_S = 2;
+/**
  * Proximity at which a cluster counts as positively identified.
  *
  * The proximity curve is a smoothstep over R = 80px, so this threshold is
@@ -271,6 +290,11 @@ export class GameEngine {
   private messageScope: MessageScope = "sticky";
   /** Per-cluster agitation as it stood the instant the finger landed. */
   private agitationAtDown: number[] = [];
+  /** The scan pass between two files: "out" erases, "in" paints. */
+  wipe: { phase: "out" | "in"; t: number } | null = null;
+  private pendingLevel = -1;
+  /** Elapsed time at which this file's groups begin to move. */
+  private emergeAt = 0;
 
   private gesture: Gesture | null = null;
   private lastTapAt = 0;
@@ -601,11 +625,44 @@ export class GameEngine {
       this.say(`FILE ${level.name} #${level.fileCode} LOADED`, "info");
     }
     getAudio().fileLoaded();
+    // The new picture is painted on by the same scan pass that took the old
+    // one off, and the groups only start moving once it has finished — a
+    // group that emerges while the screen is still arriving is lost in it.
+    this.wipe = { phase: "in", t: 0 };
+    this.emergeAt = WIPE_IN_S;
     this.emit(true);
   }
 
+  /**
+   * How far into its motion this file's groups are, 0..1.
+   *
+   * Only orientation uses it: those screens have no probe, so the motion is
+   * the entire signal and it needs a moment where the board is plainly
+   * still first. Everywhere else agitation answers to a finger.
+   */
+  get emergence(): number {
+    const t = (this.elapsed - this.emergeAt) / EMERGE_S;
+    return t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t);
+  }
+
+  /**
+   * Whether the file has finished arriving and is fully in play — the scan
+   * pass is done and, on a teaching screen, the groups are up to speed.
+   * The tests wait on this rather than on a fixed delay, so a change to
+   * either timing moves them with it.
+   */
+  get settled(): boolean {
+    if (this.wipe) return false;
+    if (LEVELS[this.levelIndex].selfAgitate !== true) return true;
+    return this.emergence >= 0.999;
+  }
+
   nextLevel(): void {
-    this.startLevel(this.levelIndex + 1);
+    // Deferred: the old file has to be taken off the screen before the new
+    // one can be put on it. `startLevel` runs when the erasing pass ends.
+    if (this.wipe?.phase === "out") return;
+    this.pendingLevel = this.levelIndex + 1;
+    this.wipe = { phase: "out", t: 0 };
   }
 
   restart(): void {
@@ -962,7 +1019,7 @@ export class GameEngine {
    */
   private acceptsInput(): boolean {
     if (this.paused) return false;
-    return this.isLive() || this.advanceAt >= 0;
+    return this.isLive() || this.advanceAt >= 0 || this.wipe !== null;
   }
 
   pointerDown(id: number, x: number, y: number): void {
@@ -1855,6 +1912,24 @@ export class GameEngine {
       }
     }
 
+    // ── the scan pass between files ──────────────────────────────────
+    if (this.wipe) {
+      const dur = this.wipe.phase === "out" ? WIPE_OUT_S : WIPE_IN_S;
+      this.wipe.t += dt / dur;
+      if (this.wipe.t >= 1) {
+        if (this.wipe.phase === "out") {
+          const to = this.pendingLevel;
+          this.pendingLevel = -1;
+          this.wipe = null;
+          // Sets its own "in" wipe, and resets `elapsed`, so nothing below
+          // should run against the half-swapped state.
+          this.startLevel(to);
+          return;
+        }
+        this.wipe = null;
+      }
+    }
+
     // ── a finished screen with no ceremony advances itself ───────────
     if (this.advanceAt >= 0 && this.elapsed >= this.advanceAt) {
       this.advanceAt = -1;
@@ -2000,7 +2075,9 @@ export class GameEngine {
       // buzzing still answer to a live finger — the file shows the player
       // that groups move, and leaves the probe as something to discover
       // one file later.
-      if (selfAgitate && !cluster.refined) target = 1;
+      if (selfAgitate && !cluster.refined) {
+        target = Math.max(target, this.emergence);
+      }
       if (pulse > 0 && !cluster.refined) target = Math.max(target, pulse);
 
       // A morphing cluster changes temper in front of the refiner, once,
