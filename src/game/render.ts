@@ -8,6 +8,11 @@ import type { GridNode, Packet, Temper } from "./types";
  *  globalCompositeOperation per glyph can force a layer flush each time. */
 const flashing: GridNode[] = [];
 
+/** Agitation above which a glyph starts burning through additively. Below
+ *  this an anomaly is still something you have to look for, which is the
+ *  game; above it, you have found it and it should be unmistakable. */
+const CORE_AT = 0.5;
+
 /** Board layer: the matrix, the reticle, the marquee. */
 export function renderGrid(ctx: CanvasRenderingContext2D, e: GameEngine): void {
   const { w, h, grid } = e.layout;
@@ -37,28 +42,50 @@ export function renderGrid(ctx: CanvasRenderingContext2D, e: GameEngine): void {
 
     const temper = e.board.clusters[n.cluster]?.temper;
     const key: PaletteKey = e.assist && temper ? temper : "stir";
+
+    // An anomaly should not read as "a brighter digit". Three things make
+    // it read as a digit that has come loose from the sheet instead:
+    //
+    // The after-image. A faint copy stays behind in the cell the digit
+    // belongs to, so the eye sees the vacancy and the displacement at once.
+    // Only drawn once the glyph has actually left its cell, so a calm board
+    // never doubles up.
+    if (n.dx * n.dx + n.dy * n.dy > 0.4) {
+      atlas.draw(ctx, "idle", n.digit, n.hx, n.hy, 0.3 * a, 0, n.scale * 0.94);
+    }
+
+    // The swell. Size is the strongest pre-attentive cue after motion, and
+    // it survives a small phone screen and a thumb better than brightness.
+    const swell = n.scale * (1 + 0.26 * a);
+
     // Cross-fade phosphor green into the temper's colour as it agitates.
     // Both alphas are driven by `a` alone so a barely-stirred cluster reads
     // as green, not as a permanently tinted giveaway.
-    atlas.draw(ctx, "idle", n.digit, x, y, 0.82 * (1 - a), n.rot, n.scale);
-    atlas.draw(ctx, key, n.digit, x, y, Math.min(1, a * 1.15), n.rot, n.scale);
+    atlas.draw(ctx, "idle", n.digit, x, y, 0.82 * (1 - a), n.rot, swell);
+    atlas.draw(ctx, key, n.digit, x, y, Math.min(1, a * 1.15), n.rot, swell);
 
-    if (n.flash > 0.02) flashing.push(n);
+    // The core. Above half agitation the glyph starts burning through, the
+    // same additive pass the malice flash uses — batched with it so the
+    // whole board still costs one composite-mode switch.
+    if (n.flash > 0.02 || a > CORE_AT) flashing.push(n);
   }
 
-  // One composite-mode switch for every flash on the board.
+  // One composite-mode switch for every flash and every burning core.
   if (flashing.length > 0) {
     ctx.globalCompositeOperation = "lighter";
     for (const n of flashing) {
+      const core = n.agitation > CORE_AT
+        ? ((n.agitation - CORE_AT) / (1 - CORE_AT)) * 0.55
+        : 0;
       atlas.draw(
         ctx,
         "hot",
         n.digit,
         n.hx + n.dx,
         n.hy + n.dy,
-        n.flash * 0.9,
+        Math.min(1, n.flash * 0.9 + core),
         n.rot,
-        n.scale * 1.1,
+        n.scale * (1.1 + 0.2 * n.agitation),
       );
     }
     ctx.globalCompositeOperation = "source-over";

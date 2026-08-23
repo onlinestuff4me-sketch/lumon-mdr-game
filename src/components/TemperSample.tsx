@@ -63,6 +63,7 @@ export function TemperSample({ temper }: { temper: Temper }) {
       morphTo: null,
       morphAfter: 0,
       morphed: false,
+      morph: false,
       decoy: false,
       fifth: false,
       members: nodes.map((n) => n.idx),

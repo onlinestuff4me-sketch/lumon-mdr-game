@@ -17,7 +17,13 @@ import {
   TAP_SLOP,
   TEMPERS,
 } from "./constants";
-import { createBoard, layoutBoard, type Board, type Extra } from "./grid";
+import {
+  assignMorphs,
+  boardExtras,
+  createBoard,
+  layoutBoard,
+  type Board,
+} from "./grid";
 import { loadSettings, saveSettings } from "./settings";
 import { computeLayout, pointInRect, type Rect, type StageLayout } from "./layout";
 import { GlyphAtlas } from "./glyphAtlas";
@@ -29,7 +35,6 @@ import type {
   Cluster,
   GamePhase,
   InputMode,
-  LevelDef,
   Packet,
   PulseDef,
   Temper,
@@ -65,6 +70,7 @@ export interface HudSnapshot {
   assist: boolean;
   pace: Pace;
   untimed: boolean;
+  ceremony: "none" | "full";
   teaching: boolean;
   activeTempers: readonly Temper[];
   /** [n, of] within a multi-screen sequence, or null. */
@@ -116,6 +122,9 @@ interface Gesture {
   moved: boolean;
   /** Cluster positively identified during *this* gesture, or -1. */
   latchedDuring: number;
+  /** Agitation of the nearest group at the instant the finger landed — the
+   *  board before this touch changed it. */
+  startAgitation: number;
 }
 
 const RISE = 11;
@@ -134,52 +143,16 @@ const ABSORB_SECONDS = 0.45;
  * motion, the audio and the haptics.
  */
 const LATCH_ENTER = 0.55;
+/** Agitation a cluster must already carry before it can be lifted at all,
+ *  by box or by tap. Below it the refiner has not identified anything and
+ *  is guessing at the shape of the board. */
+const ARM_SELECT_MIN_AGITATION = 0.22;
 /** Residual agitation a latched cluster keeps once the finger lifts. */
 const LATCH_FLOOR = 0.5;
 /** Live proximity required at release for SELECT to auto-arm. */
 const ARM_SELECT_AT = 0.5;
 /** A probe shorter than this was a sweep, not a study. */
 const ARM_SELECT_MIN_MS = 300;
-
-/**
- * Clusters a file seeds beyond the ones its bins need: decoy sites, and the
- * unnamed fifth temper. Both occupy the board and answer to a probe; no bin
- * takes either, and neither fills a quota.
- */
-function boardExtras(level: LevelDef): Extra[] {
-  const extras: Extra[] = [];
-  const [decoyCount] = level.decoys ?? [0, 0];
-  for (let i = 0; i < decoyCount; i++) {
-    // A decoy borrows a temper so it has some motion to show. Which one is
-    // rotated through the file's own tempers, so a decoy never stands out
-    // by moving in a way nothing else on the board does.
-    extras.push({ temper: level.tempers[i % level.tempers.length], decoy: true });
-  }
-  if (level.fifth) extras.push({ temper: level.tempers[0], fifth: true });
-  return extras;
-}
-
-/**
- * Marks the clusters that change temper while the refiner watches. Chosen
- * by position rather than at random so a file plays the same way twice —
- * the whole queue is seeded, and a mechanic that moved between plays could
- * not be learned.
- */
-function assignMorphs(board: Board, level: LevelDef): void {
-  const [count, holdS] = level.morphs ?? [0, 0];
-  if (count <= 0 || level.tempers.length < 2) return;
-  const real = board.clusters.filter((c) => !c.decoy && !c.fifth);
-  for (let i = 0; i < Math.min(count, real.length); i++) {
-    const c = real[i];
-    // It becomes a temper this file actually has a bin for; otherwise the
-    // lesson would be "sometimes a group is unbinnable", which is a
-    // different mechanic entirely and belongs to the fifth temper.
-    const others = level.tempers.filter((t) => t !== c.temper);
-    c.morphTo = others[i % others.length];
-    c.morphAfter = holdS;
-    c.morphed = false;
-  }
-}
 
 export class GameEngine {
   board: Board;
@@ -314,10 +287,20 @@ export class GameEngine {
     this.snapshot = this.buildSnapshot();
   }
 
+  /** The player's own audio setting, which is not the same thing as whether
+   *  audio is on right now: a redacted file forces mute for its duration. */
+  private get preferredMuted(): boolean {
+    return this.mutedBeforeRedaction ?? this.muted;
+  }
+
   private persist(): void {
     saveSettings({
       pace: this.pace,
-      muted: this.muted,
+      // Never `this.muted`: changing any other setting during a redacted
+      // file would otherwise write that file's forced mute to storage, and
+      // the restore afterwards is in memory only — the terminal would come
+      // back silent on the next visit with nothing to explain it.
+      muted: this.preferredMuted,
       hapticsOn: this.hapticsOn,
       assist: this.assist,
     });
@@ -447,6 +430,11 @@ export class GameEngine {
       assist: this.assist,
       pace: this.pace,
       untimed: level.untimed === true,
+      // The overlay needs this: `checkCompletion` sets phase "complete" for
+      // the auto-advance window too, and without it the orientation screens
+      // each flash a 100% banner, an addendum and a NEXT FILE button for
+      // 900ms — the twenty-one interruptions the sequence exists to avoid.
+      ceremony: level.ceremony ?? "full",
       teaching: level.teaches === true,
       activeTempers: level.tempers,
       stage: level.stage ?? null,
@@ -542,6 +530,7 @@ export class GameEngine {
     this.lensHoldUntil = -1;
     this.reticle.scale = 1;
     this.lastTouchAt = -1e9;
+    this.lastTapAt = 0;
     // The pulse starts hidden: the first thing the file does is nothing,
     // which is the point — the group has to be missed before it surfaces.
     this.pulseNextAt = level.pulse ? level.pulse.hiddenS : -1;
@@ -888,6 +877,12 @@ export class GameEngine {
       y,
       moved: false,
       latchedDuring: -1,
+      // What the nearest group was already doing when the finger landed. A
+      // tap is its own probe — 60ms of contact is enough to agitate a
+      // cluster past the lift threshold — so judging a tap by the agitation
+      // it caused would let blind tapping lift a group the player never
+      // found. This is the board before they touched it.
+      startAgitation: this.nearestCluster(r)?.cluster.agitation ?? 0,
     };
 
     this.reticle.x = r.x;
@@ -915,7 +910,10 @@ export class GameEngine {
     g.x = x;
     g.y = y;
 
-    const r = this.reticleFor(x, y);
+    // The gesture in flight decides the offset. Defaulting to "probe" here
+    // anchored a marquee's first corner at -22 and dragged its second at
+    // -68, skewing every box by 46px and collapsing most selections.
+    const r = this.reticleFor(x, y, g.kind);
     this.reticle.x = r.x;
     this.reticle.y = r.y;
 
@@ -940,6 +938,10 @@ export class GameEngine {
     if (!g || g.id !== id) return;
     const dt = performance.now() - g.startT;
     const isTap = !g.moved && dt < TAP_MAX_MS;
+    // Captured before the dispatch below, because resolveDrop can empty the
+    // hand — after which the tap-lift branch would see no packet and try to
+    // lift whatever sits under the drop point.
+    const hadPacket = this.packet !== null;
 
     if (g.kind === "marquee") {
       // A tap is the mode-toggle gesture, not a zero-area selection: without
@@ -957,11 +959,18 @@ export class GameEngine {
     // the digits and nothing happening — so on the teaching screens the
     // instinct is simply honoured. Tried before registerTap, since a
     // successful lift is not a mode toggle.
-    if (isTap && !this.packet && LEVELS[this.levelIndex].tapToSelect) {
-      if (this.tapLift(this.reticleFor(x, y, "marquee"))) return;
+    //
+    // It must NOT return early: everything below releases the gesture, and
+    // `pointerDown` ignores a new pointer while one is in flight. Returning
+    // here left the gesture open forever, so the very next touch — the one
+    // dragging the packet you just lifted — was discarded as a second
+    // finger and the board went dead.
+    let tapHandled = false;
+    if (isTap && !hadPacket && LEVELS[this.levelIndex].tapToSelect) {
+      tapHandled = this.tapLift(this.reticleFor(x, y, g.kind), g.startAgitation);
     }
 
-    if (isTap) this.registerTap(g.startX, g.startY);
+    if (isTap && !tapHandled) this.registerTap(g.startX, g.startY);
 
     this.gesture = null;
     this.lastTouchAt = this.elapsed;
@@ -984,6 +993,10 @@ export class GameEngine {
   pointerCancel(id: number): void {
     const g = this.gesture;
     if (!g || g.id !== id) return;
+    // A cancelled gesture is still a finger that was on the board. Without
+    // this the pulse's tap cooldown stays un-rearmed and a reveal can fire
+    // straight into the touch that was just interrupted.
+    this.lastTouchAt = this.elapsed;
     // Cancelled mid-drag (system gesture, call, notch swipe): abandon the
     // selection but never lose the packet — it stays carried.
     this.gesture = null;
@@ -1128,7 +1141,7 @@ export class GameEngine {
       this.glitchUntil = this.elapsed + 0.25;
       return;
     }
-    if (cluster.agitation < 0.22) {
+    if (cluster.agitation < ARM_SELECT_MIN_AGITATION) {
       this.say("NO TEMPER DETECTED — PROBE FIRST", "error", 1.9);
       getAudio().buzz();
       haptics.reject();
@@ -1147,8 +1160,11 @@ export class GameEngine {
    * rather than where its cell is. Decoys and the fifth are eligible: a tap
    * must not quietly reveal what a box would not.
    */
-  private tapLift(at: { x: number; y: number }): boolean {
-    const pad = 22;
+  /** The unrefined group nearest a board point, hit-tested against live
+   *  glyph positions the way the marquee is. */
+  private nearestCluster(
+    at: { x: number; y: number },
+  ): { cluster: Cluster; dist: number } | null {
     let best: Cluster | null = null;
     let bestD = Infinity;
     for (const n of this.board.nodes) {
@@ -1161,12 +1177,30 @@ export class GameEngine {
         best = c;
       }
     }
-    if (!best || bestD > pad) return false;
+    return best ? { cluster: best, dist: bestD } : null;
+  }
+
+  private tapLift(at: { x: number; y: number }, wasAgitated: number): boolean {
+    const TAP_PAD = 22;
+    const near = this.nearestCluster(at);
+    const best = near?.cluster ?? null;
+    if (!best || near!.dist > TAP_PAD) return false;
     if (best.decoy) {
       this.say("NO TEMPER DETECTED", "error", 1.8);
       getAudio().buzz();
       haptics.reject();
       this.glitchUntil = this.elapsed + 0.25;
+      return true;
+    }
+    // The same gate the marquee applies. Without it a tap lifts a cluster a
+    // box would refuse — and on the file that introduces the probe, where
+    // the group is hidden for five seconds out of seven, blind-tapping the
+    // board would lift it with no probing at all and take the whole lesson
+    // with it.
+    if (wasAgitated < ARM_SELECT_MIN_AGITATION) {
+      this.say("NO TEMPER DETECTED — PROBE FIRST", "error", 1.9);
+      getAudio().buzz();
+      haptics.reject();
       return true;
     }
     this.liftCluster(best, best.cx, best.cy);

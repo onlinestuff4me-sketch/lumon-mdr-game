@@ -1,6 +1,6 @@
 import { COLS, ROWS, CELL_COUNT } from "./constants";
 import { mulberry32, randInt, shuffle } from "./rng";
-import type { Cluster, GridNode, Temper } from "./types";
+import type { Cluster, GridNode, LevelDef, Temper } from "./types";
 
 export interface Board {
   nodes: GridNode[];
@@ -117,6 +117,7 @@ export interface Extra {
   readonly temper: Temper;
   readonly decoy?: boolean;
   readonly fifth?: boolean;
+  readonly morph?: boolean;
 }
 
 export function createBoard(
@@ -132,7 +133,7 @@ export function createBoard(
     const attempt = seedBoard(seed, tempers, perTemper, s, extras, focus);
     // Only the real clusters have to fit: a board that cannot hold every
     // decoy is still winnable, and a board short a real cluster is not.
-    if (attempt.clusters.filter((c) => !c.decoy && !c.fifth).length === real) {
+    if (attempt.clusters.filter((c) => !c.decoy && !c.fifth).length >= real) {
       return attempt;
     }
   }
@@ -140,6 +141,14 @@ export function createBoard(
 }
 
 export type Focus = "centre" | "mid" | "edge" | null;
+
+/** Chebyshev radius each focus aims for, 0 at the board's centre and 1 at
+ *  its border. */
+const FOCUS_TARGET: Record<Exclude<Focus, null>, number> = {
+  centre: 0.1,
+  mid: 0.55,
+  edge: 0.78,
+};
 
 /**
  * Ranks candidate cells so a group lands where the file wants it. Ordering
@@ -165,11 +174,12 @@ function rankByFocus(
     // Chebyshev rather than Euclidean: the board is much taller than it is
     // wide, and a radial measure would call the whole top and bottom "edge"
     // while treating most of the width as centre.
-    const r = Math.max(Math.abs(nx), Math.abs(ny)) + (rng() - 0.5) * 0.18;
-    score.set(
-      i,
-      focus === "centre" ? r : focus === "edge" ? -r : Math.abs(r - 0.55),
-    );
+    const r = Math.max(Math.abs(nx), Math.abs(ny)) + (rng() - 0.5) * 0.22;
+    // Each focus aims at a band rather than at an extreme. Maximising `r`
+    // for "edge" produced clusters flush to the border — four cells all in
+    // the last row, or all in the last column — which are the hardest
+    // targets in the game, sitting on a teaching screen.
+    score.set(i, Math.abs(r - FOCUS_TARGET[focus]));
   }
   return [...cells].sort((a, b) => score.get(a)! - score.get(b)!);
 }
@@ -225,6 +235,7 @@ function seedBoard(
       morphTo: null,
       morphAfter: 0,
       morphed: false,
+      morph: want.morph === true,
       decoy: want.decoy === true,
       fifth: want.fifth === true,
       members,
@@ -360,4 +371,51 @@ export function layoutBoard(
   }
 
   return { cellW, cellH };
+}
+
+/**
+ * Clusters a file seeds beyond the ones its bins need: decoy sites, and the
+ * unnamed fifth temper. Both occupy the board and answer to a probe; no bin
+ * takes either, and neither fills a quota.
+ */
+export function boardExtras(level: LevelDef): Extra[] {
+  const extras: Extra[] = [];
+  const [decoyCount] = level.decoys ?? [0, 0];
+  for (let i = 0; i < decoyCount; i++) {
+    // A decoy borrows a temper so it has some motion to show. Which one is
+    // rotated through the file's own tempers, so a decoy never stands out
+    // by moving in a way nothing else on the board does.
+    extras.push({ temper: level.tempers[i % level.tempers.length], decoy: true });
+  }
+  const [morphCount] = level.morphs ?? [0, 0];
+  for (let i = 0; i < morphCount; i++) {
+    // Seeded as an extra, never taken from the quota. Rewriting a quota
+    // cluster's temper removes the last cluster of the source temper and
+    // the bin can then never fill — on an untimed teaching file that is a
+    // softlock with no clock to expire and no RETRY to press.
+    extras.push({ temper: level.tempers[i % level.tempers.length], morph: true });
+  }
+  if (level.fifth) extras.push({ temper: level.tempers[0], fifth: true });
+  return extras;
+}
+
+/**
+ * Marks the clusters that change temper while the refiner watches. Chosen
+ * by position rather than at random so a file plays the same way twice —
+ * the whole queue is seeded, and a mechanic that moved between plays could
+ * not be learned.
+ */
+export function assignMorphs(board: Board, level: LevelDef): void {
+  const [, holdS] = level.morphs ?? [0, 0];
+  const real = board.clusters.filter((c) => c.morph);
+  for (let i = 0; i < real.length; i++) {
+    const c = real[i];
+    // It becomes a temper this file actually has a bin for; otherwise the
+    // lesson would be "sometimes a group is unbinnable", which is a
+    // different mechanic entirely and belongs to the fifth temper.
+    const others = level.tempers.filter((t) => t !== c.temper);
+    c.morphTo = others[i % others.length];
+    c.morphAfter = holdS;
+    c.morphed = false;
+  }
 }
