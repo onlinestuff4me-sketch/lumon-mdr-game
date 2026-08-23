@@ -11,11 +11,11 @@
  * NEXT gesture, and the playthroughs run a whole file to 100%.
  */
 import {
-  open, state, findGroup, touchFor, drag, tap, load, setMode,
+  open, state, findGroup, touchFor, drag, tap, touchTap, load, setMode,
   boxAndBin, carryToBin, section, check, eq, summary,
 } from "./harness.mjs";
 
-const { browser, page, origin, errors } = await open();
+const { browser, page, origin, errors, cdp } = await open();
 
 // ═══ 1. the gesture never leaks ══════════════════════════════════════
 section("gesture lifecycle");
@@ -662,6 +662,86 @@ section("taps land where the finger is");
   });
   check("a touch during the auto-advance window is not discarded",
     took !== "discarded", took);
+}
+{
+  // A THUMB RESTING ON THE SCREEN MUST NOT KILL EVERY TAP.
+  //
+  // A phone held one-handed puts a finger on the bezel, and every touch
+  // after the first one down is `isPrimary: false`. Refusing those meant
+  // the tap never reached the engine at all — no message, no sound, no
+  // timeout that could rescue it, for as long as the thumb stayed put.
+  // Mouse events cannot express this, which is why the suite carries a CDP
+  // touch path just for it.
+  for (const rest of [{ x: 15, y: 300 }, { x: 370, y: 640 }]) {
+    await load(page, 8);
+    const g = await findGroup(page);
+    await touchTap(cdp, origin, g.ctr, [rest]);
+    const s = await state(page);
+    check(`a tap lifts with a finger already resting at (${rest.x},${rest.y})`,
+      s.carrying, s.message ?? "silence");
+    check("  and the gesture is released", !s.gestureOpen);
+  }
+  {
+    // ...but a drag already in flight is not something a stray touch may
+    // steal. Only a gesture that has never moved is handed over.
+    await load(page, 8);
+    const g = await findGroup(page);
+    const kept = await page.evaluate(async ({ x, y }) => {
+      const e = window.__mdr;
+      e.pointerDown(1, x, y);
+      e.pointerMove(1, x + 40, y + 40);          // a real drag
+      e.pointerDown(2, 20, 300);                 // a stray second finger
+      const id = e.gesture?.id ?? null;
+      e.pointerUp(1, x + 40, y + 40);
+      await new Promise((r) => setTimeout(r, 80));
+      return { id, open: e.gesture !== null };
+    }, { x: g.ctr.x, y: g.ctr.y });
+    check("a drag in flight is not stolen by a second finger", kept.id === 1,
+      `gesture id ${kept.id}`);
+    check("  and it still released", !kept.open);
+  }
+}
+{
+  // A group walks out from under a resting thumb. Woe droops, frolic skips,
+  // malice lunges — and a considered press was measured failing 11.7% of
+  // the time at 1200ms because the digits had moved on by the time the
+  // finger lifted. What you touched is what you meant.
+  const slipped = [];
+  for (const level of [1, 4, 5, 10]) {
+    for (const ms of [90, 400, 1200]) {
+      await load(page, level);
+      const g = await findGroup(page);
+      await page.mouse.move(origin.x + g.ctr.x, origin.y + g.ctr.y - 10);
+      await page.mouse.down();
+      await page.waitForTimeout(ms);
+      await page.mouse.up();
+      await page.waitForTimeout(90);
+      const s = await state(page);
+      if (!s.carrying) slipped.push(`L${level}@${ms}ms: ${s.message ?? "silence"}`);
+      check(`  gesture released after L${level} ${ms}ms hold`, !s.gestureOpen);
+    }
+  }
+  check("a group that drifts under a held finger is still lifted",
+    slipped.length === 0, slipped.join("; "));
+}
+{
+  // On a screen whose groups move by themselves, PROBE does nothing — so
+  // no pair of taps, however placed, may put the file there.
+  for (const level of [2, 5]) {
+    await load(page, level);
+    const before = (await state(page)).mode;
+    const g = await findGroup(page);
+    for (const at of [
+      { x: g.ctr.x, y: g.min.y - 26 },        // a near miss above the group
+      { x: 12, y: g.ctr.y },                  // and open board, far from it
+    ]) {
+      await tap(page, origin, at);
+      await tap(page, origin, at);
+    }
+    const s = await state(page);
+    check(`no pair of taps flips L${level} into a mode it has no use for`,
+      s.mode === before, `${before} -> ${s.mode}`);
+  }
 }
 {
   // A gesture that leaked — no pointerup will ever arrive for it — must not

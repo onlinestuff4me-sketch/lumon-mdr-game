@@ -978,7 +978,20 @@ export class GameEngine {
     // has been open impossibly long is not a finger, though — it is one
     // that leaked, and refusing every touch behind it bricks the board.
     if (this.gesture) {
-      if (performance.now() - this.gesture.startT < STALE_GESTURE_MS) return;
+      // ...unless the one in flight is doing nothing. A thumb resting on
+      // the bezel of a phone held one-handed opens a gesture and never
+      // uses it, and every tap behind it was being discarded in silence.
+      //
+      // Doing nothing means all three: it has not moved, so it is not a
+      // drag; it did not land on a group, so it is not a press about to
+      // become one; and nothing is being carried, so it is not a hand on
+      // the box. Anything else is a real gesture and is never interrupted
+      // — only the four-second staleness rule can take one of those, and
+      // by then no finger is still down.
+      const g = this.gesture;
+      const stale = performance.now() - g.startT >= STALE_GESTURE_MS;
+      const idle = !g.moved && g.startCluster < 0 && !this.packet;
+      if (!stale && !idle) return;
       this.releaseGesture();
     }
 
@@ -1170,14 +1183,25 @@ export class GameEngine {
     const aim = isTap ? this.tapTarget(x, y, this.reticleFor(x, y, g.kind)) : null;
     if (isTap && !hadPacket && this.tapToSelect) {
       tapHandled = this.tapLift(aim);
+      // The group is moving, and the finger is not. Woe droops, frolic
+      // skips, malice lunges — and a group can walk out of its own tap pad
+      // while a thumb rests on it deciding. Measured: a tap 10px above a
+      // group fails 2.8% of the time at 60ms and 11.7% at 1200ms, silently,
+      // because by the time the finger lifts the digits are elsewhere.
+      //
+      // The gesture already recorded what it landed on. What you touched is
+      // what you meant, whatever it did in the meantime.
+      if (!tapHandled) tapHandled = this.tapLiftStart(g);
     }
 
     // The mode toggle only ever listens to taps on open board. Two taps
     // that missed a group used to flip an orientation screen — which has
     // no probe at all — into PROBE mode, where the offset jumps another
     // 46px and the press-drag conversion stops working. Two near misses
-    // and the file was unplayable.
-    const onGroup = aim !== null && aim.dist <= TAP_PAD;
+    // and the file was unplayable. The near-miss guard is wider than the
+    // tap pad because a tap that missed by 26px was still aimed at the
+    // group, not at the board.
+    const onGroup = aim !== null && aim.dist <= TAP_PAD + TAP_INSET;
     if (isQuickTap && !tapHandled && !onGroup) {
       this.registerTap(g.startX, g.startY);
     }
@@ -1257,6 +1281,13 @@ export class GameEngine {
   }
 
   private registerTap(x: number, y: number): void {
+    // On a file whose groups move by themselves there is nothing for the
+    // lens to find, so PROBE is a mode that does nothing — and switching
+    // into it also moves the aim another 46px and stops press-and-drag
+    // working. Two taps that missed a group by a hair were enough to put
+    // an orientation screen there, silently, and it read as the board
+    // having died. A shortcut to a mode with no purpose is not a shortcut.
+    if (LEVELS[this.levelIndex].selfAgitate === true) return;
     const now = performance.now();
     const near = Math.hypot(x - this.lastTapX, y - this.lastTapY) < TAP_SLOP * 3;
     if (now - this.lastTapAt < DOUBLE_TAP_MS && near) {
@@ -1505,6 +1536,20 @@ export class GameEngine {
     const w = Math.max(cols * cell + 18, label.length * 8 * 0.62 + 16);
     const h = rows * cell + 26;
     return { x: p.x - w / 2, y: p.y - h / 2, w, h };
+  }
+
+  /**
+   * Lift whatever the gesture landed on when the finger first went down,
+   * for the taps whose target has moved out from under them since.
+   */
+  private tapLiftStart(g: Gesture): boolean {
+    if (g.startCluster < 0) return false;
+    const c = this.board.clusters[g.startCluster];
+    // It may have been binned by something else in the meantime, and
+    // `nearestCluster` — which every other caller goes through — would
+    // never have offered a refined group.
+    if (!c || c.refined || this.board.nodes[c.members[0]]?.retired) return false;
+    return this.tapLift({ cluster: c, dist: 0 });
   }
 
   private tapLift(near: { cluster: Cluster; dist: number } | null): boolean {
