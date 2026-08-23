@@ -762,7 +762,84 @@ section("taps land where the finger is");
   check("and released again", !revived.open);
 }
 
-// ═══ 7. the room plays the temper of what is on it ═══════════════════
+// ═══ 7. a file arrives, it does not appear ═══════════════════════════
+section("arrival");
+{
+  // The groups emerge over two seconds. On the first frame the board must
+  // be plainly still — that stillness is what makes the motion an event.
+  await page.evaluate(() => window.__mdr.startLevel(4));
+  const curve = await page.evaluate(async () => {
+    const e = window.__mdr;
+    const c = e.board.clusters.find((k) => !k.refined && !k.decoy);
+    const out = [];
+    const at = [0, 400, 900, 1500, 2600];
+    let last = 0;
+    for (const ms of at) {
+      await new Promise((r) => setTimeout(r, ms - last));
+      last = ms;
+      out.push(Math.round(c.agitation * 100) / 100);
+    }
+    return out;
+  });
+  check("the board is still when the screen arrives", curve[0] <= 0.02, `${curve[0]}`);
+  check("and it has not finished emerging half a second in",
+    curve[1] < 0.6, `${curve[1]}`);
+  check("motion only grows", curve.every((v, i) => i === 0 || v >= curve[i - 1] - 0.02),
+    curve.join(" -> "));
+  check("and it is fully up to speed by two and a half seconds",
+    curve[4] > 0.95, curve.join(" -> "));
+
+  // A later file has no emergence — its groups answer to a probe, and
+  // making the refiner wait two seconds for nothing would be a bug.
+  await load(page, 31);
+  const settled = await page.evaluate(() => window.__mdr.settled);
+  check("a probe file is ready as soon as it has been drawn", settled);
+}
+{
+  // The scan pass between files: one beam down the board, erasing, then a
+  // second painting the new file on. It must never take the board away
+  // from the refiner — a transition that eats a touch is the bug this
+  // game has already spent two rounds removing.
+  await load(page, 0);
+  let guard = 0;
+  while ((await state(page)).progress < 100 && guard++ < 6) {
+    const g = await findGroup(page);
+    if (!g) break;
+    await tap(page, origin, g.ctr);
+    if (!(await state(page)).carrying) break;
+    await carryToBin(page, origin, g);
+  }
+  const seen = await page.evaluate(async () => {
+    const e = window.__mdr;
+    const from = e.levelIndex;
+    const phases = new Set();
+    let acceptedDuringWipe = null;
+    for (let i = 0; i < 120; i++) {
+      if (e.wipe) {
+        phases.add(e.wipe.phase);
+        if (acceptedDuringWipe === null) {
+          e.pointerDown(90, 100, e.layout.grid.y + 40);
+          acceptedDuringWipe = e.gesture !== null;
+          e.pointerUp(90, 100, e.layout.grid.y + 40);
+        }
+      }
+      if (e.levelIndex !== from && !e.wipe) break;
+      await new Promise((r) => requestAnimationFrame(r));
+    }
+    return {
+      phases: [...phases].sort(),
+      advanced: e.levelIndex !== from,
+      acceptedDuringWipe,
+      open: e.gesture !== null,
+    };
+  });
+  eq("the file is erased and then painted back on", seen.phases, ["in", "out"]);
+  check("and the next file actually arrives", seen.advanced);
+  check("a touch during the transition is not discarded", seen.acceptedDuringWipe);
+  check("and it left no gesture open", !seen.open);
+}
+
+// ═══ 8. the room plays the temper of what is on it ═══════════════════
 section("ambient temper");
 {
   await load(page, 0);                       // one group, one temper
@@ -822,7 +899,7 @@ section("ambient temper");
   check("the fifth temper gives off nothing", quiet === null, String(quiet));
 }
 
-// ═══ 8. nothing threw ════════════════════════════════════════════════
+// ═══ 9. nothing threw ════════════════════════════════════════════════
 section("console");
 check("no page errors", errors.length === 0, errors.join(" | "));
 

@@ -13,6 +13,71 @@ const flashing: GridNode[] = [];
  *  game; above it, you have found it and it should be unmistakable. */
 const CORE_AT = 0.5;
 
+/** Digits sitting on the scan edge, lit additively. Scratch, reused. */
+const edging: GridNode[] = [];
+const edgingA: number[] = [];
+
+/**
+ * The file-change transition, as a CRT does it.
+ *
+ * One scan pass travels down the board: ahead of it the old picture is
+ * still there, behind it the picture is gone — and then, on the new file,
+ * the same pass paints the digits back on. The glyphs on the edge itself
+ * bloom as they are written, which is the phosphor being struck.
+ *
+ * Deliberately alpha only. Squashing or rolling the picture would move the
+ * digits away from where the engine hit-tests them, and a transition that
+ * makes the board briefly un-tappable is the exact bug this game has spent
+ * two rounds getting rid of. Input stays live the whole way through, and
+ * every digit stays exactly where it is drawn.
+ */
+function scanEdge(e: GameEngine): number {
+  // Overshoot both ends so the pass clears the board completely rather
+  // than stopping on the last row of digits.
+  return (e.wipe as { t: number }).t * 1.2 - 0.1;
+}
+
+/** How lit a digit at `y` is, given where the scan pass has reached. */
+function scanAlpha(e: GameEngine, y: number, edge: number): number {
+  const g = e.layout.grid;
+  const p = (y - g.y) / (g.h || 1);
+  // A short ramp rather than a hard line: a CRT's beam has width, and a
+  // hard cut reads as a mask sliding over the picture instead.
+  const d = (p - edge) * 7;
+  const lit = e.wipe?.phase === "out" ? d : -d;
+  return lit <= 0 ? 0 : lit >= 1 ? 1 : lit;
+}
+
+/** How close a digit at `y` is to the beam, 0..1 — its bloom. */
+function scanGlow(e: GameEngine, y: number, edge: number): number {
+  const g = e.layout.grid;
+  const p = (y - g.y) / (g.h || 1);
+  const d = (p - edge) * 9;
+  const k = 1 - d * d;
+  return k <= 0 ? 0 : k;
+}
+
+/** The beam itself: a hard line with a soft trail behind it. */
+function drawScanBeam(ctx: CanvasRenderingContext2D, e: GameEngine, edge: number): void {
+  const g = e.layout.grid;
+  const y = g.y + edge * g.h;
+  if (y < g.y - 40 || y > g.y + g.h + 40) return;
+  const back = e.wipe?.phase === "out" ? 1 : -1;
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  // Three stacked bands instead of a gradient: a gradient object per frame
+  // is an allocation in the render path, and at this size nobody can tell.
+  const bands: [number, number][] = [[2, 0.5], [10, 0.16], [30, 0.06]];
+  for (const [hgt, alpha] of bands) {
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = "#8ff3c4";
+    ctx.fillRect(g.x, y - (back > 0 ? 0 : hgt), g.w, hgt);
+  }
+  ctx.restore();
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = "source-over";
+}
+
 /** Board layer: the matrix, the reticle, the marquee. */
 export function renderGrid(ctx: CanvasRenderingContext2D, e: GameEngine): void {
   const { w, h, grid } = e.layout;
@@ -28,15 +93,30 @@ export function renderGrid(ctx: CanvasRenderingContext2D, e: GameEngine): void {
   ctx.fillRect(grid.x, grid.y, grid.w, grid.h);
 
   // ── digits ──────────────────────────────────────────────────────────
+  const wiping = e.wipe !== null;
+  const edge = wiping ? scanEdge(e) : 0;
   for (const n of e.board.nodes) {
     if (n.retired || n.lifted) continue;
     const x = n.hx + n.dx;
     const y = n.hy + n.dy;
     if (y < grid.y - 24 || y > grid.y + grid.h + 24) continue;
 
+    // Where the scan pass has got to decides whether this digit is on the
+    // screen at all yet, and how hard the beam is striking it.
+    let wa = 1;
+    if (wiping) {
+      wa = scanAlpha(e, y, edge);
+      const glow = scanGlow(e, y, edge);
+      if (glow > 0.02) {
+        edging.push(n);
+        edgingA.push(glow);
+      }
+      if (wa <= 0.004) continue;
+    }
+
     const a = n.agitation;
     if (a <= 0.04 && n.flash <= 0.02) {
-      atlas.draw(ctx, "idle", n.digit, x, y, 0.82, n.rot, n.scale);
+      atlas.draw(ctx, "idle", n.digit, x, y, 0.82 * wa, n.rot, n.scale);
       continue;
     }
 
@@ -51,7 +131,7 @@ export function renderGrid(ctx: CanvasRenderingContext2D, e: GameEngine): void {
     // Only drawn once the glyph has actually left its cell, so a calm board
     // never doubles up.
     if (n.dx * n.dx + n.dy * n.dy > 0.4) {
-      atlas.draw(ctx, "idle", n.digit, n.hx, n.hy, 0.3 * a, 0, n.scale * 0.94);
+      atlas.draw(ctx, "idle", n.digit, n.hx, n.hy, 0.3 * a * wa, 0, n.scale * 0.94);
     }
 
     // The swell. Size is the strongest pre-attentive cue after motion, and
@@ -61,8 +141,8 @@ export function renderGrid(ctx: CanvasRenderingContext2D, e: GameEngine): void {
     // Cross-fade phosphor green into the temper's colour as it agitates.
     // Both alphas are driven by `a` alone so a barely-stirred cluster reads
     // as green, not as a permanently tinted giveaway.
-    atlas.draw(ctx, "idle", n.digit, x, y, 0.82 * (1 - a), n.rot, swell);
-    atlas.draw(ctx, key, n.digit, x, y, Math.min(1, a * 1.15), n.rot, swell);
+    atlas.draw(ctx, "idle", n.digit, x, y, 0.82 * (1 - a) * wa, n.rot, swell);
+    atlas.draw(ctx, key, n.digit, x, y, Math.min(1, a * 1.15) * wa, n.rot, swell);
 
     // The core. Above half agitation the glyph starts burning through, the
     // same additive pass the malice flash uses — batched with it so the
@@ -91,7 +171,30 @@ export function renderGrid(ctx: CanvasRenderingContext2D, e: GameEngine): void {
     ctx.globalCompositeOperation = "source-over";
     flashing.length = 0;
   }
+
+  // Digits the beam is passing over, struck bright as they are written.
+  if (edging.length > 0) {
+    ctx.globalCompositeOperation = "lighter";
+    for (let i = 0; i < edging.length; i++) {
+      const n = edging[i];
+      atlas.draw(
+        ctx,
+        "hot",
+        n.digit,
+        n.hx + n.dx,
+        n.hy + n.dy,
+        edgingA[i] * 0.7,
+        n.rot,
+        n.scale * 1.06,
+      );
+    }
+    ctx.globalCompositeOperation = "source-over";
+    edging.length = 0;
+    edgingA.length = 0;
+  }
   ctx.globalAlpha = 1;
+
+  if (wiping) drawScanBeam(ctx, e, edge);
 
   if (e.marquee.active) drawMarquee(ctx, e);
   // The marquee's own corner ticks mark the drag point; a probe ring on top
