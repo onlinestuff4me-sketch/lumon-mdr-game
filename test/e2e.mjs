@@ -59,15 +59,21 @@ section("gesture lifecycle");
     await run();
     const s = await state(page);
     check(`gesture released: ${label}`, !s.gestureOpen);
-    // And input still works afterwards — the real proof.
-    const g2 = await findGroup(page);
-    if (g2) {
-      await tap(page, origin, await touchFor(page, g2.one, "marquee"));
-      const s2 = await state(page);
-      check(`  input still live after: ${label}`, s2.carrying);
-      if (s2.carrying) await carryToBin(page, origin, g2);
-      await load(page, 0);
+    // And input still works afterwards — the real proof. A case that ends
+    // holding a packet (pressing a group and dragging is a carry now)
+    // proves it by binning that packet; the rest by lifting a new one.
+    if (s.carrying) {
+      check(`  input still live after: ${label}`, await carryToBin(page, origin, g));
+    } else {
+      const g2 = await findGroup(page);
+      if (g2) {
+        await tap(page, origin, await touchFor(page, g2.one, "marquee"));
+        const s2 = await state(page);
+        check(`  input still live after: ${label}`, s2.carrying);
+        if (s2.carrying) await carryToBin(page, origin, g2);
+      }
     }
+    await load(page, 0);
   }
 }
 
@@ -193,12 +199,14 @@ section("mechanics");
   const d = await findGroup(page, "decoy");
   check("decoy seeded", !!d);
   if (d) {
-    // Tap-to-select is a teaching-screen affordance and JESUP is not one, so
-    // a tap here must do nothing at all — and must not eat the gesture.
+    // Tapping is available on every file now, so what has to hold here is
+    // that the agitation gate still refuses an unprobed group — blind
+    // tapping must never find what probing is for.
     await setMode(page, "select");
-    await tap(page, origin, await touchFor(page, d.one, "marquee"));
+    await tap(page, origin, d.ctr);
     const t = await state(page);
-    check("a tap lifts nothing on a file without tapToSelect", !t.carrying);
+    check("a tap lifts nothing unprobed, even on a late file", !t.carrying);
+    check("and it says why", (t.message ?? "").includes("NO TEMPER"), t.message);
     check("gesture released after that tap", !t.gestureOpen);
 
     // Boxing it is the shipped path, and it must refuse with the honest
@@ -369,21 +377,65 @@ section("reticle and hint");
   check("the bin hint is showing immediately", hint.delay >= 0, `${hint.delay.toFixed(2)}s held`);
   eq("and exactly one bin is marked as the target", hint.target, [g.temper]);
 
-  // Touching the packet must not throw it up the screen away from the thumb
-  // that is about to drag it.
-  const jump = await page.evaluate(async ({ x, y }) => {
+  // Touching the box takes hold of it again: it comes to the thumb, at the
+  // carry offset and nowhere else, and then it must not move again except
+  // with the finger.
+  const grab = await page.evaluate(async () => {
     const e = window.__mdr;
-    const before = { x: e.packet.x, y: e.packet.y };
+    const b = e.packetBounds(e.packet);
+    const x = b.x + b.w / 2;
+    const y = b.y + b.h / 2;
+    const want = e.reticleFor(x, y, "carry");
     e.pointerDown(1, x, y);
     e.pointerMove(1, x, y);
     await new Promise((r) => setTimeout(r, 60));
-    const after = { x: e.packet.x, y: e.packet.y };
-    e.pointerUp(1, x, y);
-    return Math.round(Math.hypot(after.x - before.x, after.y - before.y));
-  }, { x: at.x, y: at.y });
-  check("touching the packet does not teleport it", jump <= 4, `${jump}px jump`);
+    const settled = { x: e.packet.x, y: e.packet.y };
+    e.pointerMove(1, x + 30, y - 25);
+    await new Promise((r) => setTimeout(r, 60));
+    const moved = { x: e.packet.x, y: e.packet.y };
+    e.pointerUp(1, x + 30, y - 25);
+    return {
+      offBy: Math.round(Math.hypot(settled.x - want.x, settled.y - want.y)),
+      drift: Math.round(
+        Math.hypot(moved.x - settled.x - 30, moved.y - settled.y + 25),
+      ),
+      still: e.packet !== null,
+    };
+  });
+  check("touching the box recentres it under the thumb", grab.offBy <= 2,
+    `${grab.offBy}px from the carry reticle`);
+  check("and it does not slip again while dragging", grab.drift <= 2,
+    `${grab.drift}px unexplained`);
+  check("touching the box never puts it down", grab.still);
 
-  check("and it still carries to the bin", await carryToBin(page, origin, g));
+  // Touching anywhere else on the board does put it down — the numbers go
+  // back to the cells they came from, still found.
+  const let_go = await page.evaluate(async () => {
+    const e = window.__mdr;
+    const id = e.packet.clusterId;
+    const b = e.packetBounds(e.packet);
+    const x = Math.min(e.layout.w - 6, b.x + b.w + 90);
+    const y = Math.max(e.layout.grid.y + 8, b.y - 90);
+    e.pointerDown(1, x, y);
+    e.pointerUp(1, x, y);
+    await new Promise((r) => setTimeout(r, 80));
+    const c = e.board.clusters[id];
+    return {
+      carrying: e.packet !== null,
+      onGrid: c.members.every((m) => !e.board.nodes[m].lifted),
+      keptTemper: c.agitation > 0.2,
+      open: e.gesture !== null,
+    };
+  });
+  check("tapping outside the box releases the numbers", !let_go.carrying);
+  check("and they go back to the grid", let_go.onGrid);
+  check("still found, so they need no re-probing", let_go.keptTemper);
+  check("gesture released after a release-tap", !let_go.open);
+
+  const again = await findGroup(page);
+  await tap(page, origin, again.ctr);
+  check("and the released group can be taken again", (await state(page)).carrying);
+  check("and it still carries to the bin", await carryToBin(page, origin, again));
 }
 {
   // Press on a group and drag: one motion, group to bin, no box in between.
@@ -473,7 +525,224 @@ section("reticle and hint");
   if (s.carrying) check("and that packet carries too", await carryToBin(page, origin, g));
 }
 
-// ═══ 6. nothing threw ════════════════════════════════════════════════
+// ═══ 6. every tap on a group forms the box, first time ═══════════════
+//
+// The bug this section exists for: hit-testing happened at the *reticle*,
+// which floats 22px (SELECT) or 68px (PROBE) above the finger, so the
+// tappable region of a group sat below its own digits. A one-row group
+// could not be tapped at all. Nothing caught it because every test aimed
+// through `touchFor()`, which solves for the offset — the tests were
+// tapping 22px below the numbers, and humans tap the numbers.
+//
+// So: no `touchFor` anywhere in this section. Raw coordinates, on the
+// glyphs, the way a thumb does it.
+section("taps land where the finger is");
+{
+  const SCREENS = [0, 4, 8, 12, 16, 20, 24, 28];
+  let attempts = 0;
+  const missed = [];
+  const stuck = [];
+  for (const level of SCREENS) {
+    await load(page, level);
+    if (!(await findGroup(page))) continue;
+    // Nine points across the group's own footprint, corners included, plus
+    // the exact centre of its topmost digit — the point that was dead.
+    // Read off the LIVE footprint each time: these groups drift, and a
+    // thumb aims at where the digits are now, which is the whole point.
+    const frac = [];
+    for (const fx of [0, 0.5, 1]) for (const fy of [0, 0.5, 1]) frac.push([fx, fy]);
+    frac.push(["top", "top"]);
+    for (const [fx, fy] of frac) {
+      const live = await findGroup(page);
+      if (!live) break;
+      const at =
+        fx === "top"
+          ? { x: live.ctr.x, y: live.min.y }
+          : {
+              x: live.min.x + (live.max.x - live.min.x) * fx,
+              y: live.min.y + (live.max.y - live.min.y) * fy,
+            };
+      await tap(page, origin, at);
+      const st = await state(page);
+      attempts++;
+      if (!st.carrying) {
+        missed.push(`L${level} (${Math.round(at.x)},${Math.round(at.y)}) ${st.message ?? "silence"}`);
+      } else {
+        // Put it back rather than binning it, so every point in the sweep
+        // is tested against the same group in the same place.
+        await page.evaluate(() => {
+          const e = window.__mdr;
+          const b = e.packetBounds(e.packet);
+          const x = Math.min(e.layout.w - 6, b.x + b.w + 100);
+          const y = Math.max(e.layout.grid.y + 6, b.y - 100);
+          e.pointerDown(1, x, y);
+          e.pointerUp(1, x, y);
+        });
+        await page.waitForTimeout(60);
+      }
+      if ((await state(page)).gestureOpen) {
+        stuck.push(`L${level} (${Math.round(at.x)},${Math.round(at.y)})`);
+      }
+    }
+  }
+  check("every tap inside a group's footprint lifts it",
+    missed.length === 0, `${attempts - missed.length}/${attempts}${missed.length ? " — " + missed.slice(0, 6).join("; ") : ""}`);
+  check("and none of them left a gesture open", stuck.length === 0,
+    stuck.slice(0, 6).join("; "));
+}
+{
+  // Duration must not decide. A considered press — down, think, up, no
+  // movement — is a tap however long it took.
+  await load(page, 8);
+  const holds = [60, 150, 300, 500, 900];
+  const bad = [];
+  for (const ms of holds) {
+    await load(page, 8);
+    const g = await findGroup(page);
+    await page.mouse.move(origin.x + g.ctr.x, origin.y + g.ctr.y);
+    await page.mouse.down();
+    await page.waitForTimeout(ms);
+    await page.mouse.up();
+    await page.waitForTimeout(90);
+    const st = await state(page);
+    if (!st.carrying) bad.push(`${ms}ms: ${st.message ?? "nothing"}`);
+    check(`  gesture released after a ${ms}ms press`, !st.gestureOpen);
+  }
+  check("a still press lifts the group however long it is held",
+    bad.length === 0, bad.join("; "));
+}
+{
+  // And a hand that wobbles and comes back is still a tap.
+  await load(page, 8);
+  const g = await findGroup(page);
+  const wob = await page.evaluate(async ({ x, y }) => {
+    const e = window.__mdr;
+    e.pointerDown(1, x, y);
+    for (const d of [6, 13, 16, 11, 3, 0]) e.pointerMove(1, x + d, y - d);
+    await new Promise((r) => setTimeout(r, 320));
+    e.pointerUp(1, x, y);
+    await new Promise((r) => setTimeout(r, 80));
+    return { carrying: e.packet !== null, open: e.gesture !== null };
+  }, { x: g.ctr.x, y: g.ctr.y });
+  check("a press that drifts 16px and returns still lifts", wob.carrying);
+  check("gesture released after the wobble", !wob.open);
+}
+{
+  // Two taps that miss must not silently flip an orientation screen into
+  // PROBE — a mode that does nothing there, and that moves the aim another
+  // 46px. Two near-misses used to make the file unplayable.
+  await load(page, 8);
+  const before = (await state(page)).mode;
+  const g = await findGroup(page);
+  await tap(page, origin, g.ctr);
+  await tap(page, origin, g.ctr);
+  const after = await state(page);
+  check("tapping a group never toggles the mode", after.mode === before,
+    `${before} -> ${after.mode}`);
+}
+{
+  // The 900ms auto-advance window draws no scrim, so the board looks live.
+  // A tap there must not be thrown away.
+  await load(page, 0);
+  let guard = 0;
+  while ((await state(page)).progress < 100 && guard++ < 6) {
+    const g = await findGroup(page);
+    if (!g) break;
+    await tap(page, origin, g.ctr);
+    if (!(await state(page)).carrying) break;
+    await carryToBin(page, origin, g);
+  }
+  const took = await page.evaluate(() => {
+    const e = window.__mdr;
+    if (e.getSnapshot().phase !== "complete") return "not in the window";
+    e.pointerDown(1, 100, e.layout.grid.y + 40);
+    const open = e.gesture !== null;
+    e.pointerUp(1, 100, e.layout.grid.y + 40);
+    return open ? "accepted" : "discarded";
+  });
+  check("a touch during the auto-advance window is not discarded",
+    took !== "discarded", took);
+}
+{
+  // A gesture that leaked — no pointerup will ever arrive for it — must not
+  // brick the board forever.
+  await load(page, 8);
+  const revived = await page.evaluate(async () => {
+    const e = window.__mdr;
+    e.pointerDown(1, 100, e.layout.grid.y + 40);      // never released
+    e.gesture.startT -= 9000;                          // as if long ago
+    const c = e.board.clusters.find((k) => !k.refined);
+    const n = e.board.nodes[c.members[0]];
+    e.pointerDown(2, n.hx + n.dx, n.hy + n.dy);
+    e.pointerUp(2, n.hx + n.dx, n.hy + n.dy);
+    await new Promise((r) => setTimeout(r, 80));
+    return { carrying: e.packet !== null, open: e.gesture !== null };
+  });
+  check("a stale gesture is taken over by the next touch", revived.carrying);
+  check("and released again", !revived.open);
+}
+
+// ═══ 7. the room plays the temper of what is on it ═══════════════════
+section("ambient temper");
+{
+  await load(page, 0);                       // one group, one temper
+  const solo = await page.evaluate(() => {
+    const e = window.__mdr;
+    const c = e.board.clusters.find((k) => !k.refined && !k.decoy && !k.fifth);
+    return { bed: e.ambientTemper(), group: c.temper };
+  });
+  eq("one group on screen: the bed is that group", solo.bed, solo.group);
+
+  await load(page, 28);                      // four groups, four tempers
+  const many = await page.evaluate(() => {
+    const e = window.__mdr;
+    const g = e.layout.grid;
+    const cx = g.x + g.w / 2;
+    const cy = g.y + g.h / 2;
+    let best = null;
+    let bestD = Infinity;
+    for (const c of e.board.clusters) {
+      if (c.refined || c.decoy || c.fifth) continue;
+      const d = Math.hypot(c.cx - cx, c.cy - cy);
+      if (d < bestD) { bestD = d; best = c; }
+    }
+    return { bed: e.ambientTemper(), central: best.temper, n: e.board.clusters.length };
+  });
+  check("several groups: the bed is the most central one",
+    many.bed === many.central, `${many.bed} vs ${many.central} of ${many.n}`);
+
+  const g = await findGroup(page);
+  const other = await page.evaluate((id) => {
+    const e = window.__mdr;
+    const c = e.board.clusters.find((k) => k.id !== id && !k.refined && !k.decoy);
+    return c ? c.temper : null;
+  }, g.id);
+  await tap(page, origin, g.ctr);
+  const held = await page.evaluate(() => ({
+    carrying: window.__mdr.packet !== null,
+    bed: window.__mdr.ambientTemper(),
+  }));
+  check("the packet lifted", held.carrying);
+  check("holding a group: the bed follows it into the hand",
+    held.bed === g.temper, `${held.bed} vs ${g.temper}`);
+  if (other && other !== g.temper) {
+    check("  and it is no longer the other group's", held.bed !== other);
+  }
+  check("and it still carries to the bin", await carryToBin(page, origin, g));
+
+  // A decoy has no temper to give off, and the fifth is never named.
+  await load(page, 45);                      // COLD HARBOR — carries the fifth
+  const quiet = await page.evaluate(() => {
+    const e = window.__mdr;
+    const f = e.board.clusters.find((k) => k.fifth);
+    if (!f) return null;
+    e.board.clusters.forEach((c) => { if (c !== f) c.refined = true; });
+    return e.ambientTemper();
+  });
+  check("the fifth temper gives off nothing", quiet === null, String(quiet));
+}
+
+// ═══ 8. nothing threw ════════════════════════════════════════════════
 section("console");
 check("no page errors", errors.length === 0, errors.join(" | "));
 

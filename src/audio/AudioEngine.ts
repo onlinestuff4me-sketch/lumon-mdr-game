@@ -25,6 +25,19 @@ type VoiceParam = {
 };
 
 const SMOOTH = 0.05; // setTargetAtTime time-constant for proximity moves
+/**
+ * The ambient bed: the temper of the group the refiner is looking at,
+ * playing under everything at a fraction of probe volume. Loud enough to
+ * colour the room, quiet enough that finding a group with the lens is
+ * still unmistakably louder than not having found one.
+ */
+const AMBIENT_GAIN = 0.26;
+/** Slower than SMOOTH, so one group's temper dissolves into the next
+ *  rather than switching. */
+const AMBIENT_SMOOTH = 0.5;
+/** How far the bed steps back while a probe is live, so the two never
+ *  argue over which temper the refiner is being told about. */
+const AMBIENT_DUCK = 0.4;
 
 function makeDistortionCurve(amount: number): Float32Array<ArrayBuffer> {
   const n = 1024;
@@ -41,7 +54,12 @@ export class AudioEngine {
   private ctx: AudioContext | null = null;
   private bus: GainNode | null = null;
   private voices = new Map<Temper, VoiceParam>();
+  /** Combined level per temper, read by the scheduled voice ticks. */
   private intensities: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
+  /** What the lens is finding right now. */
+  private proximity: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
+  /** What is on screen, playing underneath. */
+  private ambient: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
   private muted = false;
   private arpStep = 0;
   private nextArpAt = 0;
@@ -329,22 +347,58 @@ export class AudioEngine {
 
   /** Set a temper's proximity intensity, 0..1. Cheap; call every frame. */
   setProximity(temper: Temper, intensity: number): void {
-    const clamped = intensity < 0 ? 0 : intensity > 1 ? 1 : intensity;
-    this.intensities[temper] = clamped;
+    this.proximity[temper] = clamp01(intensity);
+    this.apply(temper, SMOOTH);
+  }
+
+  /**
+   * The bed: which temper the groups currently on screen are giving off.
+   *
+   * One group and it is that group's; several and it is the one nearest
+   * the middle of the board, until the refiner takes hold of one, at which
+   * point it is that one's. Only ever one temper at a time — a chord of
+   * four tempers is not a feeling, it is noise — and the crossfade between
+   * them is slow enough to be a change of mood rather than a cut.
+   */
+  setAmbient(temper: Temper | null, level = 1): void {
+    const want = clamp01(level);
+    for (const t of Object.keys(this.ambient) as Temper[]) {
+      const next = t === temper ? want : 0;
+      if (this.ambient[t] === next) continue;
+      this.ambient[t] = next;
+      this.apply(t, AMBIENT_SMOOTH);
+    }
+  }
+
+  private apply(temper: Temper, smooth: number): void {
+    const near = this.proximity[temper];
+    // The bed ducks under a live probe: the lens is the thing answering
+    // the question, and it must always be the louder answer.
+    const duck = this.anyProbe() ? AMBIENT_DUCK : 1;
+    const bed = this.ambient[temper] * AMBIENT_GAIN * duck;
+    const shaped = near * near * (3 - 2 * near);
+    const level = Math.max(shaped, bed);
+    this.intensities[temper] = level;
+
     const voice = this.voices.get(temper);
     const ctx = this.ctx;
     if (!voice || !ctx || ctx.state !== "running") return;
 
     const now = ctx.currentTime;
-    // Perceptual curve: quiet until the reticle is genuinely close.
-    const shaped = clamped * clamped * (3 - 2 * clamped);
-    const target = this.muted ? 0 : shaped * voice.peakGain;
-    voice.amp.gain.setTargetAtTime(target, now, SMOOTH);
+    const target = this.muted ? 0 : level * voice.peakGain;
+    voice.amp.gain.setTargetAtTime(target, now, smooth);
     voice.filter.frequency.setTargetAtTime(
-      voice.baseCutoff + (voice.peakCutoff - voice.baseCutoff) * shaped,
+      voice.baseCutoff + (voice.peakCutoff - voice.baseCutoff) * level,
       now,
-      SMOOTH,
+      smooth,
     );
+  }
+
+  private anyProbe(): boolean {
+    for (const t of Object.keys(this.proximity) as Temper[]) {
+      if (this.proximity[t] > 0.02) return true;
+    }
+    return false;
   }
 
   /** Drive the scheduled elements (arpeggio, kick). Call once per frame. */
@@ -357,9 +411,10 @@ export class AudioEngine {
     }
   }
 
-  /** Silence every temper voice (used on phase changes). */
+  /** Drop the probe voices. The bed is not a probe and survives this —
+   *  it answers to what is on the board, not to what a finger is doing. */
   silenceAll(): void {
-    for (const t of Object.keys(this.intensities) as Temper[]) {
+    for (const t of Object.keys(this.proximity) as Temper[]) {
       this.setProximity(t, 0);
     }
   }
@@ -439,6 +494,16 @@ export class AudioEngine {
     this.noise(0.035, 0.05, 3200);
   }
 
+  /**
+   * Packet let go without binning it. The lift click played backwards —
+   * lower, softer, falling. It has to read as "put down", not as the buzz
+   * that means you got it wrong, because nothing went wrong.
+   */
+  release(): void {
+    this.blip("square", 620, 840, 0.045, 0.11);
+    this.noise(0.03, 0.045, 2200);
+  }
+
   /** Correct bin — the Lumon confirmation chime. */
   chime(): void {
     this.blip("sine", 784, 784, 0.16, 0.22);
@@ -494,8 +559,8 @@ export class AudioEngine {
         if (ctx) voice.amp.gain.setTargetAtTime(0, ctx.currentTime, 0.02);
       }
     } else {
-      for (const t of Object.keys(this.intensities) as Temper[]) {
-        this.setProximity(t, this.intensities[t]);
+      for (const t of Object.keys(this.proximity) as Temper[]) {
+        this.apply(t, SMOOTH);
       }
     }
   }
@@ -515,8 +580,14 @@ export class AudioEngine {
     }
     for (const t of Object.keys(this.intensities) as Temper[]) {
       this.intensities[t] = 0;
+      this.proximity[t] = 0;
+      this.ambient[t] = 0;
     }
   }
+}
+
+function clamp01(v: number): number {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
 }
 
 let singleton: AudioEngine | null = null;

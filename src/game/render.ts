@@ -349,59 +349,136 @@ export function renderOverlay(
   const label = e.assist
     ? `UNASSIGNED / ${packet.temper} / ${n}`
     : `UNASSIGNED / ${n} DIGITS`;
-  // Keep the caption inside the frame no matter how few digits there are.
-  const boxW = Math.max(cols * cell + 18, label.length * labelPx * 0.62 + 16);
-  const boxH = rows * cell + 26;
+  // Sized by the engine, which also hit-tests it: what the refiner can
+  // grab has to be exactly what they can see.
+  const { w: boxW, h: boxH } = e.packetBounds(packet);
   const x = packet.x;
   const y = packet.y;
   const birth = packet.birth;
-  const pop = 1 + (1 - birth) * 0.35;
+
+  // The box does not appear around digits that were never seen to move
+  // into it. Each digit flies from the cell it occupied on the grid to its
+  // slot, the frame draws itself closed behind them, and the whole thing
+  // reads as the group being collected rather than swapped out for a card.
+  const fT = clamp01((birth - FRAME_START) / (1 - FRAME_START));
+  const frameIn = easeOutBack(fT);
+  const frameScale = 0.72 + 0.28 * frameIn;
 
   ctx.save();
   ctx.translate(x, y);
-  ctx.scale(pop, pop);
 
-  // Phosphor bloom on lift-off.
-  if (birth < 1) {
+  // A ring closing from the group's own footprint down onto the box: the
+  // outline of the thing being gathered, tightening as it gathers.
+  if (birth < 0.85 && packet.origins.length > 0) {
+    let far = 0;
+    for (const o of packet.origins) far = Math.max(far, Math.hypot(o.x, o.y));
+    const k = smoothstep(clamp01(birth / 0.85));
+    const r = (far + 14) * (1 - k) + Math.max(boxW, boxH) * 0.55 * k;
     ctx.globalCompositeOperation = "lighter";
-    ctx.globalAlpha = (1 - birth) * 0.5;
+    ctx.globalAlpha = (1 - k) * 0.4;
+    ctx.strokeStyle = ink;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalCompositeOperation = "source-over";
+  }
+
+  // ── the frame, scaled about the packet centre ─────────────────────
+  ctx.save();
+  ctx.scale(frameScale, frameScale);
+
+  // Phosphor bloom, brightest at the instant the frame snaps shut.
+  if (fT < 1) {
+    ctx.globalCompositeOperation = "lighter";
+    ctx.globalAlpha = Math.sin(Math.PI * fT) * 0.38;
     ctx.fillStyle = ink;
     ctx.beginPath();
-    ctx.arc(0, 0, boxW * (0.6 + birth), 0, Math.PI * 2);
+    ctx.arc(0, 0, boxW * 0.75, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalCompositeOperation = "source-over";
   }
 
-  ctx.globalAlpha = 0.9;
   ctx.fillStyle = "rgba(1,6,4,0.88)";
   ctx.strokeStyle = ink;
   roundRect(ctx, -boxW / 2, -boxH / 2, boxW, boxH, 5);
+  ctx.globalAlpha = 0.9 * fT;
   ctx.fill();
-  ctx.globalAlpha = 0.3;
+  ctx.globalAlpha = 0.3 * fT;
   ctx.lineWidth = 6;
   ctx.stroke();
-  ctx.globalAlpha = 0.95;
+  ctx.globalAlpha = 0.95 * fT;
   ctx.lineWidth = 1.5;
   ctx.stroke();
 
+  ctx.fillStyle = ink;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `600 ${labelPx}px "Courier New", Courier, monospace`;
+  ctx.globalAlpha = 0.75 * fT;
+  ctx.fillText(label, 0, boxH / 2 - 9);
+  ctx.restore();
+
+  // ── the digits, flying in at full size ────────────────────────────
   ctx.globalAlpha = 1;
   ctx.fillStyle = ink;
   ctx.font = `700 ${Math.round(cell * 0.72)}px "Courier New", Courier, monospace`;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
+  const spread = n > 1 ? STAGGER / (n - 1) : 0;
   for (let i = 0; i < n; i++) {
     const col = i % cols;
     const row = (i / cols) | 0;
     const gx = -((cols - 1) * cell) / 2 + col * cell;
     const gy = -((rows - 1) * cell) / 2 + row * cell - 5;
-    ctx.fillText(String(packet.digits[i]), gx, gy);
+    const glyph = String(packet.digits[i]);
+
+    const from = packet.origins[i];
+    if (!from || birth >= 1) {
+      ctx.globalAlpha = 1;
+      ctx.fillText(glyph, gx, gy);
+      continue;
+    }
+
+    // Digits leave in the order they were collected, a few hundredths of a
+    // second apart, so the group arrives as a stream rather than a jump.
+    const begin = i * spread;
+    const t = smoothstep(clamp01((birth - begin) / (GATHER_END - begin)));
+    ctx.globalAlpha = 1;
+    ctx.fillText(glyph, from.x + (gx - from.x) * t, from.y + (gy - from.y) * t);
+    // A dimming after-image left in the cell it came from, so the eye can
+    // see where each digit was taken from.
+    if (t < 1) {
+      ctx.globalAlpha = (1 - t) * 0.3;
+      ctx.fillText(glyph, from.x, from.y);
+    }
   }
 
-  ctx.font = `600 ${labelPx}px "Courier New", Courier, monospace`;
-  ctx.globalAlpha = 0.75;
-  ctx.fillText(label, 0, boxH / 2 - 9);
   ctx.restore();
   ctx.globalAlpha = 1;
+}
+
+/** Birth progress at which the frame begins drawing itself. */
+const FRAME_START = 0.26;
+/** Birth progress by which the first digit has landed. */
+const GATHER_END = 0.78;
+/** How far apart, in birth progress, consecutive digits set off. */
+const STAGGER = 0.16;
+
+function clamp01(v: number): number {
+  return v < 0 ? 0 : v > 1 ? 1 : v;
+}
+
+function smoothstep(t: number): number {
+  return t * t * (3 - 2 * t);
+}
+
+/** Ease-out with a small overshoot — the frame snaps shut rather than
+ *  easing politely into place. */
+function easeOutBack(t: number): number {
+  const c = 1.9;
+  const p = t - 1;
+  return 1 + p * p * ((c + 1) * p + c);
 }
 
 /**

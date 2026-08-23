@@ -32,7 +32,13 @@ export const MARQUEE_OFFSET_Y = -22;
 export const MIN_CAPTURE = 4;
 /** Double-tap window (ms) and slop (px) for the mode toggle gesture. */
 export const DOUBLE_TAP_MS = 300;
-export const TAP_SLOP = 14;
+/**
+ * How far a finger may travel and still have meant to stay put. Raised
+ * from 14: a thumb resting on a phone while its owner decides drifts
+ * further than that, and a group that is itself drifting invites the
+ * finger to follow it.
+ */
+export const TAP_SLOP = 18;
 export const TAP_MAX_MS = 250;
 
 export const TEMPERS: readonly Temper[] = ["WO", "FC", "DR", "MA"] as const;
