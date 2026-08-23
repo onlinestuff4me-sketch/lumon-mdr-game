@@ -103,6 +103,24 @@ section("reachability");
   });
   eq("bottom board row reachable by probe and marquee", reach.deadRowsBottom, 0);
   eq("every bin reachable while carrying", reach.binsReachable, reach.bins);
+
+  // The control deck must sit above the board, so it never crosses the path
+  // a packet is dragged along.
+  const deck = await page.evaluate(() => {
+    const L = window.__mdr.layout;
+    const el = [...document.querySelectorAll("*")].find((n) =>
+      n.textContent?.trim().startsWith("MODE:"));
+    const st = document.querySelector('[role="application"]').getBoundingClientRect();
+    const r = el?.getBoundingClientRect();
+    return r
+      ? { deckBottom: Math.round(r.bottom - st.top), gridTop: Math.round(L.grid.y),
+          gridBottom: Math.round(L.grid.y + L.grid.h), binsTop: Math.round(L.h - L.binsH) }
+      : null;
+  });
+  check("the control deck is above the board", !!deck && deck.deckBottom <= deck.gridTop + 2,
+    JSON.stringify(deck));
+  check("and nothing sits between the board and the bins",
+    !!deck && deck.binsTop - deck.gridBottom < 4, JSON.stringify(deck));
 }
 
 // ═══ 3. full playthroughs ════════════════════════════════════════════
@@ -330,7 +348,10 @@ section("reticle and hint");
       carry: Math.round(e.reticleFor(150, y, "carry").y - y),
     };
   });
-  eq("offsets by gesture", off, { probe: -68, marquee: -22, carry: -68 });
+  // Only the lens takes the big lift. A marquee corner and a carried packet
+  // both sit just clear of the contact patch, so nothing jumps when a press
+  // becomes a drag.
+  eq("offsets by gesture", off, { probe: -68, marquee: -22, carry: -22 });
 
   await load(page, 0);
   const g = await findGroup(page);
@@ -375,6 +396,67 @@ section("reticle and hint");
   check("pressing a group and dragging carries it straight to the bin",
     s.progress === 100, `${s.progress}%  ${s.message}`);
   check("gesture released", !s.gestureOpen);
+}
+{
+  // A tap anywhere over the group counts, not just within a pad of a glyph.
+  // A five-digit group spread over two rows has gaps wider than the pad in
+  // the middle of it, and taps landing there were being dropped.
+  await load(page, 0);
+  const g = await findGroup(page);
+  const gaps = await page.evaluate(() => {
+    const e = window.__mdr, b = e.board, c = b.clusters[0];
+    const pts = c.members.map((m) => ({ x: b.nodes[m].hx + b.nodes[m].dx, y: b.nodes[m].hy + b.nodes[m].dy }));
+    const x0 = Math.min(...pts.map((p) => p.x)), x1 = Math.max(...pts.map((p) => p.x));
+    const y0 = Math.min(...pts.map((p) => p.y)), y1 = Math.max(...pts.map((p) => p.y));
+    // Sample the footprint and keep the points furthest from every glyph —
+    // the ones a pad-only hit test would miss.
+    let worst = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, d: 0 };
+    for (let i = 0; i <= 10; i++) {
+      for (let j = 0; j <= 10; j++) {
+        const x = x0 + ((x1 - x0) * i) / 10;
+        const y = y0 + ((y1 - y0) * j) / 10;
+        const d = Math.min(...pts.map((p) => Math.hypot(p.x - x, p.y - y)));
+        if (d > worst.d) worst = { x, y, d };
+      }
+    }
+    return { worst, corners: [{ x: x0, y: y0 }, { x: x1, y: y1 }] };
+  });
+  check("the group has a gap wider than the 22px pad", gaps.worst.d > 22,
+    `${gaps.worst.d.toFixed(0)}px from the nearest digit`);
+  await tap(page, origin, await touchFor(page, gaps.worst, "marquee"));
+  const inGap = await state(page);
+  check("a tap in the middle of the group still lifts it", inGap.carrying,
+    String(inGap.message));
+  if (inGap.carrying) await carryToBin(page, origin, g);
+}
+{
+  // The frame a press turns into a carry is where the box used to leap: the
+  // gesture changed kind, and the two kinds carried different offsets.
+  await load(page, 0);
+  const g = await findGroup(page);
+  const jump = await page.evaluate(async ({ x, y }) => {
+    const e = window.__mdr;
+    e.setMode("select");
+    e.pointerDown(1, x, y);
+    let prev = null;
+    let worst = 0;
+    for (let i = 0; i < 14; i++) {
+      e.pointerMove(1, x, y + i * 6);
+      await new Promise((r) => requestAnimationFrame(r));
+      if (e.packet) {
+        // Compare against the expected step, so only movement the finger
+        // did not ask for counts.
+        if (prev) worst = Math.max(worst, Math.abs(e.packet.y - prev - 6));
+        prev = e.packet.y;
+      }
+    }
+    const lifted = !!e.packet;
+    e.pointerCancel(1);
+    return { worst: Math.round(worst), lifted };
+  }, await touchFor(page, g.one, "marquee"));
+  check("pressing a group starts a carry", jump.lifted);
+  check("and the box never leaps away from the finger", jump.worst <= 6,
+    `${jump.worst}px unexplained movement`);
 }
 {
   // Starting on empty board still draws a box, so boxing stays available.

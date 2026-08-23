@@ -61,15 +61,8 @@ export function PhaseOverlay({
             Welcome, refiner. Probe the file for numbers that feel wrong, and
             bin them by the temper they evoke.
           </p>
-          <p className="mt-3 text-[10px] leading-relaxed text-phos-400">
-            You begin on <span className="text-phos-200">ORIENTATION</span>:
-            one group, already moving, on a screen of digits that only look
-            like it. Box it and bin it. <span className="text-phos-200">
-            CALIBRATION</span> then teaches you to find the ones that are
-            hiding, and names each temper as you feel it.
-          </p>
-          <p className="mt-3 text-[9px] leading-relaxed tracking-[0.1em] text-phos-600">
-            HEADPHONES AND HAPTICS RECOMMENDED.
+          <p className="mt-4 text-[9px] leading-relaxed tracking-[0.1em] text-phos-600">
+            HEADPHONES RECOMMENDED.
             <br />
             THE WORK IS MYSTERIOUS AND IMPORTANT.
           </p>

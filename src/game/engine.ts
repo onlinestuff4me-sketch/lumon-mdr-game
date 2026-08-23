@@ -159,6 +159,9 @@ const ARM_SELECT_MIN_AGITATION = 0.22;
 /** How close a touch must land to a glyph to count as being *on* its group,
  *  for both tap-to-lift and press-and-drag. */
 const TAP_PAD = 22;
+/** How far outside a group's live bounding box still counts as inside it.
+ *  Roughly half a cell, so the whole visible footprint is tappable. */
+const TAP_INSET = 12;
 /** Residual agitation a latched cluster keeps once the finger lifts. */
 const LATCH_FLOOR = 0.5;
 /** Live proximity required at release for SELECT to auto-arm. */
@@ -561,7 +564,7 @@ export class GameEngine {
     } else {
       this.say(`FILE ${level.name} #${level.fileCode} LOADED`, "info", 2.6);
     }
-    getAudio().boot();
+    getAudio().fileLoaded();
     this.emit(true);
   }
 
@@ -806,7 +809,12 @@ export class GameEngine {
     // corner is a hairline with nothing to hide behind it, and lifting it
     // that far put the box well above the finger drawing it — so selection
     // gets its own, much smaller offset.
-    const base = kind === "marquee" ? MARQUEE_OFFSET_Y : RETICLE_OFFSET_Y;
+    // Only the lens needs the big lift, because the lens is the thing being
+    // looked at. A marquee corner and a carried packet both want to sit
+    // just clear of the contact patch: lifting the packet a lens-height put
+    // it well above the thumb dragging it, which reads as the box escaping
+    // the hand.
+    const base = kind === "probe" ? RETICLE_OFFSET_Y : MARQUEE_OFFSET_Y;
     const taperEnd = l.grid.y + l.grid.h;
     const band = Math.max(l.deckH, Math.abs(base) + 16);
     const taperStart = taperEnd - band;
@@ -951,10 +959,15 @@ export class GameEngine {
       const c = this.board.clusters[g.startCluster];
       if (c && !c.refined && !c.decoy) {
         this.marquee.active = false;
-        this.liftCluster(c, r.x, r.y);
+        const held = this.liftCluster(c, r.x, r.y);
         g.kind = "carry";
-        g.grabX = 0;
-        g.grabY = 0;
+        // Derived from the reticle the *next* move will use, not assumed to
+        // be zero: the gesture changes kind mid-drag, and if the two kinds
+        // ever carry different offsets again the packet would jump by the
+        // difference on the very next frame.
+        const carried = this.reticleFor(x, y, "carry");
+        g.grabX = held.x - carried.x;
+        g.grabY = held.y - carried.y;
       }
     }
 
@@ -1232,19 +1245,51 @@ export class GameEngine {
   private nearestCluster(
     at: { x: number; y: number },
   ): { cluster: Cluster; dist: number } | null {
+    // Distance to the nearest glyph of each group, and separately whether
+    // the point falls inside the group's live footprint. A five-digit group
+    // spread over two rows has gaps wider than the tap pad in the middle of
+    // it, so a tap that is plainly *on* the group can be more than a pad
+    // away from every single digit — which is what made tapping the
+    // floating numbers miss.
+    const inside = new Map<number, boolean>();
+    const box = new Map<number, { x0: number; y0: number; x1: number; y1: number }>();
     let best: Cluster | null = null;
     let bestD = Infinity;
     for (const n of this.board.nodes) {
       if (n.cluster < 0 || n.lifted || n.retired) continue;
       const c = this.board.clusters[n.cluster];
       if (c.refined) continue;
-      const d = Math.hypot(at.x - (n.hx + n.dx), at.y - (n.hy + n.dy));
+      const px = n.hx + n.dx;
+      const py = n.hy + n.dy;
+      const d = Math.hypot(at.x - px, at.y - py);
       if (d < bestD) {
         bestD = d;
         best = c;
       }
+      const b = box.get(c.id);
+      if (!b) box.set(c.id, { x0: px, y0: py, x1: px, y1: py });
+      else {
+        b.x0 = Math.min(b.x0, px);
+        b.y0 = Math.min(b.y0, py);
+        b.x1 = Math.max(b.x1, px);
+        b.y1 = Math.max(b.y1, py);
+      }
     }
-    return best ? { cluster: best, dist: bestD } : null;
+    if (!best) return null;
+    for (const [id, b] of box) {
+      const m = TAP_INSET;
+      inside.set(
+        id,
+        at.x >= b.x0 - m && at.x <= b.x1 + m && at.y >= b.y0 - m && at.y <= b.y1 + m,
+      );
+    }
+    // A point inside a group's footprint is on that group, however far the
+    // nearest digit happens to be.
+    if (inside.get(best.id)) return { cluster: best, dist: 0 };
+    for (const [id, hit] of inside) {
+      if (hit) return { cluster: this.board.clusters[id], dist: 0 };
+    }
+    return { cluster: best, dist: bestD };
   }
 
   private tapLift(at: { x: number; y: number }, wasAgitated: number): boolean {
@@ -1276,7 +1321,7 @@ export class GameEngine {
 
   /** Lifts a whole cluster into a carried packet. The one path a packet is
    *  ever created by, whether a box or a tap asked for it. */
-  private liftCluster(cluster: Cluster, x: number, y: number): void {
+  private liftCluster(cluster: Cluster, x: number, y: number): Packet {
     const digits: number[] = [];
     for (const i of cluster.members) {
       const n = this.board.nodes[i];
@@ -1285,7 +1330,7 @@ export class GameEngine {
       digits.push(n.digit);
     }
 
-    this.packet = {
+    const packet: Packet = {
       temper: cluster.temper,
       clusterId: cluster.id,
       digits,
@@ -1293,6 +1338,7 @@ export class GameEngine {
       y,
       birth: 0,
     };
+    this.packet = packet;
     this.packetHeldAt = this.elapsed;
     this.latchedId = -1;
     this.phase = "carry";
@@ -1305,6 +1351,7 @@ export class GameEngine {
     haptics.lift();
     this.say("PACKET LIFTED — ASSIGN A TEMPER", "info", 2.2);
     this.snapshotDirty = true;
+    return packet;
   }
 
   private resolveDrop(at: { x: number; y: number }): void {

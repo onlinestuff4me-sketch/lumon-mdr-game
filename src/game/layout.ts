@@ -62,9 +62,14 @@ export function computeLayout(
   const deckH = Math.round(h * DECK_FRAC);
   const binsH = Math.round(h * (rows > 1 ? BINS_FRAC : BINS_FRAC_ONE_ROW));
 
+  // The control deck sits at the TOP, under the coach line, not between the
+  // board and the bins. Down there it cut straight across the path every
+  // packet has to travel — the refiner drags a box down the screen and the
+  // mode switches are in the way of it. Nothing on the deck is pressed
+  // during play, so it belongs out of the working area entirely.
   const grid: Rect = {
     x: 0,
-    y: hudH + tickerH,
+    y: hudH + tickerH + deckH,
     w,
     h: Math.max(40, h - hudH - tickerH - deckH - binsH),
   };
