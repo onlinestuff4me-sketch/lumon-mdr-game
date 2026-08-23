@@ -258,6 +258,19 @@ the refinement half drops by 60%. The margins above are therefore a floor,
 not a current measurement, and the row that mattered — hesitant, on Cold
 Harbor, losing at 80% — is the one the ramp exists to fix.
 
+## Tests
+
+`npm test` runs board-and-level invariants, builds, and then drives the real
+game through real pointer events against that build. CI runs it on every
+pull request.
+
+The suite has one rule, learned the hard way: **never assert a state
+transition without completing the interaction that follows it.** A leaked
+gesture once made the board completely unresponsive after a tap-to-select,
+and the test written for that feature asserted the packet lifted and stopped
+— it passed while the game was unplayable. Every gesture test now ends by
+proving the next gesture still works. See [docs/TESTING.md](docs/TESTING.md).
+
 ## Notes on the browser
 
 - `touch-action: none` across the input surface, with pointer capture, so a

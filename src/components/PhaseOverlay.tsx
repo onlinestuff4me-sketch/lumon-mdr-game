@@ -38,6 +38,9 @@ export function PhaseOverlay({
   if (hud.phase === "probe" || hud.phase === "select" || hud.phase === "carry") {
     return null;
   }
+  // Nor does the scrim: an auto-advancing screen must stay looking like the
+  // board it just cleared, not like a dimmed interstitial.
+  if (hud.phase === "complete" && hud.ceremony === "none") return null;
 
   const level = LEVELS[hud.levelIndex];
 
@@ -89,7 +92,11 @@ export function PhaseOverlay({
         </>
       ) : null}
 
-      {hud.phase === "complete" ? (
+      {/* A screen that advances itself shows nothing: the engine holds
+          phase "complete" for the auto-advance window, and rendering the
+          banner there would put a 100% panel and a NEXT FILE button over
+          every one of the twenty orientation screens for 900ms apiece. */}
+      {hud.phase === "complete" && hud.ceremony !== "none" ? (
         <>
           <p className="text-[9px] tracking-[0.3em] text-phos-600">
             FILE {hud.levelIndex + 1} OF {LEVELS.length} · {level.name}

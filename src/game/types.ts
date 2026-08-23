@@ -72,6 +72,11 @@ export interface Cluster {
   /** A site that stirs when probed and belongs to nothing. No bin takes it,
    *  it fills no quota, and it is silent — the ear stays honest. */
   decoy: boolean;
+  /** A spare cluster seeded solely so it can change temper in front of the
+   *  player. Kept outside the quota: rewriting a quota cluster's temper
+   *  takes the last cluster of the source temper off the board and leaves
+   *  its bin permanently unfillable. */
+  morph: boolean;
   /** The unnamed fifth temper: it borrows the motion of whichever temper
    *  was last refined, so it always looks like something known and is
    *  always wrong. Nothing in the game explains it. */

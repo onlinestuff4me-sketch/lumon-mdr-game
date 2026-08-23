@@ -228,9 +228,14 @@ export function GameStage() {
     engine.startLevel(0);
   }, [engine]);
 
-  // Dev-only handle so the play-through harness can assert on real state.
+  // Handle for the test harness to assert on real state.
+  //
+  // Present in dev, and in a build made with VITE_MDR_TEST=1 — which is a
+  // production build in every other respect, so the end-to-end suite runs
+  // against minified, bundled code rather than the dev server. It is absent
+  // from the artifact that actually ships.
   useEffect(() => {
-    if (!import.meta.env.DEV) return;
+    if (!import.meta.env.DEV && !import.meta.env.VITE_MDR_TEST) return;
     (window as unknown as { __mdr?: unknown }).__mdr = engine;
     return () => {
       delete (window as unknown as { __mdr?: unknown }).__mdr;

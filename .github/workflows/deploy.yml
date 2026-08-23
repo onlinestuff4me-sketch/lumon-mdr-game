@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+  # Verification on every pull request. PR #2 removed the branch push
+  # trigger so a stray push cannot overwrite what main publishes; this puts
+  # the checks back without putting the deploy back. The `deploy` job is
+  # gated on the event, so a PR builds and tests but never publishes.
+  pull_request:
   workflow_dispatch:
 
 # Allow one concurrent deployment; a newer push supersedes an in-flight one
@@ -39,6 +44,16 @@ jobs:
       - name: Build
         run: npm run build
 
+      # The suite drives the real game through real pointer events against a
+      # production build. It is the gate that would have caught the leaked
+      # gesture that made the board unplayable, and the skewed marquee that
+      # shipped alongside it.
+      - name: Install Chromium for the end-to-end suite
+        run: npx playwright install --with-deps chromium
+
+      - name: Test
+        run: npm test
+
       # Pages must be switched on once by hand (Settings -> Pages -> Source:
       # GitHub Actions). The Actions token is not permitted to create a Pages
       # site — the first run here failed with "Resource not accessible by
@@ -54,6 +69,7 @@ jobs:
 
   deploy:
     needs: build
+    if: github.event_name != 'pull_request' 
     runs-on: ubuntu-latest
     environment:
       name: github-pages
