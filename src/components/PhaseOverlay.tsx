@@ -57,15 +57,18 @@ export function PhaseOverlay({
             REFINEMENT
           </h1>
           <div className="mt-4 h-px w-24 bg-phos-600" />
-          <p className="mt-4 text-[10px] leading-relaxed text-phos-400">
-            Welcome, refiner. Probe the file for numbers that feel wrong, and
-            bin them by the temper they evoke.
-          </p>
-          <p className="mt-4 text-[9px] leading-relaxed tracking-[0.1em] text-phos-600">
-            HEADPHONES RECOMMENDED.
-            <br />
-            THE WORK IS MYSTERIOUS AND IMPORTANT.
-          </p>
+          {/* One thought per line. Run together as prose these read as a
+              paragraph to be skimmed; stacked, each line is an instruction
+              the refiner can hold onto. */}
+          <div className="mt-4 flex flex-col gap-1.5 text-[10px] leading-snug text-phos-400">
+            <p>Welcome refiner</p>
+            <p>Probe files for numbers that feel wrong</p>
+            <p>Bin them by the temper they evoke</p>
+          </div>
+          <div className="mt-4 flex flex-col gap-1.5 text-[9px] leading-snug tracking-[0.1em] text-phos-600">
+            <p>THE WORK IS MYSTERIOUS AND IMPORTANT</p>
+            <p>HEADPHONES RECOMMENDED</p>
+          </div>
           <button type="button" className={BTN} onClick={onStart}>
             <Play size={12} strokeWidth={2.6} />
             BEGIN ORIENTATION
@@ -180,8 +183,8 @@ export function PhaseOverlay({
         onClick={onHandbook}
         className="mt-6 inline-flex items-center gap-1.5 text-[9px] tracking-[0.2em] text-phos-600 underline-offset-4 hover:text-phos-400"
       >
-        <CircleHelp size={10} strokeWidth={2.2} aria-hidden />
         READ THE HANDBOOK
+        <CircleHelp size={10} strokeWidth={2.2} aria-hidden />
       </button>
     </div>
   );

@@ -52,6 +52,22 @@ export interface BinView {
   target: boolean;
 }
 
+/**
+ * How long a coach line stays true.
+ *  - sticky:       until something else is said.
+ *  - attempt:      it reports how the last attempt went; the next touch
+ *                  supersedes it, so it clears on pointer-down.
+ *  - untilPacket:  an instruction to pick something up.
+ *  - untilDropped: an instruction about the thing being carried.
+ *  - untilAction:  an orientation nudge, retired by any real progress.
+ */
+type MessageScope =
+  | "sticky"
+  | "attempt"
+  | "untilPacket"
+  | "untilDropped"
+  | "untilAction";
+
 export interface HudSnapshot {
   phase: GamePhase;
   paused: boolean;
@@ -141,6 +157,24 @@ const FALL = 4.2;
 const RADIUS_SQ = PROBE_RADIUS * PROBE_RADIUS;
 /** Seconds a refined packet takes to dissolve into its bin. */
 const ABSORB_SECONDS = 0.45;
+/** How long the digits take to fly from the grid into the box. Long
+ *  enough to be watched, short enough that a refiner who already knows
+ *  where the bin is never has to wait for it. */
+const GATHER_SECONDS = 0.34;
+/**
+ * How far outside the packet frame still counts as touching it. A thumb
+ * aiming at the box lands near its edge as often as inside it, and the
+ * penalty for guessing wrong is dropping the group you just picked up.
+ */
+const PACKET_TOUCH_PAD = 16;
+/**
+ * A gesture open longer than this is not a finger. Nothing clears a
+ * gesture but its own pointerup, and iOS drops those on interruptions —
+ * after which `pointerDown`'s single-pointer guard refuses every touch and
+ * the board is dead until the refiner happens to pause. This lets the next
+ * touch take over instead.
+ */
+const STALE_GESTURE_MS = 4000;
 /**
  * Proximity at which a cluster counts as positively identified.
  *
@@ -234,7 +268,9 @@ export class GameEngine {
   /** Cluster ids currently pulsing from a rejected drop. */
   glitchUntil = 0;
   message: { text: string; kind: "praise" | "error" | "info" } | null = null;
-  private messageUntil = 0;
+  private messageScope: MessageScope = "sticky";
+  /** Per-cluster agitation as it stood the instant the finger landed. */
+  private agitationAtDown: number[] = [];
 
   private gesture: Gesture | null = null;
   private lastTapAt = 0;
@@ -560,9 +596,9 @@ export class GameEngine {
     if (level.selfAgitate) {
       // The generic "FILE LOADED" line teaches nothing to someone who does
       // not yet know the matrix hides anything.
-      this.say("ONE GROUP IS ALREADY MOVING. BOX IT.", "info", 7);
+      this.say("ONE GROUP IS ALREADY MOVING. BOX IT.", "info", "untilAction");
     } else {
-      this.say(`FILE ${level.name} #${level.fileCode} LOADED`, "info", 2.6);
+      this.say(`FILE ${level.name} #${level.fileCode} LOADED`, "info");
     }
     getAudio().fileLoaded();
     this.emit(true);
@@ -634,7 +670,7 @@ export class GameEngine {
     // Applies from the next file; rescaling a clock mid-shift would either
     // gift or steal time depending on which way it moved.
     getAudio().click();
-    this.say(`SHIFT LENGTH: ${PACE[pace].label} — FROM THE NEXT FILE`, "info", 2.4);
+    this.say(`SHIFT LENGTH: ${PACE[pace].label} — FROM THE NEXT FILE`, "info");
     this.persist();
     this.snapshotDirty = true;
     this.emit(true);
@@ -701,13 +737,44 @@ export class GameEngine {
     getAudio().setMuted(this.muted);
   }
 
+  /**
+   * The coach line does not tick away. A message stays on screen until
+   * something replaces it, because a line that vanishes on a timer is a
+   * line the refiner has to have been looking at. What it may not do is
+   * outlive its own subject: "DROP INTO A BIN" is a lie once nothing is
+   * held. Each message therefore carries the state it describes, and the
+   * band goes blank — not stale — when that state ends.
+   */
   private say(
     text: string,
     kind: "praise" | "error" | "info",
-    seconds: number,
+    scope: MessageScope = "sticky",
   ): void {
     this.message = { text, kind };
-    this.messageUntil = this.elapsed + seconds;
+    this.messageScope = scope;
+    this.snapshotDirty = true;
+  }
+
+  /** True once the message on screen is describing something that is over. */
+  private messageIsStale(): boolean {
+    switch (this.messageScope) {
+      case "untilPacket":
+        return this.packet !== null;
+      case "untilDropped":
+        return this.packet === null;
+      case "untilAction":
+        return (
+          this.packet !== null || this.board.clusters.some((c) => c.refined)
+        );
+      default:
+        return false;
+    }
+  }
+
+  private clearMessage(): void {
+    if (!this.message) return;
+    this.message = null;
+    this.messageScope = "sticky";
     this.snapshotDirty = true;
   }
 
@@ -861,11 +928,41 @@ export class GameEngine {
     this.packet = null;
   }
 
+  /**
+   * Whether a tap on a group lifts it.
+   *
+   * On by default. It was an orientation-only affordance, which meant the
+   * gesture the first twenty-nine screens spend their whole length
+   * teaching stopped working the moment training ended, silently. The
+   * agitation gate is what protects the probe mechanic — a tap on a group
+   * nobody has found yet is refused and says so — not the absence of the
+   * gesture.
+   */
+  private get tapToSelect(): boolean {
+    return LEVELS[this.levelIndex].tapToSelect ?? true;
+  }
+
   private isLive(): boolean {
     if (this.paused) return false;
     return (
       this.phase === "probe" || this.phase === "select" || this.phase === "carry"
     );
+  }
+
+  /**
+   * Whether a touch should be accepted at all.
+   *
+   * An orientation screen that finished holds phase "complete" for the
+   * 900ms auto-advance, and deliberately draws no scrim — so for nearly a
+   * second the board looks completely live and every pointer event was
+   * thrown away. A refiner tapping briskly through orientation lost one
+   * tap per screen, which is exactly the "sometimes I have to tap twice"
+   * report. There is nothing on that board left to break, so let the touch
+   * through: it can only start a gesture that the level change releases.
+   */
+  private acceptsInput(): boolean {
+    if (this.paused) return false;
+    return this.isLive() || this.advanceAt >= 0;
   }
 
   pointerDown(id: number, x: number, y: number): void {
@@ -875,22 +972,74 @@ export class GameEngine {
     // fire visibilitychange on iOS, and a frozen loop with no way back is
     // indistinguishable from a crash.
     if (!this.running && !this.disposed) this.start();
-    if (!this.isLive()) return;
+    if (!this.acceptsInput()) return;
     // Strictly single-pointer: a second finger is ignored outright rather
-    // than being allowed to hijack the in-flight gesture.
-    if (this.gesture) return;
+    // than being allowed to hijack the in-flight gesture. A gesture that
+    // has been open impossibly long is not a finger, though — it is one
+    // that leaked, and refusing every touch behind it bricks the board.
+    if (this.gesture) {
+      // ...unless the one in flight is doing nothing. A thumb resting on
+      // the bezel of a phone held one-handed opens a gesture and never
+      // uses it, and every tap behind it was being discarded in silence.
+      //
+      // Doing nothing means all three: it has not moved, so it is not a
+      // drag; it did not land on a group, so it is not a press about to
+      // become one; and nothing is being carried, so it is not a hand on
+      // the box. Anything else is a real gesture and is never interrupted
+      // — only the four-second staleness rule can take one of those, and
+      // by then no finger is still down.
+      const g = this.gesture;
+      const stale = performance.now() - g.startT >= STALE_GESTURE_MS;
+      const idle = !g.moved && g.startCluster < 0 && !this.packet;
+      if (!stale && !idle) return;
+      this.releaseGesture();
+    }
 
-    const kindNow: Gesture["kind"] = this.packet
+    // A line that reports how the last attempt went stops being true the
+    // moment a new attempt begins. Nothing takes its place yet — the band
+    // simply goes quiet until this touch produces its own outcome.
+    if (this.messageScope === "attempt") this.clearMessage();
+
+    // What every group was doing before this finger landed. A tap is its
+    // own probe — 60ms of contact is enough to agitate a cluster past the
+    // lift threshold — so judging a tap by the agitation it caused would
+    // let blind tapping lift a group the refiner never found. Recorded per
+    // cluster rather than for one guessed cluster, because the group the
+    // touch turns out to be on is not always the one nearest at the start.
+    this.agitationAtDown.length = 0;
+    for (const c of this.board.clusters) this.agitationAtDown[c.id] = c.agitation;
+
+    let kind: Gesture["kind"] = this.packet
       ? "carry"
       : this.mode === "select"
         ? "marquee"
         : "probe";
-    const r = this.reticleFor(x, y, kindNow);
-    const start = this.nearestCluster(r);
+
+    // ── a held packet decides what this touch is ──────────────────────
+    let recentre = false;
+    if (this.packet) {
+      const b = this.packetBounds(this.packet);
+      const m = PACKET_TOUCH_PAD;
+      const onBox =
+        x >= b.x - m && x <= b.x + b.w + m && y >= b.y - m && y <= b.y + b.h + m;
+      if (onBox) {
+        // Touching the box does not put it down. It takes hold of it
+        // again, squarely, and waits to be dragged.
+        recentre = true;
+      } else if (!this.binAt(x, y)) {
+        // Touching anywhere else on the board lets the numbers go. They
+        // fly back to the cells they came from and can be taken again.
+        // A bin is the exception: dropping into one is the whole point.
+        this.releasePacket();
+        kind = this.mode === "select" ? "marquee" : "probe";
+      }
+    }
+
+    const r = this.reticleFor(x, y, kind);
+    const start = this.tapTarget(x, y, r);
     this.lastTouchAt = this.elapsed;
     this.lensHoldUntil = -1;
     this.reticle.scale = 1;
-    const kind = kindNow;
 
     this.gesture = {
       id,
@@ -902,14 +1051,9 @@ export class GameEngine {
       y,
       moved: false,
       latchedDuring: -1,
-      // What the nearest group was already doing when the finger landed. A
-      // tap is its own probe — 60ms of contact is enough to agitate a
-      // cluster past the lift threshold — so judging a tap by the agitation
-      // it caused would let blind tapping lift a group the player never
-      // found. This is the board before they touched it.
       startAgitation: start?.cluster.agitation ?? 0,
       startCluster: start && start.dist <= TAP_PAD ? start.cluster.id : -1,
-      ...this.grabOffset(r),
+      ...(recentre ? { grabX: 0, grabY: 0 } : this.grabOffset(r)),
     };
 
     this.reticle.x = r.x;
@@ -924,8 +1068,13 @@ export class GameEngine {
       this.marquee.x1 = b.x;
       this.marquee.y1 = b.y;
     } else if (kind === "carry" && this.packet) {
-      this.packet.x = r.x;
-      this.packet.y = r.y;
+      // Only when the box was actually grabbed, or when the touch is over a
+      // bin and is therefore a drop. Snapping it unconditionally moved the
+      // box before the finger did — the leap this offset exists to prevent.
+      if (recentre || this.binAt(x, y)) {
+        this.packet.x = r.x;
+        this.packet.y = r.y;
+      }
     }
     this.snapshotDirty = true;
   }
@@ -949,12 +1098,12 @@ export class GameEngine {
     // is the same rule every selection surface uses and leaves boxing
     // available for the groups a single grab cannot take.
     if (
-      g.kind === "marquee" &&
+      g.kind !== "carry" &&
       g.moved &&
       !this.packet &&
       g.startCluster >= 0 &&
       g.startAgitation >= ARM_SELECT_MIN_AGITATION &&
-      LEVELS[this.levelIndex].tapToSelect
+      this.tapToSelect
     ) {
       const c = this.board.clusters[g.startCluster];
       if (c && !c.refined && !c.decoy) {
@@ -994,7 +1143,15 @@ export class GameEngine {
     const g = this.gesture;
     if (!g || g.id !== id) return;
     const dt = performance.now() - g.startT;
-    const isTap = !g.moved && dt < TAP_MAX_MS;
+    // A tap is a finger that came down and went up in the same place. Not
+    // a *fast* finger: a considered press — thumb down, "is this the
+    // group?", lift — routinely runs past 250ms, and a still hand on a
+    // phone drifts 15px and comes back. Both used to resolve to nothing at
+    // all. Duration and the sticky moved flag still gate the double-tap
+    // toggle, which genuinely is a quick gesture.
+    const net = Math.hypot(x - g.startX, y - g.startY);
+    const isTap = net <= TAP_SLOP;
+    const isQuickTap = isTap && !g.moved && dt < TAP_MAX_MS;
     // Captured before the dispatch below, because resolveDrop can empty the
     // hand — after which the tap-lift branch would see no packet and try to
     // lift whatever sits under the drop point.
@@ -1023,11 +1180,31 @@ export class GameEngine {
     // dragging the packet you just lifted — was discarded as a second
     // finger and the board went dead.
     let tapHandled = false;
-    if (isTap && !hadPacket && LEVELS[this.levelIndex].tapToSelect) {
-      tapHandled = this.tapLift(this.reticleFor(x, y, g.kind), g.startAgitation);
+    const aim = isTap ? this.tapTarget(x, y, this.reticleFor(x, y, g.kind)) : null;
+    if (isTap && !hadPacket && this.tapToSelect) {
+      tapHandled = this.tapLift(aim);
+      // The group is moving, and the finger is not. Woe droops, frolic
+      // skips, malice lunges — and a group can walk out of its own tap pad
+      // while a thumb rests on it deciding. Measured: a tap 10px above a
+      // group fails 2.8% of the time at 60ms and 11.7% at 1200ms, silently,
+      // because by the time the finger lifts the digits are elsewhere.
+      //
+      // The gesture already recorded what it landed on. What you touched is
+      // what you meant, whatever it did in the meantime.
+      if (!tapHandled) tapHandled = this.tapLiftStart(g);
     }
 
-    if (isTap && !tapHandled) this.registerTap(g.startX, g.startY);
+    // The mode toggle only ever listens to taps on open board. Two taps
+    // that missed a group used to flip an orientation screen — which has
+    // no probe at all — into PROBE mode, where the offset jumps another
+    // 46px and the press-drag conversion stops working. Two near misses
+    // and the file was unplayable. The near-miss guard is wider than the
+    // tap pad because a tap that missed by 26px was still aimed at the
+    // group, not at the board.
+    const onGroup = aim !== null && aim.dist <= TAP_PAD + TAP_INSET;
+    if (isQuickTap && !tapHandled && !onGroup) {
+      this.registerTap(g.startX, g.startY);
+    }
 
     this.gesture = null;
     this.lastTouchAt = this.elapsed;
@@ -1047,9 +1224,11 @@ export class GameEngine {
     this.snapshotDirty = true;
   }
 
+  /** `id` of -1 cancels whatever is in flight, whatever its pointer id —
+   *  for the ways a gesture ends that carry no pointer with them. */
   pointerCancel(id: number): void {
     const g = this.gesture;
-    if (!g || g.id !== id) return;
+    if (!g || (id !== -1 && g.id !== id)) return;
     // A cancelled gesture is still a finger that was on the board. Without
     // this the pulse's tap cooldown stays un-rearmed and a reveal can fire
     // straight into the touch that was just interrupted.
@@ -1089,7 +1268,7 @@ export class GameEngine {
     this.mode = "select";
     getAudio().click();
     haptics.tap();
-    this.say("TEMPER DETECTED — DRAW A SELECTION", "info", 1.8);
+    this.say("TEMPER DETECTED — DRAW A SELECTION", "info", "untilPacket");
     this.snapshotDirty = true;
   }
 
@@ -1102,6 +1281,13 @@ export class GameEngine {
   }
 
   private registerTap(x: number, y: number): void {
+    // On a file whose groups move by themselves there is nothing for the
+    // lens to find, so PROBE is a mode that does nothing — and switching
+    // into it also moves the aim another 46px and stops press-and-drag
+    // working. Two taps that missed a group by a hair were enough to put
+    // an orientation screen there, silently, and it read as the board
+    // having died. A shortcut to a mode with no purpose is not a shortcut.
+    if (LEVELS[this.levelIndex].selfAgitate === true) return;
     const now = performance.now();
     const near = Math.hypot(x - this.lastTapX, y - this.lastTapY) < TAP_SLOP * 3;
     if (now - this.lastTapAt < DOUBLE_TAP_MS && near) {
@@ -1136,7 +1322,15 @@ export class GameEngine {
   private resolveMarquee(): void {
     const box = this.marqueeRect();
     if (box.w < 8 || box.h < 8) {
-      this.say("SELECTION TOO SMALL", "error", 1.4);
+      // A flat swipe straight across a group is 60px by 3px, and refusing
+      // it as "too small" is pedantry: the refiner drew a line through the
+      // digits they meant. Take it as a tap on the middle of that line.
+      const cx = box.x + box.w / 2;
+      const cy = box.y + box.h / 2;
+      if (this.tapToSelect && this.tapLift(this.nearestCluster({ x: cx, y: cy }))) {
+        return;
+      }
+      this.say("SELECTION TOO SMALL", "error", "attempt");
       getAudio().click();
       return;
     }
@@ -1173,14 +1367,14 @@ export class GameEngine {
     }
 
     if (bestId < 0) {
-      this.say("NO DATA IN SELECTION", "error", 1.6);
+      this.say("NO DATA IN SELECTION", "error", "attempt");
       getAudio().buzz();
       haptics.reject();
       return;
     }
     const minCapture = LEVELS[this.levelIndex].minCapture ?? MIN_CAPTURE;
     if (bestCount < minCapture) {
-      this.say(`INSUFFICIENT CAPTURE — ${minCapture} MINIMUM`, "error", 1.8);
+      this.say(`INSUFFICIENT CAPTURE — ${minCapture} MINIMUM`, "error", "attempt");
       getAudio().buzz();
       haptics.reject();
       return;
@@ -1192,14 +1386,14 @@ export class GameEngine {
     // advice that cannot work, on a site they did probe. It gets the honest
     // answer instead, and gets it before the guard can lie.
     if (cluster.decoy) {
-      this.say("NO TEMPER DETECTED", "error", 1.8);
+      this.say("NO TEMPER DETECTED", "error", "attempt");
       getAudio().buzz();
       haptics.reject();
       this.glitchUntil = this.elapsed + 0.25;
       return;
     }
     if (cluster.agitation < ARM_SELECT_MIN_AGITATION) {
-      this.say("NO TEMPER DETECTED — PROBE FIRST", "error", 1.9);
+      this.say("NO TEMPER DETECTED — PROBE FIRST", "error", "attempt");
       getAudio().buzz();
       haptics.reject();
       this.glitchUntil = this.elapsed + 0.35;
@@ -1251,7 +1445,7 @@ export class GameEngine {
     // it, so a tap that is plainly *on* the group can be more than a pad
     // away from every single digit — which is what made tapping the
     // floating numbers miss.
-    const inside = new Map<number, boolean>();
+    const near = new Map<number, number>();
     const box = new Map<number, { x0: number; y0: number; x1: number; y1: number }>();
     let best: Cluster | null = null;
     let bestD = Infinity;
@@ -1266,6 +1460,8 @@ export class GameEngine {
         bestD = d;
         best = c;
       }
+      const prev = near.get(c.id);
+      if (prev === undefined || d < prev) near.set(c.id, d);
       const b = box.get(c.id);
       if (!b) box.set(c.id, { x0: px, y0: py, x1: px, y1: py });
       else {
@@ -1276,28 +1472,96 @@ export class GameEngine {
       }
     }
     if (!best) return null;
+    // A point inside a group's footprint is on that group, however far the
+    // nearest digit happens to be. Padded footprints overlap on the tight
+    // files, and returning whichever happened to be first in map order sent
+    // a tap dead-centre on one group to its neighbour — often a decoy. The
+    // group with the nearer digit wins.
+    let hit: Cluster | null = null;
+    let hitD = Infinity;
     for (const [id, b] of box) {
       const m = TAP_INSET;
-      inside.set(
-        id,
-        at.x >= b.x0 - m && at.x <= b.x1 + m && at.y >= b.y0 - m && at.y <= b.y1 + m,
-      );
+      const within =
+        at.x >= b.x0 - m && at.x <= b.x1 + m && at.y >= b.y0 - m && at.y <= b.y1 + m;
+      if (!within) continue;
+      const d = near.get(id) ?? Infinity;
+      if (d < hitD) {
+        hitD = d;
+        hit = this.board.clusters[id];
+      }
     }
-    // A point inside a group's footprint is on that group, however far the
-    // nearest digit happens to be.
-    if (inside.get(best.id)) return { cluster: best, dist: 0 };
-    for (const [id, hit] of inside) {
-      if (hit) return { cluster: this.board.clusters[id], dist: 0 };
-    }
+    if (hit) return { cluster: hit, dist: 0 };
     return { cluster: best, dist: bestD };
   }
 
-  private tapLift(at: { x: number; y: number }, wasAgitated: number): boolean {
-    const near = this.nearestCluster(at);
-    const best = near?.cluster ?? null;
-    if (!best || near!.dist > TAP_PAD) return false;
+  /**
+   * Which group a touch is aimed at.
+   *
+   * The reticle floats above the finger so the lens is not underneath the
+   * thumb — but the *target* must not float with it. Hit-testing at the
+   * reticle put the tappable region of every group 22px (SELECT) or 68px
+   * (PROBE) below its own digits: a one-row group could not be tapped at
+   * all, a two-row group only on its bottom half, and tapping empty board
+   * below the numbers worked when tapping the numbers did not. That is the
+   * whole of "I have to tap it several times".
+   *
+   * The contact point is tried first, because it is what the refiner
+   * believes they are pointing at. The reticle is kept as a fallback so
+   * every aim that worked before still works.
+   */
+  private tapTarget(
+    x: number,
+    y: number,
+    r: { x: number; y: number },
+  ): { cluster: Cluster; dist: number } | null {
+    const direct = this.nearestCluster({ x, y });
+    if (direct && direct.dist <= TAP_PAD) return direct;
+    const aimed = this.nearestCluster(r);
+    if (aimed && aimed.dist <= TAP_PAD) return aimed;
+    return direct ?? aimed;
+  }
+
+  /**
+   * The packet frame in stage coordinates, sized exactly as the renderer
+   * draws it, so what can be touched is what can be seen.
+   */
+  packetBounds(p: Packet): Rect {
+    const n = p.digits.length;
+    const cols = Math.ceil(Math.sqrt(n));
+    const rows = Math.ceil(n / cols);
+    const cell = Math.max(14, this.layout.fontPx * 1.25);
+    const label = this.assist
+      ? `UNASSIGNED / ${p.temper} / ${n}`
+      : `UNASSIGNED / ${n} DIGITS`;
+    const w = Math.max(cols * cell + 18, label.length * 8 * 0.62 + 16);
+    const h = rows * cell + 26;
+    return { x: p.x - w / 2, y: p.y - h / 2, w, h };
+  }
+
+  /**
+   * Lift whatever the gesture landed on when the finger first went down,
+   * for the taps whose target has moved out from under them since.
+   */
+  private tapLiftStart(g: Gesture): boolean {
+    if (g.startCluster < 0) return false;
+    const c = this.board.clusters[g.startCluster];
+    // It may have been binned by something else in the meantime, and
+    // `nearestCluster` — which every other caller goes through — would
+    // never have offered a refined group.
+    if (!c || c.refined || this.board.nodes[c.members[0]]?.retired) return false;
+    return this.tapLift({ cluster: c, dist: 0 });
+  }
+
+  private tapLift(near: { cluster: Cluster; dist: number } | null): boolean {
+    if (!near || near.dist > TAP_PAD) return false;
+    const best = near.cluster;
+    // The group's own state before the finger landed — not the state of
+    // whichever group happened to be nearest when it did. On a dense board
+    // those are different clusters, and an agitated group was being
+    // refused on a calm neighbour's reading.
+    const wasAgitated = this.agitationAtDown[best.id] ?? best.agitation;
     if (best.decoy) {
-      this.say("NO TEMPER DETECTED", "error", 1.8);
+      this.say("NO TEMPER DETECTED", "error", "attempt");
       getAudio().buzz();
       haptics.reject();
       this.glitchUntil = this.elapsed + 0.25;
@@ -1309,7 +1573,7 @@ export class GameEngine {
     // board would lift it with no probing at all and take the whole lesson
     // with it.
     if (wasAgitated < ARM_SELECT_MIN_AGITATION) {
-      this.say("NO TEMPER DETECTED — PROBE FIRST", "error", 1.9);
+      this.say("NO TEMPER DETECTED — PROBE FIRST", "error", "attempt");
       getAudio().buzz();
       haptics.reject();
       return true;
@@ -1323,8 +1587,12 @@ export class GameEngine {
    *  ever created by, whether a box or a tap asked for it. */
   private liftCluster(cluster: Cluster, x: number, y: number): Packet {
     const digits: number[] = [];
+    const origins: { x: number; y: number }[] = [];
     for (const i of cluster.members) {
       const n = this.board.nodes[i];
+      // Read the live position before clearing the node, so the gather
+      // starts from exactly the pixel the digit was last drawn at.
+      origins.push({ x: n.hx + n.dx - x, y: n.hy + n.dy - y });
       n.lifted = true;
       n.scatter = 0;
       digits.push(n.digit);
@@ -1337,6 +1605,7 @@ export class GameEngine {
       x,
       y,
       birth: 0,
+      origins,
     };
     this.packet = packet;
     this.packetHeldAt = this.elapsed;
@@ -1349,9 +1618,29 @@ export class GameEngine {
     this.mode = LEVELS[this.levelIndex].startMode ?? "probe";
     getAudio().lift();
     haptics.lift();
-    this.say("PACKET LIFTED — ASSIGN A TEMPER", "info", 2.2);
+    this.say("PACKET LIFTED — ASSIGN A TEMPER", "info", "untilDropped");
     this.snapshotDirty = true;
     return packet;
+  }
+
+  /**
+   * Let a held packet go without binning it. The digits fly back to the
+   * cells they came from and stay found — this is a change of mind, not a
+   * mistake, and re-probing a group you had already identified would be a
+   * penalty for tapping the wrong part of the screen.
+   */
+  private releasePacket(): void {
+    const packet = this.packet;
+    if (!packet) return;
+    const cluster = this.board.clusters[packet.clusterId];
+    if (cluster) this.scatterBack(cluster, packet, true);
+    this.packet = null;
+    this.phase = this.mode === "select" ? "select" : "probe";
+    this.hoverBin = null;
+    getAudio().release();
+    haptics.tap();
+    this.clearMessage();
+    this.snapshotDirty = true;
   }
 
   private resolveDrop(at: { x: number; y: number }): void {
@@ -1362,7 +1651,7 @@ export class GameEngine {
 
     if (!target) {
       // Released over open board: the packet stays in hand.
-      this.say("PACKET HELD — DROP INTO A BIN", "info", 1.6);
+      this.say("PACKET HELD — DROP INTO A BIN", "info", "untilDropped");
       return;
     }
 
@@ -1377,7 +1666,7 @@ export class GameEngine {
       getAudio().buzz();
       haptics.reject();
       this.glitchUntil = this.elapsed + 0.6;
-      this.say("NO TEMPER DETECTED", "error", 2.4);
+      this.say("NO TEMPER DETECTED", "error", "attempt");
       this.packet = null;
       this.phase = "probe";
       this.hoverBin = null;
@@ -1417,10 +1706,9 @@ export class GameEngine {
         this.say(
           `${PRAISE[(this.elapsed | 0) % PRAISE.length]}  +${TIME_CREDIT}s`,
           "praise",
-          1.9,
         );
       } else {
-        this.say(PRAISE[(this.elapsed | 0) % PRAISE.length], "praise", 1.9);
+        this.say(PRAISE[(this.elapsed | 0) % PRAISE.length], "praise");
       }
       this.packet = null;
       this.phase = "probe";
@@ -1433,7 +1721,7 @@ export class GameEngine {
       getAudio().buzz();
       haptics.reject();
       this.glitchUntil = this.elapsed + 0.5;
-      this.say(REPRIMAND[(this.elapsed | 0) % REPRIMAND.length], "error", 2.2);
+      this.say(REPRIMAND[(this.elapsed | 0) % REPRIMAND.length], "error");
       this.packet = null;
       this.phase = "probe";
     }
@@ -1446,7 +1734,11 @@ export class GameEngine {
    * Nothing is lost but time — which is what keeps a mis-binned cluster
    * from being able to make a file uncompletable.
    */
-  private scatterBack(cluster: Cluster, packet: Packet): void {
+  private scatterBack(
+    cluster: Cluster,
+    packet: Packet,
+    keepAgitation = false,
+  ): void {
     for (const i of cluster.members) {
       const n = this.board.nodes[i];
       n.lifted = false;
@@ -1454,7 +1746,7 @@ export class GameEngine {
       n.sx = packet.x + (this.board.rng() - 0.5) * 60;
       n.sy = packet.y + (this.board.rng() - 0.5) * 60;
     }
-    cluster.agitation = 0;
+    if (!keepAgitation) cluster.agitation = 0;
     if (this.latchedId === cluster.id) this.latchedId = -1;
   }
 
@@ -1475,10 +1767,10 @@ export class GameEngine {
       // no button. The phase still goes to "complete" so input stops.
       getAudio().chime();
       this.advanceAt = this.elapsed + (level.autoAdvanceMs ?? 900) / 1000;
-      this.say("REFINED", "praise", 2);
+      this.say("REFINED", "praise");
     } else {
       getAudio().fanfare();
-      this.say("FILE REFINED. PLEASE ENJOY EACH NUMBER EQUALLY.", "praise", 6);
+      this.say("FILE REFINED. PLEASE ENJOY EACH NUMBER EQUALLY.", "praise");
     }
     this.snapshotDirty = true;
   }
@@ -1511,6 +1803,9 @@ export class GameEngine {
       // player opened the handbook to go and look up.
       if (!this.pausedSilenced) {
         getAudio().silenceAll();
+        // The bed too: a paused terminal is a quiet one, and the handbook
+        // is not a place to sit and listen to the file you left open.
+        getAudio().setAmbient(null);
         this.pausedSilenced = true;
       }
       return;
@@ -1539,7 +1834,7 @@ export class GameEngine {
         getAudio().alarm();
         haptics.releaseProximity();
         haptics.reject();
-        this.say("SHIFT EXPIRED — FILE RETURNED TO QUEUE", "error", 6);
+        this.say("SHIFT EXPIRED — FILE RETURNED TO QUEUE", "error");
         this.snapshotDirty = true;
       }
     }
@@ -1567,10 +1862,7 @@ export class GameEngine {
       return;
     }
 
-    if (this.message && this.elapsed > this.messageUntil) {
-      this.message = null;
-      this.snapshotDirty = true;
-    }
+    if (this.message && this.messageIsStale()) this.clearMessage();
 
     // Orientation offers its hint a second time, once, for a player who
     // read the first line, did nothing, and watched it disappear. Cancelled
@@ -1581,20 +1873,57 @@ export class GameEngine {
         this.orientHintAt = -1;
       } else if (this.elapsed >= this.orientHintAt) {
         this.orientHintAt = -1;
-        this.say("BOX THE MOVING DIGITS. DRAG THEM TO THE BIN.", "info", 7);
+        this.say("BOX THE MOVING DIGITS. DRAG THEM TO THE BIN.", "info", "untilAction");
       }
     }
 
     this.updateAgitation(dt, live);
     this.updateNodes(dt);
 
-    if (this.packet) this.packet.birth = Math.min(1, this.packet.birth + dt * 4);
+    if (this.packet) {
+      this.packet.birth = Math.min(1, this.packet.birth + dt / GATHER_SECONDS);
+    }
     if (this.absorb) {
       this.absorb.t += dt / ABSORB_SECONDS;
       if (this.absorb.t >= 1) this.absorb = null;
     }
 
     getAudio().tick();
+  }
+
+  /**
+   * Which temper the board is giving off underneath everything.
+   *
+   * One group and it is that group's. Several and it is whichever sits
+   * nearest the middle of the board — the one the eye is already on —
+   * until the refiner takes hold of one, at which point the room is about
+   * the thing in their hand. A decoy gives off nothing, and the fifth is
+   * never named by anything, least of all by the sound of the room.
+   */
+  private ambientTemper(): Temper | null {
+    const held = this.packet;
+    if (held) {
+      const c = this.board.clusters[held.clusterId];
+      return c && !c.decoy && !c.fifth ? held.temper : null;
+    }
+    const g = this.layout.grid;
+    const cx = g.x + g.w / 2;
+    const cy = g.y + g.h / 2;
+    let best: Cluster | null = null;
+    let bestD = Infinity;
+    for (const c of this.board.clusters) {
+      if (c.refined || c.decoy || c.fifth) continue;
+      if (this.board.nodes[c.members[0]]?.retired) continue;
+      // A group under the lens is the group being considered, wherever it
+      // happens to sit.
+      const d =
+        c.id === this.latchedId ? -1 : Math.hypot(c.cx - cx, c.cy - cy);
+      if (d < bestD) {
+        bestD = d;
+        best = c;
+      }
+    }
+    return best?.temper ?? null;
   }
 
   private updateAgitation(dt: number, live: boolean): void {
@@ -1727,7 +2056,6 @@ export class GameEngine {
         this.say(
           `${def.code} ${def.name} — ${def.signature.toUpperCase()}`,
           "info",
-          3.2,
         );
       }
       this.latchedId = latchCandidate;
@@ -1739,6 +2067,7 @@ export class GameEngine {
 
     const audio = getAudio();
     for (const t of TEMPERS) audio.setProximity(t, peak[t]);
+    audio.setAmbient(live ? this.ambientTemper() : null);
     // The ambient cadence answers to a live probe only. Driving it from a
     // decaying probe after release re-fires one pulse a frame later, which
     // replaces (and so destroys) the lift or rejection pattern that the

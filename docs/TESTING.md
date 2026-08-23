@@ -32,6 +32,27 @@ and stopped there. It passed. The game was broken.
 So every gesture test below ends by proving the engine is ready for the
 *next* gesture, and the playthroughs run a whole file to 100%.
 
+### The second rule, learned the same way
+
+> **Drive the game with the coordinates a thumb would use, not with
+> coordinates solved from the engine's own maths.**
+
+Taps were hit-tested at the *reticle*, which floats 22px (SELECT) or 68px
+(PROBE) above the contact point — so the tappable region of every group sat
+below its own digits. A one-row group could not be tapped at all; a two-row
+group only on its bottom half. Players reported having to tap two or three
+times, and the suite saw nothing.
+
+It saw nothing because every test aimed through `touchFor()`, a helper that
+solves the taper for "what must the finger touch for the reticle to land
+here". The tests were faithfully tapping 22px below the numbers. Humans tap
+the numbers.
+
+`touchFor` is still right for anything that is genuinely about the lens.
+For anything about *where the refiner is pointing*, the section
+**taps land where the finger is** uses raw footprint coordinates and nothing
+else.
+
 ---
 
 ## What is covered
@@ -82,11 +103,13 @@ that ships, has no handle.
 | reachability | The bottom board row is reachable by probe and by marquee, and every bin is reachable while carrying. A previous release shipped two unreachable rows. |
 | playthroughs | Orientation 17/21 reaches 100% by tapping alone; DRANESVILLE reaches 100% by probe → box → carry. Both paths, end to end. |
 | mechanics | The orientation group moves untouched while driving no audio; a decoy cannot be boxed and answers honestly; the fifth is seeded and disguised; a redacted file mutes and the next one restores. |
-| tap parity | On BELLINGHAM — the one file that is both `startMode: "probe"` and `tapToSelect` — aiming the lens and tapping lifts the group; and while the group is *sunk*, a tap refuses it, because a tap must never lift what a box would not. |
+| tap parity | On BELLINGHAM — `startMode: "probe"` — aiming the lens and tapping lifts the group; and while the group is *sunk*, a tap refuses it, because a tap must never lift what a box would not. Tapping is available on every file now; the agitation gate, not the absence of the gesture, is what stops a blind tap finding an unprobed group. |
 | morph supply | After the morph fires, every bin on NANNING is still fillable. |
 | ceremony | A self-advancing screen shows no 100% banner, and advances. |
 | settings | Changing any setting during a redacted file does not persist that file's forced mute. |
-| reticle and hint | Offsets are −68 / −22 / −68 for probe / select / carry; the bin hint and the highlighted target bin are showing the moment the packet lifts; touching the packet moves it 0px, so a drag never teleports the box away from the thumb; and it still carries to the bin. |
+| reticle and hint | Offsets are −68 / −22 / −22 for probe / select / carry; the bin hint and the highlighted target bin are showing the moment the packet lifts; touching the box brings it to the carry reticle and then it moves only with the finger; touching anywhere else releases the digits back to the grid *still found*, and the group can be taken again and binned. |
+| taps land where the finger is | A tap lifts with a finger already resting elsewhere on the screen (real CDP multi-touch — a resting thumb makes every later touch `isPrimary: false`, and refusing those killed every tap for as long as it stayed put), while a drag already in flight is never stolen by a stray second finger. A group that drifts out from under a held thumb is still lifted, at 90ms and at 1200ms, on four tempers. No pair of taps can flip a self-agitating screen into PROBE, a mode it has no use for. Eighty raw taps — nine points across each group's footprint plus the centre of its top row, on eight orientation screens — every one lifts. A still press lifts at 60ms and at 1200ms alike. A press that drifts 16px and comes back still lifts. Two taps on a group never toggle the mode. A touch inside the 900ms auto-advance window is not discarded. A gesture left open for nine seconds is taken over by the next touch instead of blocking it. |
+| ambient temper | With one group the bed plays that group's temper; with four it plays the most central; taking one into the hand moves the bed to it; the fifth temper gives off nothing. |
 | console | No page errors in any of it. |
 
 ---

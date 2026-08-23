@@ -54,7 +54,14 @@ function browserPath() {
 export async function open() {
   const exe = browserPath();
   const browser = await chromium.launch(exe ? { executablePath: exe } : {});
-  const ctx = await browser.newContext({ viewport: VIEWPORT, deviceScaleFactor: 2 });
+  // hasTouch, so the suite can dispatch real multi-touch through CDP. The
+  // bug that made this necessary — a resting finger silently killing every
+  // tap — only exists for touch pointers; a mouse has no second pointer.
+  const ctx = await browser.newContext({
+    viewport: VIEWPORT,
+    deviceScaleFactor: 2,
+    hasTouch: true,
+  });
   const page = await ctx.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
@@ -69,7 +76,43 @@ export async function open() {
     const r = document.querySelector('[role="application"]').getBoundingClientRect();
     return { x: r.left, y: r.top };
   });
-  return { browser, page, origin, errors };
+  const cdp = await ctx.newCDPSession(page);
+  return { browser, page, origin, errors, cdp };
+}
+
+/**
+ * A real touch, in stage coordinates, optionally with other fingers already
+ * resting on the screen. `page.mouse` cannot express this and it is the only
+ * way to reach the multi-touch paths.
+ */
+export async function touchTap(cdp, origin, at, resting = [], holdMs = 90) {
+  const pt = (p, id) => ({ x: origin.x + p.x, y: origin.y + p.y, id });
+  const held = resting.map((p, i) => pt(p, i + 1));
+  const tapId = held.length + 1;
+  for (let i = 0; i < held.length; i++) {
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: held.slice(0, i + 1),
+    });
+  }
+  await new Promise((r) => setTimeout(r, 120));
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [...held, pt(at, tapId)],
+  });
+  await new Promise((r) => setTimeout(r, holdMs));
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [pt(at, tapId)],
+  });
+  await new Promise((r) => setTimeout(r, 120));
+  if (held.length) {
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: held,
+    });
+    await new Promise((r) => setTimeout(r, 80));
+  }
 }
 
 /** Engine snapshot, plus the few internals the assertions need. */

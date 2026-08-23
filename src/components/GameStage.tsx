@@ -170,6 +170,18 @@ export function GameStage() {
 
   const onPointerDown = useCallback(
     (ev: React.PointerEvent<HTMLDivElement>) => {
+      // A secondary mouse button is not a gesture: letting one open a
+      // gesture leaves a pointer id whose pointerup may never arrive.
+      //
+      // `isPrimary` is deliberately NOT tested. Every touch after the first
+      // one still down is non-primary, so refusing them made a thumb
+      // resting anywhere on the screen — the bezel of a phone held in one
+      // hand — silently kill every tap for as long as it stayed there, with
+      // no timeout that could rescue it. What protects the in-flight
+      // gesture is the engine's single-gesture guard, which now hands a
+      // still gesture over to a deliberate second touch rather than
+      // discarding it.
+      if (ev.pointerType === "mouse" && ev.button !== 0) return;
       // Re-measure once per gesture: cheap, and immune to layout shifts
       // caused by the mobile URL bar collapsing mid-session.
       rectRef.current = ev.currentTarget.getBoundingClientRect();
@@ -211,6 +223,19 @@ export function GameStage() {
     },
     [engine],
   );
+
+  /**
+   * Every way a gesture can end that is not a pointerup on this element.
+   * Nothing but a matching release clears the engine's single in-flight
+   * gesture, and while one is open every new touch is discarded as a
+   * second finger — so a capture lost to a system gesture, or a window
+   * that blurs mid-drag, used to leave the board permanently dead.
+   */
+  useEffect(() => {
+    const cancelAll = () => engine.pointerCancel(-1);
+    window.addEventListener("blur", cancelAll);
+    return () => window.removeEventListener("blur", cancelAll);
+  }, [engine]);
 
   // Same call the engine makes, with the same active tempers, so the bins
   // the player sees are the rects the engine hit-tests.
@@ -294,6 +319,7 @@ export function GameStage() {
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerCancel}
+          onLostPointerCapture={onPointerCancel}
           onContextMenu={(ev) => ev.preventDefault()}
         />
 

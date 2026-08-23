@@ -107,6 +107,15 @@ export interface Packet {
   y: number;
   /** 0..1 lift-off bloom progress. */
   birth: number;
+  /**
+   * Where each digit was sitting when the group was lifted, as an offset
+   * from the packet centre. The gather animation flies the digits in from
+   * these points, so the box is seen to be assembled out of the numbers
+   * that were on the grid rather than to replace them. Stored as offsets,
+   * not absolute points, so a press-and-drag lift keeps the digits with
+   * the box while it is already moving.
+   */
+  origins: readonly { x: number; y: number }[];
 }
 
 export interface BinState {
