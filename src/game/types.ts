@@ -191,4 +191,17 @@ export interface LevelDef {
    *  what SKIP on the briefing screen skips. Marked explicitly rather than
    *  inferred from `teaches`, which is also set on every Act I file. */
   readonly training?: boolean;
+  /** Where on the board groups prefer to sit. The first orientation screens
+   *  put their group in the middle, where it cannot be missed; later ones
+   *  push it out towards the edges, where it has to be looked for. */
+  readonly focus?: "centre" | "mid" | "edge";
+  /** A tap anywhere on a group lifts the whole thing, no box required.
+   *  Drag-to-box is not a discoverable gesture on its own, and the
+   *  orientation screens exist to teach rather than to gate. */
+  readonly tapToSelect?: boolean;
+  /** Show faint arrows from a held packet towards the bin, after a pause.
+   *  Only ever set where a single bin is on the deck, so it gives nothing
+   *  away — and only after the player has hesitated, so anyone who already
+   *  knows the gesture never sees it. */
+  readonly binHint?: boolean;
 }
