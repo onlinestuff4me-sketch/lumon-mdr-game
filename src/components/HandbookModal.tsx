@@ -130,6 +130,21 @@ export function HandbookModal({
           equally.
         </p>
 
+        <h3 className="crt-text-glow mb-2 text-[10px] font-bold tracking-[0.2em] text-phos-300">
+          HOW TO REFINE MACRODATA
+        </h3>
+        <p className="mb-3 text-[10px] leading-relaxed text-phos-400">
+          You begin on <span className="text-phos-200">ORIENTATION</span>:
+          one group, already moving, on a screen of digits that only look
+          like it. Press it and drag it to the bin. Later screens put two
+          groups up, then two tempers, then all four.{" "}
+          <span className="text-phos-200">BELLINGHAM</span> takes the
+          visibility away — the group surfaces and sinks, and your first
+          touch summons the lens instead of the box.{" "}
+          <span className="text-phos-200">CALIBRATION</span> then names each
+          temper as you feel it, and the shift starts.
+        </p>
+
         <ol className="mb-4 space-y-1.5 text-[10px] leading-relaxed text-phos-400">
           <li>
             <span className="text-phos-300">01 · PROBE.</span> Hold a finger to

@@ -427,10 +427,16 @@ export class AudioEngine {
     this.blip("square", 1200, 700, 0.045, 0.16);
   }
 
-  /** Packet lifts off the grid. */
+  /**
+   * Packet lifts off the grid.
+   *
+   * A flat mechanical click, not a rising chime. The rising pair read as
+   * congratulation, and lifting a packet is not an achievement — it is the
+   * middle of a gesture, and it happens twenty times a file.
+   */
   lift(): void {
-    this.blip("sine", 420, 1250, 0.22, 0.2);
-    this.blip("triangle", 840, 2100, 0.18, 0.1, 0.03);
+    this.blip("square", 900, 640, 0.05, 0.16);
+    this.noise(0.035, 0.05, 3200);
   }
 
   /** Correct bin — the Lumon confirmation chime. */
@@ -465,6 +471,14 @@ export class AudioEngine {
   boot(): void {
     this.blip("sine", 90, 900, 0.5, 0.14);
     this.noise(0.3, 0.08, 2400);
+  }
+
+  /** Deliberately silent. A file arriving is not an event the refiner did,
+   *  and a sting on every one of them — 46 in a full queue — reads as the
+   *  terminal congratulating itself. Left as a named no-op so the call site
+   *  stays legible and a sound can be dropped in later. */
+  fileLoaded(): void {
+    /* no sound */
   }
 
   /** Last-ten-seconds clock tick. */

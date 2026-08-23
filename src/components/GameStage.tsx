@@ -258,7 +258,9 @@ export function GameStage() {
               the hand that was holding the phone — unreadable exactly while
               the player was doing the thing it describes. */}
           <StatusTicker hud={hud} height={layout.tickerH} />
-          <div className="flex-1" />
+          {/* Above the board, not below it: down between the matrix and the
+              bins the deck sat across the path every packet is dragged
+              along. Nothing here is pressed during play. */}
           <ControlDeck
             hud={hud}
             height={layout.deckH}
@@ -268,6 +270,7 @@ export function GameStage() {
             }}
             onHandbook={openHandbook}
           />
+          <div className="flex-1" />
           <div className="shrink-0" style={{ height: layout.binsH }} />
         </div>
 
@@ -346,7 +349,7 @@ export function GameStage() {
         {live && !hud.audioReady ? (
           <div
             className="pointer-events-none absolute inset-x-0 z-40 flex justify-center"
-            style={{ top: layout.hudH + layout.tickerH + 4 }}
+            style={{ top: layout.grid.y + 4 }}
           >
             <span className="rounded-[2px] border border-phos-700 bg-phos-950/85 px-2 py-0.5 text-[8px] tracking-[0.16em] text-phos-600">
               TAP TO ENABLE TERMINAL AUDIO
