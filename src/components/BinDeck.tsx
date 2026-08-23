@@ -40,7 +40,9 @@ export function BinDeck({
               ? "0 0 18px 2px rgba(255,59,48,0.8)"
               : bin.hover
                 ? `0 0 14px 1px ${def.css}`
-                : "none";
+                : bin.target
+                  ? `0 0 16px 2px ${def.css}`
+                  : "none";
         return (
           <div
             key={bin.temper}
@@ -54,11 +56,18 @@ export function BinDeck({
               top: rect.y,
               width: rect.w,
               height: rect.h,
-              borderColor: bin.hover || full ? def.css : "rgba(15,112,69,0.85)",
+              borderColor:
+                bin.hover || bin.target || full ? def.css : "rgba(15,112,69,0.85)",
               background: bin.hover
                 ? `color-mix(in srgb, ${def.css} 14%, #010604)`
-                : "#020a06",
+                : bin.target
+                  ? `color-mix(in srgb, ${def.css} 9%, #010604)`
+                  : "#020a06",
               boxShadow: flash,
+              // The destination reads as live while a packet is in hand, so
+              // the arrows are pointing somewhere that looks like it is
+              // waiting rather than at one more piece of chrome.
+              animation: bin.target && !bin.hover ? "bin-await 1.5s ease-in-out infinite" : undefined,
             }}
           >
             {wide ? (

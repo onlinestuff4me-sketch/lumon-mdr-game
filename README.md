@@ -34,7 +34,7 @@ of them 404s every asset on the other.
 ## The loop
 
 The queue runs in three acts behind a training sequence, so the job is
-learned rather than sprung on you. **ORIENTATION** is 21 short screens in
+learned rather than sprung on you. **ORIENTATION** is 29 short screens in
 which nothing is hidden: every group is already moving, and all you do is
 box it and bin it. Three screens per temper teach what each one looks like,
 four put two tempers on the deck, five put up all four. Selecting is generous there —

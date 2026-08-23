@@ -120,9 +120,9 @@ console.log(`\n── placement gradient ${"─".repeat(38)}`);
 console.log(`\n── the shape of the queue ${"─".repeat(34)}`);
 {
   const orient = LEVELS.filter((l) => l.id.startsWith("orientation-"));
-  if (orient.length !== 21) fail(`want 21 orientation screens, got ${orient.length}`);
-  if (orient.slice(0, 20).some((l) => l.ceremony !== "none")) {
-    fail("orientation screens 1-20 must advance themselves");
+  if (orient.length !== 29) fail(`want 29 orientation screens, got ${orient.length}`);
+  if (orient.slice(0, -1).some((l) => l.ceremony !== "none")) {
+    fail("every orientation screen but the last must advance itself");
   }
   if (orient.filter((l) => l.archived !== false).length !== 1) {
     fail("orientation must hold exactly one archive row");
@@ -130,11 +130,55 @@ console.log(`\n── the shape of the queue ${"─".repeat(34)}`);
   if (!orient.every((l) => l.tapToSelect && l.minCapture === 1 && l.selfAgitate)) {
     fail("an orientation screen is misconfigured");
   }
+  // Stage A — three screens of each temper, in numbered order.
   for (let t = 0; t < 4; t++) {
-    const three = orient.slice(t * 3, t * 3 + 3).map((l) => l.tempers[0]);
-    if (new Set(three).size !== 1 || three[0] !== TEMPERS[t]) {
-      fail(`stage 1 block ${t + 1} is ${three.join(",")}, want three of ${TEMPERS[t]}`);
+    const three = orient.slice(t * 3, t * 3 + 3);
+    const names = three.map((l) => l.tempers[0]);
+    if (new Set(names).size !== 1 || names[0] !== TEMPERS[t]) {
+      fail(`stage A block ${t + 1} is ${names.join(",")}, want three of ${TEMPERS[t]}`);
     }
+    if (three.some((l) => l.tempers.length !== 1 || l.quota !== 1)) {
+      fail(`stage A block ${t + 1} is not one group of one temper`);
+    }
+  }
+  // Stage B — eight screens of two groups of a single temper, opening on
+  // the temper stage A just finished with and cycling.
+  const b = orient.slice(12, 20);
+  if (b.length !== 8) fail(`stage B should be 8 screens, got ${b.length}`);
+  if (b.some((l) => l.tempers.length !== 1 || l.quota !== 2)) {
+    fail("stage B screens must be two groups of one temper");
+  }
+  if (b[0].tempers[0] !== orient[11].tempers[0]) {
+    fail(`stage B opens on ${b[0].tempers[0]}, but stage A ended on ${orient[11].tempers[0]}`);
+  }
+  const bSeen: Record<string, number> = {};
+  for (const l of b) bSeen[l.tempers[0]] = (bSeen[l.tempers[0]] ?? 0) + 1;
+  for (const t of TEMPERS) {
+    if (bSeen[t] !== 2) fail(`stage B shows ${t} ${bSeen[t] ?? 0} times, want 2`);
+  }
+  // Stage C — the first discrimination. It must open on the two tempers the
+  // player has just seen, and every screen must keep one temper from the
+  // screen before it, so there is always something familiar to anchor on.
+  const c = orient.slice(20, 24);
+  if (c.length !== 4) fail(`stage C should be 4 screens, got ${c.length}`);
+  if (c.some((l) => l.tempers.length !== 2)) fail("stage C screens must carry two tempers");
+  const recent = [orient[19].tempers[0], orient[18].tempers[0]];
+  if (!recent.every((t) => c[0].tempers.includes(t))) {
+    fail(`stage C opens on ${c[0].tempers.join("+")}, want the two most recent ${recent.join("+")}`);
+  }
+  for (let i = 1; i < c.length; i++) {
+    if (!c[i].tempers.some((t) => c[i - 1].tempers.includes(t))) {
+      fail(`stage C screen ${i + 1} (${c[i].tempers.join("+")}) shares nothing with ${c[i - 1].tempers.join("+")}`);
+    }
+  }
+  const cSeen: Record<string, number> = {};
+  for (const l of c) for (const t of l.tempers) cSeen[t] = (cSeen[t] ?? 0) + 1;
+  for (const t of TEMPERS) {
+    if (cSeen[t] !== 2) fail(`stage C shows ${t} ${cSeen[t] ?? 0} times, want 2`);
+  }
+  // Stage D — the full deck.
+  if (orient.slice(24).some((l) => l.tempers.length !== 4)) {
+    fail("stage D screens must carry all four tempers");
   }
   // Every Act III mechanic is taught before it is used.
   const first = (pred: (l: (typeof LEVELS)[number]) => boolean, teach: string, what: string) => {
@@ -149,7 +193,7 @@ console.log(`\n── the shape of the queue ${"─".repeat(34)}`);
   const fifth = LEVELS.filter((l) => l.fifth);
   if (fifth.length !== 1 || fifth[0].id !== "cold-harbor") fail("the fifth belongs on cold harbor only");
   if (fifth[0]?.teaches) fail("the fifth temper must never be taught");
-  ok("21 orientation screens, then every mechanic taught before it is used");
+  ok("29 orientation screens in four stages, each anchored on the last");
 }
 
 console.log(bad ? `\nFAILED — ${bad} problems` : "\nPASSED");

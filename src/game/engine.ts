@@ -47,6 +47,9 @@ export interface BinView {
   hit: number;
   /** True while a carried packet hovers this bin. */
   hover: boolean;
+  /** True while this is the bin the held packet belongs in, on the files
+   *  that teach the drag. */
+  target: boolean;
 }
 
 export interface HudSnapshot {
@@ -125,6 +128,10 @@ interface Gesture {
   /** Agitation of the nearest group at the instant the finger landed — the
    *  board before this touch changed it. */
   startAgitation: number;
+  /** Where the carried packet sat relative to the reticle when this drag
+   *  began, so picking it up does not teleport it. */
+  grabX: number;
+  grabY: number;
 }
 
 const RISE = 11;
@@ -402,6 +409,10 @@ export class GameEngine {
       return {
         temper: t,
         fill: b.fill,
+        // Where this packet is meant to go. Only on the files that already
+        // show the arrows — a single bin on the deck, so it points at the
+        // one place a packet can land and gives nothing away.
+        target: level.binHint === true && this.packet?.temper === t,
         hit: fresh ? (b.lastHitOk ? 1 : -1) : 0,
         hover: this.hoverBin === t,
       };
@@ -883,6 +894,7 @@ export class GameEngine {
       // it caused would let blind tapping lift a group the player never
       // found. This is the board before they touched it.
       startAgitation: this.nearestCluster(r)?.cluster.agitation ?? 0,
+      ...this.grabOffset(r),
     };
 
     this.reticle.x = r.x;
@@ -922,9 +934,12 @@ export class GameEngine {
       this.marquee.x1 = b.x;
       this.marquee.y1 = b.y;
     } else if (g.kind === "carry" && this.packet) {
-      this.packet.x = r.x;
-      this.packet.y = r.y;
-      const bin = this.binAt(r.x, r.y);
+      this.packet.x = r.x + g.grabX;
+      this.packet.y = r.y + g.grabY;
+      // The drop lands where the packet is, not where the reticle is —
+      // otherwise the box and the thing it is being tested against are in
+      // two different places.
+      const bin = this.binAt(this.packet.x, this.packet.y);
       if (bin !== this.hoverBin) {
         this.hoverBin = bin;
         if (bin) haptics.tap();
@@ -949,7 +964,7 @@ export class GameEngine {
       // and buzzes at you on the way out.
       if (!isTap) this.resolveMarquee();
     } else if (g.kind === "carry" && this.packet) {
-      this.resolveDrop(this.reticleFor(x, y, "carry"));
+      this.resolveDrop({ x: this.packet.x, y: this.packet.y });
     } else if (g.kind === "probe") {
       this.armSelectIfIdentified(g, dt);
     }
@@ -1160,6 +1175,29 @@ export class GameEngine {
    * rather than where its cell is. Decoys and the fifth are eligible: a tap
    * must not quietly reveal what a box would not.
    */
+  /**
+   * How far the packet is from the reticle as a drag begins.
+   *
+   * A packet used to snap to the reticle on the first move, which threw it
+   * a lens-height up the screen the instant a finger touched it — the
+   * player taps the digits, the box appears where they are, and then it
+   * jumps away from the thumb that is about to drag it. Holding the offset
+   * means the packet simply follows the finger from wherever it already is.
+   *
+   * Clamped, so pressing far from the packet pulls it towards the finger
+   * instead of dragging it from across the board.
+   */
+  private grabOffset(r: { x: number; y: number }): { grabX: number; grabY: number } {
+    const p = this.packet;
+    if (!p) return { grabX: 0, grabY: 0 };
+    const dx = p.x - r.x;
+    const dy = p.y - r.y;
+    const d = Math.hypot(dx, dy);
+    const max = 56;
+    if (d <= max) return { grabX: dx, grabY: dy };
+    return { grabX: (dx / d) * max, grabY: (dy / d) * max };
+  }
+
   /** The unrefined group nearest a board point, hit-tested against live
    *  glyph positions the way the marquee is. */
   private nearestCluster(
