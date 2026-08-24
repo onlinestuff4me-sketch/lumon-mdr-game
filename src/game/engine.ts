@@ -25,7 +25,7 @@ import {
   type Board,
 } from "./grid";
 import { loadSettings, saveSettings } from "./settings";
-import { computeLayout, pointInRect, type Rect, type StageLayout } from "./layout";
+import { computeLayout, type Rect, type StageLayout } from "./layout";
 import { GlyphAtlas } from "./glyphAtlas";
 import { applyTemperMotion, settleNode } from "./motion";
 import { renderGrid, renderOverlay } from "./render";
@@ -175,6 +175,16 @@ const PACKET_TOUCH_PAD = 16;
  * touch take over instead.
  */
 const STALE_GESTURE_MS = 4000;
+/**
+ * The bin catch zone: how far outside a bin's drawn rectangle a dropped
+ * packet still lands in it. Above is the generous side — every drop
+ * arrives from above, and the packet frame is tall enough that its centre
+ * sits well over the thumb — so a box brought down to touch a bin's top
+ * edge should already count as delivered.
+ */
+const BIN_CATCH_ABOVE = 56;
+const BIN_CATCH_SIDE = 12;
+const BIN_CATCH_BELOW = 24;
 /**
  * The file-change transition, in seconds. A CRT does not cut between
  * pictures: one scan pass takes the old one off and the next paints the
@@ -1357,11 +1367,37 @@ export class GameEngine {
     this.lastTapY = y;
   }
 
+  /**
+   * Which bin a drop at this point lands in.
+   *
+   * Not a strict rectangle test. The packet's *centre* is what is tested,
+   * and the box is a hundred pixels wide — demanding the centre inside the
+   * bin meant dragging the whole box fully over it, and drops released
+   * just shy of the top edge fell back into the hand. Each bin has a
+   * catch zone: generous above, where every drop arrives from, and a
+   * little either side. Zones from adjacent bins can overlap in the gap
+   * between them, so the nearest bin centre wins rather than whichever
+   * was checked first.
+   */
   private binAt(x: number, y: number): Temper | null {
+    let best: Temper | null = null;
+    let bestD = Infinity;
     for (const t of this.activeTempers) {
-      if (pointInRect(x, y, this.layout.binRects[t])) return t;
+      const r = this.layout.binRects[t];
+      if (r.w <= 0) continue;
+      const inside =
+        x >= r.x - BIN_CATCH_SIDE &&
+        x <= r.x + r.w + BIN_CATCH_SIDE &&
+        y >= r.y - BIN_CATCH_ABOVE &&
+        y <= r.y + r.h + BIN_CATCH_BELOW;
+      if (!inside) continue;
+      const d = Math.hypot(x - (r.x + r.w / 2), y - (r.y + r.h / 2));
+      if (d < bestD) {
+        bestD = d;
+        best = t;
+      }
     }
-    return null;
+    return best;
   }
 
   // ── selection & scoring ─────────────────────────────────────────────
