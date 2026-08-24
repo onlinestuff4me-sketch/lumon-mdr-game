@@ -42,7 +42,7 @@ const AMBIENT_SMOOTH = 0.8;
  * is an atmosphere. Two slightly detuned fundamentals beat against each
  * other so the hum breathes instead of being a test tone.
  */
-const HUM_GAIN = 0.09;
+const HUM_GAIN = 0.075;
 const HUM_SMOOTH = 0.6;
 /**
  * The buzz: the hum's dirty edge. A sawtooth on the mains frequency,
@@ -50,8 +50,8 @@ const HUM_SMOOTH = 0.6;
  * fizz rather than more bass. Level is relative to the hum, so turning
  * the room up keeps its character.
  */
-const HUM_BUZZ = 0.12;
-const HUM_BUZZ_TONE = 700;
+const HUM_BUZZ = 0.25;
+const HUM_BUZZ_TONE = 1580;
 /**
  * The keyboards: the rest of the office, typing. Synthesised, not
  * sampled — each key is a noise click plus a low thump, matching the
@@ -59,10 +59,10 @@ const HUM_BUZZ_TONE = 700;
  * near 3kHz over a thump at 150Hz), fired in human bursts with pauses.
  * Very soft: it should be noticed only when it stops.
  */
-const TYPING_GAIN = 0.03;
-const TYPING_RATE = 8; // keys per second inside a burst
-const TYPING_THUMP = 0.5; // low-body weight, 0..1
-const TYPING_CLICK_HZ = 2800; // click bandpass centre
+const TYPING_GAIN = 0.145;
+const TYPING_RATE = 12; // keys per second inside a burst
+const TYPING_THUMP = 0.2; // low-body weight, 0..1
+const TYPING_CLICK_HZ = 2150; // click bandpass centre
 /** How far the bed steps back while a probe is live, so the two never
  *  argue over which temper the refiner is being told about. */
 const AMBIENT_DUCK = 0.4;
@@ -257,7 +257,7 @@ export class AudioEngine {
     a.frequency.value = 50;
     const b = ctx.createOscillator();
     b.type = "sine";
-    b.frequency.value = 50 - 2.5;
+    b.frequency.value = 50 - 1.8;
     const sub = ctx.createOscillator();
     sub.type = "triangle";
     sub.frequency.value = 25;
@@ -267,14 +267,14 @@ export class AudioEngine {
     a.connect(mix);
     b.connect(mix);
     const subGain = ctx.createGain();
-    subGain.gain.value = 0.7;
+    subGain.gain.value = 0.6;
     sub.connect(subGain).connect(mix);
 
     // And the whole thing sighs: the cutoff drags down and back, slower
     // than the beat, so no two swells are quite alike.
     const lfo = ctx.createOscillator();
     lfo.type = "sine";
-    lfo.frequency.value = 0.5;
+    lfo.frequency.value = 0.51;
     const lfoDepth = ctx.createGain();
     lfoDepth.gain.value = 40;
     lfo.connect(lfoDepth).connect(filter.frequency);
@@ -289,9 +289,9 @@ export class AudioEngine {
       baseCutoff: 120,
       peakCutoff: 340,
       peakGain: 1.0,
-      // Bench verdict: woe present should sound like woe probed. The bed
-      // IS the probe level; the lens adds nothing but the duck's release.
-      bed: 1.0,
+      // Bench-tuned: most of the probe level while merely present, the
+      // last stretch saved for the lens itself.
+      bed: 0.8,
     };
   }
 
@@ -332,9 +332,9 @@ export class AudioEngine {
     flicker.gain.value = 0.5;
     const flutter = ctx.createOscillator();
     flutter.type = "sine";
-    flutter.frequency.value = 2.1;
+    flutter.frequency.value = 1.6;
     const flutterDepth = ctx.createGain();
-    flutterDepth.gain.value = 0.28;
+    flutterDepth.gain.value = 0.12;
     flutter.connect(flutterDepth).connect(flicker.gain);
 
     mix.connect(flicker).connect(filter).connect(amp).connect(out);
@@ -347,7 +347,7 @@ export class AudioEngine {
       baseCutoff: 900,
       peakCutoff: 2400,
       peakGain: 0.3,
-      bed: 0.3,
+      bed: 0.2,
     };
   }
 
@@ -396,7 +396,7 @@ export class AudioEngine {
       // Above 1 on purpose: the bench's slider topped out and playtesting
       // asked for more. The limiter is what keeps four beds honest.
       peakGain: 1.3,
-      bed: 1.0,
+      bed: 0.65,
     };
   }
 
@@ -446,7 +446,7 @@ export class AudioEngine {
       baseCutoff: 320,
       peakCutoff: 1500,
       peakGain: 0.5,
-      bed: 0.09,
+      bed: 0.12,
     };
   }
 
