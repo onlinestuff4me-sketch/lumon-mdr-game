@@ -144,106 +144,122 @@ export const TIME_CREDIT = 5;
  *  only a touch — at the original 1.35 the groups jumped around like a
  *  fire alarm, and a thing that obvious is scenery, not a discovery. The
  *  stillness before the emergence does the announcing now; the motion
- *  itself just has to be findable once you are looking. */
-const OR_SUBTLETY = [0.95, 0.9, 0.85, 0.8] as const;
+ *  itself just has to be findable once you are looking. One entry per
+ *  ramp rung. */
+const OR_SUBTLETY = [0.95, 0.92, 0.89, 0.86, 0.83, 0.8] as const;
 
 /**
- * The orientation sequence: 29 screens in four stages, none of which hides
- * anything. Generated rather than written out, because they differ only in
- * which tempers they carry and which seed they use, and twenty-nine
- * hand-written near-duplicates is twenty-nine chances to get one subtly
- * wrong.
+ * The orientation ramp, as a table.
  *
- * The order is built around recall. Each stage opens on the temper the
- * player saw most recently, and every screen in the two-temper stage shares
- * a temper with the screen before it, so there is always something familiar
- * to anchor against while the new thing arrives.
+ * Playtesting called the original twenty-nine screens too slow, and the
+ * replacement is a ladder the playtester specified rung by rung: one
+ * group alone, two of the same, two tempers told apart, doubled, then
+ * the full deck of bins arriving before the full deck of tempers. Each
+ * rung is one row here — how many screens it lasts, how many tempers a
+ * screen carries, how many groups of each, and how many bins the deck
+ * shows. `bins` may exceed `tempers`: that is the rung that teaches
+ * some bins are not to be fed.
+ *
+ * The ramp planner artifact edits `screens` per rung; keep this table in
+ * step with it.
  */
-function orientationGroups(): Temper[][] {
-  // Stage A — one group, one temper, three screens each, numbered order.
-  const a: Temper[][] = TEMPERS.flatMap((t) => [[t], [t], [t]]);
-
-  // Stage B — two groups, still one temper, so "two things to find" is
-  // learned before "two things to tell apart". Opens on MALICE, which
-  // stage A has just finished on, and cycles backwards through the four
-  // twice: MA, DR, FC, WO, MA, DR, FC, WO.
-  const cycle: Temper[] = [...TEMPERS].reverse();
-  const b: Temper[][] = [];
-  for (let i = 0; i < 8; i++) {
-    const t = cycle[i % cycle.length];
-    b.push([t, t]);
-  }
-
-  // Stage C — two tempers, and the first real discrimination. It opens on
-  // the two the player has just seen (WO from the screen before, and MA
-  // from the one before that), and then each pair keeps one temper from
-  // the previous screen while introducing one new one. Every temper
-  // appears exactly twice.
-  const lastB = b[b.length - 1][0];              // WO
-  const prevB = b[b.length - 2][0];              // FC
-  const rest = TEMPERS.filter((t) => t !== lastB && t !== prevB);
-  const c: Temper[][] = [
-    [lastB, prevB],
-    [prevB, rest[0]],
-    [rest[0], rest[1]],
-    [rest[1], lastB],
-  ];
-
-  // Stage D — the full deck, one group per temper.
-  const d: Temper[][] = Array.from({ length: 5 }, () => [...TEMPERS]);
-
-  return [...a, ...b, ...c, ...d];
+export interface OrientStage {
+  readonly screens: number;
+  readonly tempers: number;
+  readonly groupsPerTemper: number;
+  readonly bins: number;
 }
 
-function orientationScreens(): LevelDef[] {
-  const groups = orientationGroups();
-  const stageOf = (i: number) => (i < 12 ? 0 : i < 20 ? 1 : i < 24 ? 2 : 3);
+export const ORIENT_STAGES: readonly OrientStage[] = [
+  { screens: 4, tempers: 1, groupsPerTemper: 1, bins: 1 },
+  { screens: 2, tempers: 1, groupsPerTemper: 2, bins: 1 },
+  { screens: 2, tempers: 2, groupsPerTemper: 1, bins: 2 },
+  { screens: 2, tempers: 2, groupsPerTemper: 2, bins: 2 },
+  { screens: 2, tempers: 2, groupsPerTemper: 2, bins: 4 },
+  { screens: 1, tempers: 4, groupsPerTemper: 1, bins: 4 },
+];
 
-  return groups.map((tempers, i) => {
-    const stage = stageOf(i);
-    const last = i === groups.length - 1;
-    // The first screens put their group in the middle of the board, where
-    // it cannot be missed. Later ones push it outwards, so finding it
-    // becomes part of the task before the probe ever arrives.
-    const focus = i < 4 ? "centre" : i < 16 ? "mid" : "edge";
-    // One bin and two groups means each is half the file; one group per
-    // bin means each is the whole of its own.
-    const quota = stage === 1 ? 2 : 1;
-    return {
-      id: `orientation-${String(i + 1).padStart(2, "0")}`,
-      name: "ORIENTATION",
-      fileCode: "0001",
-      tempers: [...new Set(tempers)],
-      spacing: stage === 3 ? 5 : 6,
-      lore:
-        "Everything you will ever refine is already on the screen. Most of it is only pretending to be still.",
-      seconds: 0,
-      untimed: true,
-      training: true,
-      selfAgitate: true,
-      startMode: "select",
-      // One digit of overlap lifts the whole group. A new refiner is never
-      // told that their correct instinct was a wrong box.
-      minCapture: 1,
-      // No ceremony between screens: a completion banner apiece would break
-      // one continuous sequence into twenty-nine interruptions. The last
-      // screen keeps the full one, so orientation ends properly and
-      // releases the single addendum the whole sequence is worth.
-      ceremony: last ? "full" : "none",
-      autoAdvanceMs: 900,
-      archived: last,
-      stage: [i + 1, groups.length],
-      focus,
-      tapToSelect: true,
-      // Only where a single bin is on the deck, so the arrows point at the
-      // one place a packet can go and give nothing away.
-      binHint: new Set(tempers).size === 1,
-      seed: (0x0b1e + i * 0x1d37) >>> 0,
-      quota,
-      spare: 0,
-      subtlety: OR_SUBTLETY[stage],
-    } satisfies LevelDef;
+/** Focus and subtlety per rung: groups start centred and loud, and edge
+ *  outwards and quieten as the ladder climbs. */
+const OR_FOCUS = ["centre", "centre", "mid", "mid", "edge", "edge"] as const;
+
+function orientationScreens(): LevelDef[] {
+  const out: LevelDef[] = [];
+  const total = ORIENT_STAGES.reduce((n, st) => n + st.screens, 0);
+  // `k` is the wheel index of the temper most recently shown. A solo
+  // screen advances the wheel; a multi-temper screen OPENS on that most
+  // recent temper and introduces the next — recall is always anchored on
+  // something the player has just seen.
+  let k = -1;
+  let index = 0;
+  ORIENT_STAGES.forEach((st, stage) => {
+    for (let sIdx = 0; sIdx < st.screens; sIdx++) {
+      const n = Math.min(4, Math.max(1, st.tempers));
+      let tempers: Temper[];
+      if (n === 4) {
+        tempers = [...TEMPERS];
+      } else if (n === 1) {
+        k += 1;
+        tempers = [TEMPERS[((k % 4) + 4) % 4]];
+      } else {
+        tempers = Array.from(
+          { length: n },
+          (_, j) => TEMPERS[(((k + j) % 4) + 4) % 4],
+        );
+        k += n - 1;
+      }
+      // Bins in canonical deck order: the content tempers, widened with
+      // the remaining tempers until the deck is as wide as the rung asks.
+      const binCount = Math.min(4, Math.max(n, st.bins));
+      const showBins =
+        binCount === tempers.length
+          ? undefined
+          : [
+              ...tempers,
+              ...TEMPERS.filter((t) => !tempers.includes(t)),
+            ].slice(0, binCount).sort(
+              (x, y) => TEMPERS.indexOf(x) - TEMPERS.indexOf(y),
+            );
+      const groups = n * st.groupsPerTemper;
+      const i = index++;
+      const last = i === total - 1;
+      out.push({
+        id: `orientation-${String(i + 1).padStart(2, "0")}`,
+        name: "ORIENTATION",
+        fileCode: "0001",
+        tempers: [...new Set(tempers)],
+        ...(showBins ? { showBins } : {}),
+        spacing: groups >= 4 ? 5 : 6,
+        lore:
+          "Everything you will ever refine is already on the screen. Most of it is only pretending to be still.",
+        seconds: 0,
+        untimed: true,
+        training: true,
+        selfAgitate: true,
+        startMode: "select",
+        // One digit of overlap lifts the whole group. A new refiner is
+        // never told that their correct instinct was a wrong box.
+        minCapture: 1,
+        // No ceremony between screens: one continuous sequence, not a
+        // banner per screen. The last keeps the full one, so orientation
+        // ends properly and releases its single addendum.
+        ceremony: last ? "full" : "none",
+        autoAdvanceMs: 900,
+        archived: last,
+        stage: [i + 1, total],
+        focus: OR_FOCUS[stage],
+        tapToSelect: true,
+        // Only where a single bin is on the deck, so the arrows point at
+        // the one place a packet can go and give nothing away.
+        binHint: binCount === 1,
+        seed: (0x0b1e + i * 0x1d37) >>> 0,
+        quota: st.groupsPerTemper,
+        spare: 0,
+        subtlety: OR_SUBTLETY[stage],
+      } satisfies LevelDef);
+    }
   });
+  return out;
 }
 
 export const LEVELS: readonly LevelDef[] = [

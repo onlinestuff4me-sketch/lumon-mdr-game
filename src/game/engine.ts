@@ -329,9 +329,17 @@ export class GameEngine {
   private snapshotDirty = true;
   /** Reused each frame so the hot loop allocates nothing. */
   private peak: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
-  /** The tempers this file uses — one, two or all four. */
+  /** The bins on the deck — the content tempers, unless the level shows a
+   *  wider deck to teach that not every bin is to be fed. */
   get activeTempers(): readonly Temper[] {
-    return LEVELS[this.levelIndex].tempers;
+    const level = LEVELS[this.levelIndex];
+    return level.showBins ?? level.tempers;
+  }
+
+  /** Exposed for the test harness, which derives level indices by name
+   *  and structure instead of hardcoding them. */
+  get levels(): readonly (typeof LEVELS)[number][] {
+    return LEVELS;
   }
   private snapshotAt = 0;
   private nextTockAt = 0;
@@ -525,7 +533,7 @@ export class GameEngine {
       // 900ms — the twenty-one interruptions the sequence exists to avoid.
       ceremony: level.ceremony ?? "full",
       teaching: level.teaches === true,
-      activeTempers: level.tempers,
+      activeTempers: level.showBins ?? level.tempers,
       stage: level.stage ?? null,
       lore: level.lore,
       isLastLevel: this.levelIndex >= LEVELS.length - 1,
@@ -1844,7 +1852,10 @@ export class GameEngine {
   }
 
   private checkCompletion(): void {
-    for (const t of this.activeTempers) {
+    // Content tempers, not shown bins: a deck can display bins whose
+    // temper has nothing on the board, and an unfillable bin must never
+    // hold a file open.
+    for (const t of LEVELS[this.levelIndex].tempers) {
       if (this.bins[t].fill < 0.999) return;
     }
     const level = LEVELS[this.levelIndex];

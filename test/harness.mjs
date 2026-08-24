@@ -235,6 +235,17 @@ export const load = async (page, index) => {
   await page.waitForTimeout(60);
 };
 
+/** Level index by file name — the queue reshuffles as the ramp is tuned,
+ *  and a test pinned to a number breaks on every reshuffle. */
+export const byName = async (page, name) => {
+  const i = await page.evaluate(
+    (n) => window.__mdr.levels.findIndex((l) => l.name === n),
+    name,
+  );
+  if (i < 0) throw new Error(`no level named ${name}`);
+  return i;
+};
+
 export const setMode = (page, mode) =>
   page.evaluate((m) => window.__mdr.setMode(m), mode);
 

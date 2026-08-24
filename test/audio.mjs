@@ -169,8 +169,18 @@ const BANDS = { WO: [20, 60], FC: [250, 350], DR: [90, 120], MA: [200, 500] };
 const base = {};
 for (const t of Object.keys(BANDS)) base[t] = await bandPower(BANDS[t][0], BANDS[t][1]);
 
-// Single-temper orientation screens: 0-2 WO, 3-5 FC, 6-8 DR, 9-11 MA.
-for (const [name, lvl] of [["WO", 1], ["FC", 4], ["DR", 7], ["MA", 10]]) {
+// Each temper's first solo orientation screen, found by structure rather
+// than by index — the ramp planner reshuffles the queue.
+const solos = await page.evaluate(() => {
+  const out = {};
+  window.__mdr.levels.forEach((l, i) => {
+    if (l.selfAgitate && l.tempers.length === 1 && !(l.tempers[0] in out)) {
+      out[l.tempers[0]] = i;
+    }
+  });
+  return out;
+});
+for (const [name, lvl] of Object.entries(solos)) {
   await page.evaluate((i) => window.__mdr.startLevel(i), lvl);
   await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });
   await page.waitForTimeout(2500); // the crossfade is deliberately slow

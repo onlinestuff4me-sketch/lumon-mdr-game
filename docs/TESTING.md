@@ -64,7 +64,7 @@ reimplemented, because a test that duplicates the code it checks drifts from
 it and then agrees with itself. An earlier version of this file did exactly
 that and reported three phantom failures.
 
-Across all 46 screens:
+Across every screen in the queue:
 
 - every active temper seeds at least `quota` clusters, and no temper is
   seeded that has no bin
@@ -79,7 +79,7 @@ Across all 46 screens:
 - `binHint` is never set on a multi-bin file, where it would point at the
   answer
 - the last screen never auto-advances, which would stall the queue
-- orientation is 29 screens in four stages with one archive row: three per temper, then eight of two-groups-one-temper opening on the temper just seen, then four paired screens each sharing a temper with the one before, then five of all four
+- orientation matches the six-rung ramp table (`ORIENT_STAGES`) screen for screen — temper count, groups per temper, and bins shown per rung; every temper gets a solo screen before any discrimination; every multi-temper screen shares a temper with the screen before; the rung that widens the deck shows bins that must not be fed
 - every Act III mechanic first appears on its own teaching file, and the
   fifth temper appears only on Cold Harbor and is never taught
 - groups move outwards across orientation: measured mean offset from centre
@@ -130,8 +130,8 @@ that ships, has no handle.
   and iOS gesture interception are not exercised.
 - **Visual regression.** No screenshot diffing. Renderer changes — the
   anomaly swell, the after-image, the lens shrink — are checked by eye.
-- **The other 43 screens.** Playthroughs cover two. The data suite covers all
-  46 structurally, but only two are played.
+- **The other screens.** Playthroughs cover two. The data suite covers the
+  whole queue structurally, but only two are played.
 - **Performance.** The frame budget is measured by hand, not asserted.
 
 ---
