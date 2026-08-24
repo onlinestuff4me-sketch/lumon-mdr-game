@@ -59,6 +59,9 @@ try {
   failed += run("node", ["test/e2e.mjs"], {
     env: { ...process.env, MDR_URL: `http://127.0.0.1:${port}/` },
   }) ? 1 : 0;
+  failed += run("node", ["test/audio.mjs"], {
+    env: { ...process.env, MDR_URL: `http://127.0.0.1:${port}/` },
+  }) ? 1 : 0;
 } finally {
   server.kill();
 }

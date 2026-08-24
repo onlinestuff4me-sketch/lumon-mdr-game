@@ -110,6 +110,7 @@ that ships, has no handle.
 | reticle and hint | Offsets are −68 / −22 / −22 for probe / select / carry; the bin hint and the highlighted target bin are showing the moment the packet lifts; touching the box brings it to the carry reticle and then it moves only with the finger; touching anywhere else releases the digits back to the grid *still found*, and the group can be taken again and binned. |
 | taps land where the finger is | A tap lifts with a finger already resting elsewhere on the screen (real CDP multi-touch — a resting thumb makes every later touch `isPrimary: false`, and refusing those killed every tap for as long as it stayed put), while a drag already in flight is never stolen by a stray second finger. A group that drifts out from under a held thumb is still lifted, at 90ms and at 1200ms, on four tempers. No pair of taps can flip a self-agitating screen into PROBE, a mode it has no use for. Eighty raw taps — nine points across each group's footprint plus the centre of its top row, on eight orientation screens — every one lifts. A still press lifts at 60ms and at 1200ms alike. A press that drifts 16px and comes back still lifts. Two taps on a group never toggle the mode. A touch inside the 900ms auto-advance window is not discarded. A gesture left open for nine seconds is taken over by the next touch instead of blocking it. |
 | ambient temper | With one group the bed plays that group's temper; with four it plays the most central; taking one into the hand moves the bed to it; the fifth temper gives off nothing. |
+| audio bed exists (`test/audio.mjs`) | Measured, not trusted: the hum plays; each of the four temper beds adds ≥1.2x energy over the bare hum; a mute takes it all away. |
 | bin catch | A packet dropped 40px above a bin's top edge still lands in it; one dropped far above stays in hand. The catch zone exists because the packet's centre is what is tested and the box is a hundred pixels wide — demanding the centre fully inside the bin meant drops released at its top edge fell back into the hand. |
 | saves | A fresh terminal offers BEGIN ORIENTATION and no CONTINUE. Completing a file and fully reloading the page offers CONTINUE, a new-save escape hatch, and the attempt listed with its timestamp. CONTINUE resumes one past the furthest completed file; BEGIN A NEW SAVE starts from nothing without destroying the old attempt; loading the older attempt resumes its own bookmark, not the new one's. |
 | console | No page errors in any of it. |
@@ -118,9 +119,13 @@ that ships, has no handle.
 
 ## What is not covered, and why
 
-- **Audio and haptics output.** Asserted only through engine state
-  (`probe` stays 0, `muted` flips). Nothing verifies what is actually heard
-  or felt; that still needs a device.
+- **How the audio *sounds*.** `test/audio.mjs` now measures what is
+  actually rendered — an analyser tapped in behind the limiter proves the
+  hum plays, every temper's bed adds energy over it, and a mute silences
+  everything. That exists because a temper's ambient voice twice shipped
+  inaudible while every other check was green. But RMS is existence, not
+  taste: whether the mix is *right* still needs ears on a device. Haptics
+  remain asserted only through engine state.
 - **Real touch.** The suite drives mouse events. Multi-touch, palm rejection
   and iOS gesture interception are not exercised.
 - **Visual regression.** No screenshot diffing. Renderer changes — the
