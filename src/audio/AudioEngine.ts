@@ -16,8 +16,6 @@ type VoiceParam = {
   amp: GainNode;
   /** Opens with proximity. */
   filter: BiquadFilterNode;
-  /** Called each engine tick with (intensity, now). Optional. */
-  tick?: (intensity: number, now: number) => void;
   oscillators: OscillatorNode[];
   baseCutoff: number;
   peakCutoff: number;
@@ -35,7 +33,7 @@ const SMOOTH = 0.05; // setTargetAtTime time-constant for proximity moves
  * colour the room, quiet enough that finding a group with the lens is
  * still unmistakably louder than not having found one.
  */
-const AMBIENT_GAIN = 0.09;
+const AMBIENT_GAIN = 0.13;
 /** Slower than SMOOTH, so one group's temper dissolves into the next
  *  rather than switching. */
 const AMBIENT_SMOOTH = 0.8;
@@ -68,16 +66,13 @@ export class AudioEngine {
   private ctx: AudioContext | null = null;
   private bus: GainNode | null = null;
   private voices = new Map<Temper, VoiceParam>();
-  /** Combined level per temper, read by the scheduled voice ticks. */
+  /** Combined bed+probe level per temper, kept for mute restores. */
   private intensities: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
   /** What the lens is finding right now. */
   private proximity: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
   /** What is on screen, playing underneath. */
   private ambient: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
   private muted = false;
-  private arpStep = 0;
-  private nextArpAt = 0;
-  private nextKickAt = 0;
   /** One second of white noise, generated once and replayed with different
    *  filters. Synthesising 16k samples inside a pointerup handler was a
    *  guaranteed frame hitch at the exact moment of negative feedback. */
@@ -179,171 +174,158 @@ export class AudioEngine {
   }
 
   /** WOE — a 60 Hz minor drone that sags. */
+  /**
+   * The four tempers, rebuilt as disturbances of the mains hum.
+   *
+   * Everything below is made from the hum's own family — 50Hz, its
+   * harmonics, and near-neighbours of them — so a temper never sounds
+   * like an instrument playing over the room tone: it sounds like the
+   * room tone going slightly wrong. What tells the four apart is not
+   * pitch or melody but *time*: how the disturbance moves.
+   *
+   *   WO  the hum grown heavy   — a slow 1.6Hz mourning beat, low.
+   *   FC  the hum flickering    — bright harmonics chattering at 7Hz.
+   *   DR  the hum straining     — a tense 3Hz waver with an 11Hz shiver.
+   *   MA  the hum fouled        — a distorted buzz surging in and out.
+   *
+   * The probe drives the same disturbance harder (apply() opens each
+   * voice's filter and raises its gain with intensity), so what you hear
+   * under the lens is recognisably the thing you half-heard in the room —
+   * louder and closer, never a different sound.
+   */
   private buildWoe(ctx: AudioContext, out: GainNode): VoiceParam {
     const amp = ctx.createGain();
     amp.gain.value = 0;
     const filter = ctx.createBiquadFilter();
     filter.type = "lowpass";
-    filter.frequency.value = 180;
-    filter.Q.value = 2;
+    filter.frequency.value = 140;
+    filter.Q.value = 1.4;
 
-    const root = ctx.createOscillator();
-    root.type = "sine";
-    root.frequency.value = 60;
-    // A minor third above the root: the interval of institutional sorrow.
-    const third = ctx.createOscillator();
-    third.type = "sine";
-    third.frequency.value = 60 * Math.pow(2, 3 / 12);
+    // 50 against 48.4: a 1.6Hz beat, the transformer swelling and sagging
+    // like slow breathing. The 25Hz sub gives it weight without pitch.
+    const a = ctx.createOscillator();
+    a.type = "sine";
+    a.frequency.value = 50;
+    const b = ctx.createOscillator();
+    b.type = "sine";
+    b.frequency.value = 48.4;
     const sub = ctx.createOscillator();
     sub.type = "triangle";
-    sub.frequency.value = 30;
+    sub.frequency.value = 25;
 
     const mix = ctx.createGain();
-    mix.gain.value = 0.34;
-    root.connect(mix);
-    third.connect(mix);
+    mix.gain.value = 0.5;
+    a.connect(mix);
+    b.connect(mix);
     const subGain = ctx.createGain();
-    subGain.gain.value = 0.5;
+    subGain.gain.value = 0.35;
     sub.connect(subGain).connect(mix);
 
-    // Slow sigh: an LFO that drags the cutoff down and back.
+    // And the whole thing sighs: the cutoff drags down and back, slower
+    // than the beat, so no two swells are quite alike.
     const lfo = ctx.createOscillator();
     lfo.type = "sine";
     lfo.frequency.value = 0.22;
     const lfoDepth = ctx.createGain();
-    lfoDepth.gain.value = 55;
+    lfoDepth.gain.value = 40;
     lfo.connect(lfoDepth).connect(filter.frequency);
 
     mix.connect(filter).connect(amp).connect(out);
-    [root, third, sub, lfo].forEach((o) => o.start());
+    [a, b, sub, lfo].forEach((o) => o.start());
 
     return {
       amp,
       filter,
-      oscillators: [root, third, sub, lfo],
-      baseCutoff: 110,
-      peakCutoff: 320,
-      peakGain: 0.85,
+      oscillators: [a, b, sub, lfo],
+      baseCutoff: 120,
+      peakCutoff: 340,
+      peakGain: 0.8,
     };
   }
 
-  /** FROLIC — an 880 Hz arpeggiated chime, all sugar and no weight. */
   private buildFrolic(ctx: AudioContext, out: GainNode): VoiceParam {
     const amp = ctx.createGain();
     amp.gain.value = 0;
     const filter = ctx.createBiquadFilter();
-    filter.type = "bandpass";
-    filter.frequency.value = 1400;
-    filter.Q.value = 1.1;
+    filter.type = "lowpass";
+    filter.frequency.value = 1000;
+    filter.Q.value = 0.9;
 
-    // One persistent oscillator; the arpeggio is scheduled onto its params,
-    // so a long probe never allocates a single node.
-    const osc = ctx.createOscillator();
-    osc.type = "triangle";
-    osc.frequency.value = 880;
-    const pluck = ctx.createGain();
-    pluck.gain.value = 0;
+    // The hum's 6th and 8th harmonics, chattering at ballast speed. High
+    // enough to sit clearly above the 50-150Hz floor — the previous 190Hz
+    // carrier vanished into it — and still the same electricity, because
+    // they are exact multiples of the mains. The flicker is nearly full
+    // depth: frolic's character is the chatter, not the tone.
+    const h6 = ctx.createOscillator();
+    h6.type = "sine";
+    h6.frequency.value = 300;
+    const h8 = ctx.createOscillator();
+    h8.type = "sine";
+    h8.frequency.value = 400;
 
-    const shimmer = ctx.createOscillator();
-    shimmer.type = "sine";
-    shimmer.frequency.value = 880 * 2;
-    const shimmerGain = ctx.createGain();
-    shimmerGain.gain.value = 0.18;
-    shimmer.connect(shimmerGain).connect(pluck);
+    const mix = ctx.createGain();
+    // Twice the drive of the low voices: at equal energy a fluttering
+    // 300Hz pair still measures barely above the hum floor, and the whole
+    // failure mode this rig exists for is frolic quietly vanishing.
+    mix.gain.value = 1.0;
+    h6.connect(mix);
+    const h8Gain = ctx.createGain();
+    h8Gain.gain.value = 0.45;
+    h8.connect(h8Gain).connect(mix);
 
-    osc.connect(pluck).connect(filter).connect(amp).connect(out);
-    osc.start();
-    shimmer.start();
-
-    // Frolic's continuous body. With no finger down the arpeggio never
-    // fires, and the pluck chain rests at zero — so without this, frolic's
-    // bed would be silence. A low tone rippling at ballast speed: the
-    // flutter is what carries the bright, quick character, so the carrier
-    // can sit right down among the hum's own harmonics — at 1180Hz it cut
-    // through everything it was supposed to hide in. Wired straight to
-    // `amp`, past the bandpass, so its pitch is not at the mercy of the
-    // probe filter; the amp still rules it and a mute still kills it dead.
-    const whine = ctx.createOscillator();
-    whine.type = "sine";
-    whine.frequency.value = 190;
-    const whineGain = ctx.createGain();
-    whineGain.gain.value = 0.34;
+    const flicker = ctx.createGain();
+    flicker.gain.value = 0.5;
     const flutter = ctx.createOscillator();
     flutter.type = "sine";
-    flutter.frequency.value = 6.7;
+    flutter.frequency.value = 7.3;
     const flutterDepth = ctx.createGain();
-    flutterDepth.gain.value = 0.22;
-    flutter.connect(flutterDepth).connect(whineGain.gain);
-    whine.connect(whineGain).connect(amp);
-    whine.start();
-    flutter.start();
+    flutterDepth.gain.value = 0.45;
+    flutter.connect(flutterDepth).connect(flicker.gain);
 
-    // A-major-ish sparkle above 880: A5 C#6 E6 A6 C#6 E6.
-    const steps = [1, 1.26, 1.5, 2, 1.5, 1.26];
-
-    const tick = (intensity: number, now: number) => {
-      if (intensity <= 0.02) return;
-      // Below a real probe the arpeggio slows right down: at bed level it
-      // is one distant note most of a second apart, not a melody. The two
-      // curves meet at 0.2 so a rising probe never hears the tempo jump.
-      const interval =
-        intensity >= 0.2 ? 0.26 - 0.14 * intensity : 0.9 - 3.34 * intensity;
-      if (now < this.nextArpAt) return;
-      const t = Math.max(now, this.nextArpAt || now);
-      const f = 880 * steps[this.arpStep % steps.length];
-      osc.frequency.setValueAtTime(f, t);
-      shimmer.frequency.setValueAtTime(f * 2, t);
-      pluck.gain.cancelScheduledValues(t);
-      pluck.gain.setValueAtTime(0.0001, t);
-      pluck.gain.linearRampToValueAtTime(0.7, t + 0.012);
-      pluck.gain.exponentialRampToValueAtTime(0.0001, t + interval * 0.95);
-      this.arpStep++;
-      this.nextArpAt = t + interval;
-    };
+    mix.connect(flicker).connect(filter).connect(amp).connect(out);
+    [h6, h8, flutter].forEach((o) => o.start());
 
     return {
       amp,
       filter,
-      tick,
-      oscillators: [osc, shimmer, whine, flutter],
+      oscillators: [h6, h8, flutter],
       baseCutoff: 900,
-      peakCutoff: 2600,
-      peakGain: 0.5,
-      bedScale: 0.85,
+      peakCutoff: 2400,
+      peakGain: 0.55,
     };
   }
 
-  /** DREAD — 150 Hz against 212 Hz. A tritone that will not resolve. */
   private buildDread(ctx: AudioContext, out: GainNode): VoiceParam {
     const amp = ctx.createGain();
     amp.gain.value = 0;
     const filter = ctx.createBiquadFilter();
     filter.type = "lowpass";
-    filter.frequency.value = 700;
-    filter.Q.value = 3.5;
+    filter.frequency.value = 300;
+    filter.Q.value = 1.6;
 
+    // The hum's second harmonic against a neighbour 3Hz off — too fast to
+    // breathe with, too slow to be a texture: an uneasy waver. The 11Hz
+    // shiver on top is the sound of something held too tight, matched in
+    // spirit to the visual tremor without trying to race the display.
     const a = ctx.createOscillator();
-    a.type = "sawtooth";
-    a.frequency.value = 150;
+    a.type = "sine";
+    a.frequency.value = 100;
     const b = ctx.createOscillator();
-    b.type = "sawtooth";
-    // Exactly 212 Hz against 150 Hz — a tritone, near enough to 1.414 that
-    // it beats against itself without any help from detune.
-    b.frequency.value = 212;
+    b.type = "sine";
+    b.frequency.value = 103;
 
     const mix = ctx.createGain();
-    mix.gain.value = 0.22;
+    mix.gain.value = 0.5;
     a.connect(mix);
     b.connect(mix);
 
-    // 30 Hz amplitude shiver, matched to the visual X-axis tremor.
     const trem = ctx.createOscillator();
-    trem.type = "square";
-    trem.frequency.value = 30;
+    trem.type = "sine";
+    trem.frequency.value = 11;
     const tremDepth = ctx.createGain();
-    tremDepth.gain.value = 0.35;
+    tremDepth.gain.value = 0.22;
     const tremTarget = ctx.createGain();
-    tremTarget.gain.value = 0.65;
+    tremTarget.gain.value = 0.78;
     trem.connect(tremDepth).connect(tremTarget.gain);
 
     mix.connect(tremTarget).connect(filter).connect(amp).connect(out);
@@ -353,72 +335,61 @@ export class AudioEngine {
       amp,
       filter,
       oscillators: [a, b, trem],
-      baseCutoff: 380,
-      peakCutoff: 1500,
+      baseCutoff: 260,
+      peakCutoff: 1000,
       peakGain: 0.62,
     };
   }
 
-  /** MALICE — sawtooth driven into a shaper, with a heavy kick. */
   private buildMalice(ctx: AudioContext, out: GainNode): VoiceParam {
     const amp = ctx.createGain();
     amp.gain.value = 0;
     const filter = ctx.createBiquadFilter();
     filter.type = "lowpass";
-    filter.frequency.value = 900;
-    filter.Q.value = 1.4;
+    filter.frequency.value = 500;
+    filter.Q.value = 1.2;
 
+    // The hum fouled: its second harmonic squared off and its own root a
+    // fifth-ish below as a saw, pushed through the distortion curve so the
+    // result is grain rather than tone, surging in and out slower than
+    // breathing — something leaning on the line, then easing off.
     const osc = ctx.createOscillator();
-    osc.type = "sawtooth";
-    osc.frequency.value = 82;
+    osc.type = "square";
+    osc.frequency.value = 100;
     const growl = ctx.createOscillator();
-    growl.type = "square";
-    growl.frequency.value = 41.5;
+    growl.type = "sawtooth";
+    growl.frequency.value = 55;
 
     const pre = ctx.createGain();
-    pre.gain.value = 0.45;
+    pre.gain.value = 0.4;
     const shaper = ctx.createWaveShaper();
-    shaper.curve = makeDistortionCurve(28);
+    shaper.curve = makeDistortionCurve(24);
     shaper.oversample = "2x";
 
-    const kick = ctx.createGain();
-    kick.gain.value = 0.35;
+    const surge = ctx.createGain();
+    surge.gain.value = 0.55;
+    const surgeLfo = ctx.createOscillator();
+    surgeLfo.type = "sine";
+    surgeLfo.frequency.value = 0.55;
+    const surgeDepth = ctx.createGain();
+    surgeDepth.gain.value = 0.4;
+    surgeLfo.connect(surgeDepth).connect(surge.gain);
 
     osc.connect(pre);
     growl.connect(pre);
-    pre.connect(shaper).connect(kick).connect(filter).connect(amp).connect(out);
-    osc.start();
-    growl.start();
-
-    const tick = (intensity: number, now: number) => {
-      if (intensity <= 0.02) return;
-      // Same whisper-level stretch as frolic's arpeggio, meeting the probe
-      // curve at 0.2: the bed gets a slow distant pulse, not a heartbeat.
-      const interval =
-        intensity >= 0.2 ? 0.62 - 0.26 * intensity : 1.2 - 3.16 * intensity;
-      if (now < this.nextKickAt) return;
-      const t = Math.max(now, this.nextKickAt || now);
-      kick.gain.cancelScheduledValues(t);
-      kick.gain.setValueAtTime(0.35, t);
-      kick.gain.linearRampToValueAtTime(1, t + 0.02);
-      kick.gain.exponentialRampToValueAtTime(0.35, t + interval * 0.8);
-      osc.frequency.cancelScheduledValues(t);
-      osc.frequency.setValueAtTime(150, t);
-      osc.frequency.exponentialRampToValueAtTime(82, t + 0.16);
-      this.nextKickAt = t + interval;
-    };
+    pre.connect(shaper).connect(surge).connect(filter).connect(amp).connect(out);
+    [osc, growl, surgeLfo].forEach((o) => o.start());
 
     return {
       amp,
       filter,
-      tick,
-      oscillators: [osc, growl],
-      baseCutoff: 500,
-      peakCutoff: 2200,
-      peakGain: 0.55,
-      // Distortion survives quietness: at the same gain as woe's clean
-      // drone, malice's rasp still reads as a voice. It sits well behind.
-      bedScale: 0.5,
+      oscillators: [osc, growl, surgeLfo],
+      baseCutoff: 320,
+      peakCutoff: 1500,
+      peakGain: 0.5,
+      // Distortion survives quietness: at the same gain as a clean drone
+      // the grain still reads as a voice. It sits further back in the bed.
+      bedScale: 0.7,
     };
   }
 
@@ -489,24 +460,18 @@ export class AudioEngine {
     return false;
   }
 
-  /** Drive the scheduled elements (arpeggio, kick). Call once per frame. */
+  /**
+   * Per-frame upkeep. The voices used to schedule notes from here —
+   * frolic's arpeggio, malice's kick — but a note is a performance, and
+   * the redesign has no performances: every temper is a continuous
+   * disturbance whose LFOs run themselves. Only the hum needs
+   * re-asserting, so it comes back after a hardStop; one setTargetAtTime
+   * on an already-settled param costs nothing.
+   */
   tick(): void {
     const ctx = this.ctx;
     if (!ctx || ctx.state !== "running" || this.muted) return;
-    // Re-asserted every frame so the hum comes back after a hardStop —
-    // one setTargetAtTime on an already-settled param costs nothing.
     this.refreshHum();
-    const now = ctx.currentTime;
-    for (const [temper, voice] of this.voices) {
-      // Driven by the probe alone, never by the bed. The scheduled
-      // elements are notes — frolic's arpeggio, malice's pulse — and a
-      // note is a performance however quietly it is played. The bed is
-      // the room, and rooms do not perform: at bed level each voice is
-      // only its continuous body, one more electrical disturbance folded
-      // into the hum.
-      const p = this.proximity[temper];
-      voice.tick?.(p * p * (3 - 2 * p), now);
-    }
   }
 
   /** Drop the probe voices. The bed is not a probe and survives this —
