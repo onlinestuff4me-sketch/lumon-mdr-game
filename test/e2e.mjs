@@ -899,7 +899,100 @@ section("ambient temper");
   check("the fifth temper gives off nothing", quiet === null, String(quiet));
 }
 
-// ═══ 9. nothing threw ════════════════════════════════════════════════
+// ═══ 9. the bin catches what is brought near it ══════════════════════
+section("bin catch");
+{
+  // The packet's centre is what is tested, and the box is a hundred pixels
+  // wide — demanding the centre fully inside the bin meant drops released
+  // at its top edge fell back into the hand.
+  const dropAt = async (dy) => {
+    await load(page, 0);
+    const g = await findGroup(page);
+    await tap(page, origin, g.ctr);
+    if (!(await state(page)).carrying) return "no packet";
+    return page.evaluate(async (offset) => {
+      const e = window.__mdr;
+      const r = Object.values(e.layout.binRects).find((b) => b.w > 0);
+      const x = r.x + r.w / 2;
+      const y = r.y + offset;
+      const b = e.packetBounds(e.packet);
+      e.pointerDown(1, b.x + b.w / 2, b.y + b.h / 2);
+      e.pointerMove(1, x, y + 40);
+      // Land the packet centre itself at the probe point: the drop tests
+      // where the box is, not where the finger is.
+      const want = { x, y };
+      const cur = { x: e.packet.x, y: e.packet.y };
+      e.pointerMove(1, x + (want.x - cur.x), y + 40 + (want.y - cur.y));
+      e.pointerUp(1, x + (want.x - cur.x), y + 40 + (want.y - cur.y));
+      await new Promise((res) => setTimeout(res, 150));
+      return e.packet === null
+        ? (e.getSnapshot().progress > 0.99 ? "binned" : "released")
+        : "held";
+    }, dy);
+  };
+  eq("a drop 40px above the bin still lands in it", await dropAt(-40), "binned");
+  eq("a drop far above the bin stays in hand", await dropAt(-110), "held");
+}
+
+// ═══ 10. saves: continue, new, load ══════════════════════════════════
+section("saves");
+{
+  const boot = async () => {
+    await page.reload();
+    await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  };
+  // A terminal nobody has worked at: the briefing offers orientation, and
+  // no continue button exists to mislead.
+  await page.evaluate(() => localStorage.removeItem("lumon.mdr.runs.v1"));
+  await boot();
+  check("fresh terminal offers BEGIN ORIENTATION",
+    (await page.getByText("BEGIN ORIENTATION").count()) === 1);
+  check("and no CONTINUE", (await page.getByText("CONTINUE —").count()) === 0);
+
+  // Complete one file; the bookmark must survive a full reload.
+  await load(page, 0);
+  let guard = 0;
+  while ((await state(page)).progress < 100 && guard++ < 6) {
+    const g = await findGroup(page);
+    if (!g) break;
+    await tap(page, origin, g.ctr);
+    if (!(await state(page)).carrying) break;
+    await carryToBin(page, origin, g);
+  }
+  await page.waitForTimeout(400);
+  await boot();
+  check("after a completed file, CONTINUE is the offer",
+    (await page.getByText("CONTINUE —").count()) === 1);
+  check("with a new-save escape hatch",
+    (await page.getByText("BEGIN A NEW SAVE").count()) === 1);
+  check("and one previous save listed",
+    (await page.getByText("LOAD A PREVIOUS SAVE (1)").count()) === 1);
+
+  // Continue resumes one past the furthest completed file.
+  await page.getByText("CONTINUE —").click();
+  await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });
+  eq("continue lands on the next file",
+    await page.evaluate(() => window.__mdr.levelIndex), 1);
+
+  // A new save starts from nothing — and the old attempt survives it.
+  await boot();
+  await page.getByText("BEGIN A NEW SAVE").click();
+  await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });
+  eq("a new save starts at the beginning",
+    await page.evaluate(() => window.__mdr.levelIndex), 0);
+  await boot();
+  check("both attempts are now listed",
+    (await page.getByText("LOAD A PREVIOUS SAVE (2)").count()) === 1);
+
+  // Loading the older attempt picks up ITS bookmark, not the new one's.
+  await page.getByText("LOAD A PREVIOUS SAVE (2)").click();
+  await page.getByText("1/46 FILES").click();
+  await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });
+  eq("loading the older save resumes its own place",
+    await page.evaluate(() => window.__mdr.levelIndex), 1);
+}
+
+// ═══ 11. nothing threw ═══════════════════════════════════════════════
 section("console");
 check("no page errors", errors.length === 0, errors.join(" | "));
 

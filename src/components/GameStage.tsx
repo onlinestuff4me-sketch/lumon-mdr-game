@@ -2,7 +2,15 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { getAudio } from "../audio/AudioEngine";
 import { haptics } from "../audio/haptics";
 import { LEVELS } from "../game/constants";
-import { loadArchive, recordCompletion, resumeIndex } from "../game/archive";
+import { loadArchive, recordCompletion } from "../game/archive";
+import {
+  loadRuns,
+  recordRunProgress,
+  startNewRun,
+  selectRun,
+  continueIndex,
+  type RunStore,
+} from "../game/runs";
 import { computeLayout } from "../game/layout";
 import { useEngine } from "../hooks/useEngine";
 import { BinDeck } from "./BinDeck";
@@ -13,8 +21,6 @@ import { HUD } from "./HUD";
 import { PhaseOverlay } from "./PhaseOverlay";
 import { Viewport } from "./Viewport";
 
-const LEVEL_IDS = LEVELS.map((l) => l.id);
-
 export function GameStage() {
   const { engine, hud } = useEngine();
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -24,6 +30,7 @@ export function GameStage() {
   const [size, setSize] = useState({ w: 360, h: 640 });
   const [handbook, setHandbook] = useState(false);
   const [archive, setArchive] = useState<ReadonlySet<string>>(loadArchive);
+  const [runStore, setRunStore] = useState<RunStore>(loadRuns);
 
   const openHandbook = useCallback(() => {
     // Read the archive here rather than tracking it in an effect: the
@@ -126,6 +133,10 @@ export function GameStage() {
     if (hud.phase !== "complete") return;
     const level = LEVELS[hud.levelIndex];
     if (level) recordCompletion(level.id);
+    // The run's bookmark moves with the archive, in the same moment and
+    // for the same reason: closing the tab on the completion screen must
+    // lose nothing.
+    setRunStore(recordRunProgress(hud.levelIndex));
   }, [hud.phase, hud.levelIndex]);
 
   // ── page visibility: stop the loop, the drones and the buzzing ──────
@@ -243,15 +254,14 @@ export function GameStage() {
   const live =
     hud.phase === "probe" || hud.phase === "select" || hud.phase === "carry";
 
-  // Recomputed from the archive state, which is refreshed on every path
-  // that can reach the briefing screen.
-  const resumeAt = resumeIndex(archive, LEVEL_IDS);
-
-  const start = useCallback(() => {
-    void getAudio().unlock();
-    haptics.markActivated();
-    engine.startLevel(0);
-  }, [engine]);
+  const play = useCallback(
+    (index: number) => {
+      void getAudio().unlock();
+      haptics.markActivated();
+      engine.startLevel(index);
+    },
+    [engine],
+  );
 
   // Handle for the test harness to assert on real state.
   //
@@ -351,21 +361,28 @@ export function GameStage() {
             no phase can change underneath it. */}
         <PhaseOverlay
           hud={hud}
-          onStart={start}
+          onStart={() => play(0)}
           onNext={() => engine.nextLevel()}
           onRestart={() => engine.restart()}
           onNewQuarter={() => {
-            // Back to the briefing, where the resume link is read — so the
-            // files refined this sitting have to be visible to it.
+            // Back to the briefing, where the saves are read — so the
+            // files refined this sitting have to be visible to them.
             setArchive(loadArchive());
+            setRunStore(loadRuns());
             engine.restartQuarter();
           }}
           onHandbook={openHandbook}
-          resumeAt={resumeAt}
-          onResume={(index) => {
-            void getAudio().unlock();
-            haptics.markActivated();
-            engine.startLevel(index);
+          runStore={runStore}
+          onPlay={play}
+          onNewSave={() => {
+            setRunStore(startNewRun());
+            play(0);
+          }}
+          onLoadRun={(id) => {
+            const st = selectRun(id);
+            setRunStore(st);
+            const run = st.runs.find((r) => r.id === id);
+            play(run ? continueIndex(run, LEVELS.length) : 0);
           }}
         />
 

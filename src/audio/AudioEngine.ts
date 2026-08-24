@@ -22,6 +22,10 @@ type VoiceParam = {
   baseCutoff: number;
   peakCutoff: number;
   peakGain: number;
+  /** How much of the ambient bed this voice takes, relative to the others.
+   *  Malice's distorted body carries much further than the same gain of
+   *  woe's sine drone, so it steps further back. Default 1. */
+  bedScale?: number;
 };
 
 const SMOOTH = 0.05; // setTargetAtTime time-constant for proximity moves
@@ -251,6 +255,28 @@ export class AudioEngine {
     osc.start();
     shimmer.start();
 
+    // Frolic's continuous body. With no finger down the arpeggio never
+    // fires, and the pluck chain rests at zero — so without this, frolic's
+    // bed would be silence. A thin whine fluttering at ballast speed is
+    // what a lively fixture sounds like: unmistakably the bright temper,
+    // and unmistakably electricity rather than music. It lives behind
+    // `amp` like everything else, so the probe's brightness rules it and
+    // a mute kills it dead.
+    const whine = ctx.createOscillator();
+    whine.type = "sine";
+    whine.frequency.value = 1180;
+    const whineGain = ctx.createGain();
+    whineGain.gain.value = 0.5;
+    const flutter = ctx.createOscillator();
+    flutter.type = "sine";
+    flutter.frequency.value = 6.7;
+    const flutterDepth = ctx.createGain();
+    flutterDepth.gain.value = 0.3;
+    flutter.connect(flutterDepth).connect(whineGain.gain);
+    whine.connect(whineGain).connect(filter);
+    whine.start();
+    flutter.start();
+
     // A-major-ish sparkle above 880: A5 C#6 E6 A6 C#6 E6.
     const steps = [1, 1.26, 1.5, 2, 1.5, 1.26];
 
@@ -278,10 +304,11 @@ export class AudioEngine {
       amp,
       filter,
       tick,
-      oscillators: [osc, shimmer],
+      oscillators: [osc, shimmer, whine, flutter],
       baseCutoff: 900,
       peakCutoff: 2600,
       peakGain: 0.5,
+      bedScale: 0.85,
     };
   }
 
@@ -388,6 +415,9 @@ export class AudioEngine {
       baseCutoff: 500,
       peakCutoff: 2200,
       peakGain: 0.55,
+      // Distortion survives quietness: at the same gain as woe's clean
+      // drone, malice's rasp still reads as a voice. It sits well behind.
+      bedScale: 0.5,
     };
   }
 
@@ -427,16 +457,17 @@ export class AudioEngine {
   }
 
   private apply(temper: Temper, smooth: number): void {
+    const voice = this.voices.get(temper);
     const near = this.proximity[temper];
     // The bed ducks under a live probe: the lens is the thing answering
     // the question, and it must always be the louder answer.
     const duck = this.anyProbe() ? AMBIENT_DUCK : 1;
-    const bed = this.ambient[temper] * AMBIENT_GAIN * duck;
+    const bed =
+      this.ambient[temper] * AMBIENT_GAIN * duck * (voice?.bedScale ?? 1);
     const shaped = near * near * (3 - 2 * near);
     const level = Math.max(shaped, bed);
     this.intensities[temper] = level;
 
-    const voice = this.voices.get(temper);
     const ctx = this.ctx;
     if (!voice || !ctx || ctx.state !== "running") return;
 
@@ -466,7 +497,14 @@ export class AudioEngine {
     this.refreshHum();
     const now = ctx.currentTime;
     for (const [temper, voice] of this.voices) {
-      voice.tick?.(this.intensities[temper], now);
+      // Driven by the probe alone, never by the bed. The scheduled
+      // elements are notes — frolic's arpeggio, malice's pulse — and a
+      // note is a performance however quietly it is played. The bed is
+      // the room, and rooms do not perform: at bed level each voice is
+      // only its continuous body, one more electrical disturbance folded
+      // into the hum.
+      const p = this.proximity[temper];
+      voice.tick?.(p * p * (3 - 2 * p), now);
     }
   }
 
