@@ -124,11 +124,37 @@ check("the hum itself is playing", hum > 0.004, `rms ${hum.toFixed(4)}`);
 {
   const ref = await bandPower(7000, 9000);
   const buzzP = await bandPower(550, 900);
-  const keysP = await bandPower(2200, 3400);
   check("the buzz is in the hum", buzzP > 3 * ref,
     `${(buzzP / (ref || 1e-12)).toFixed(1)}x over the noise floor`);
-  check("the keyboards are typing", keysP > 3 * ref,
-    `${(keysP / (ref || 1e-12)).toFixed(1)}x over the noise floor`);
+
+  // The keyboards are counted, not averaged. Typing is bursts with
+  // thinking pauses, so a short average reads a random duty cycle — CI
+  // once caught a pause-heavy window and called an audible typist quiet.
+  // Keystrokes are transients: sample the click band in 100ms windows
+  // and count the windows that spike far above the median. Silence has
+  // no spikes, however long the window.
+  const hits = await page.evaluate(async () => {
+    const ctx = window.__actx;
+    const an = window.__an;
+    const buf = new Float32Array(an.frequencyBinCount);
+    const hzPerBin = ctx.sampleRate / an.fftSize;
+    const b0 = Math.floor(2200 / hzPerBin);
+    const b1 = Math.ceil(3400 / hzPerBin);
+    an.smoothingTimeConstant = 0;
+    const powers = [];
+    for (let i = 0; i < 60; i++) {
+      an.getFloatFrequencyData(buf);
+      let s = 0;
+      for (let b = b0; b <= b1; b++) s += Math.pow(10, buf[b] / 10);
+      powers.push(s);
+      await new Promise((r) => setTimeout(r, 100));
+    }
+    an.smoothingTimeConstant = 0.4;
+    const sorted = [...powers].sort((a, b) => a - b);
+    const median = sorted[(sorted.length / 2) | 0] || 1e-12;
+    return powers.filter((v) => v > 4 * median).length;
+  });
+  check("the keyboards are typing", hits >= 3, `${hits} keystrokes heard in 6s`);
 }
 
 // Each temper's signature band, chosen where the hum has little to say:
