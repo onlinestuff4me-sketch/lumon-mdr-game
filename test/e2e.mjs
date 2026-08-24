@@ -839,53 +839,47 @@ section("arrival");
   check("and it left no gesture open", !seen.open);
 }
 
-// ═══ 8. the room plays the temper of what is on it ═══════════════════
+// ═══ 8. the room plays every temper that is on it ════════════════════
 section("ambient temper");
 {
   await load(page, 0);                       // one group, one temper
   const solo = await page.evaluate(() => {
     const e = window.__mdr;
     const c = e.board.clusters.find((k) => !k.refined && !k.decoy && !k.fifth);
-    return { bed: e.ambientTemper(), group: c.temper };
+    return { beds: [...e.ambientTempers()], group: c.temper };
   });
-  eq("one group on screen: the bed is that group", solo.bed, solo.group);
+  eq("one group on screen: its temper alone plays", solo.beds, [solo.group]);
 
   await load(page, 28);                      // four groups, four tempers
   const many = await page.evaluate(() => {
     const e = window.__mdr;
-    const g = e.layout.grid;
-    const cx = g.x + g.w / 2;
-    const cy = g.y + g.h / 2;
-    let best = null;
-    let bestD = Infinity;
-    for (const c of e.board.clusters) {
-      if (c.refined || c.decoy || c.fifth) continue;
-      const d = Math.hypot(c.cx - cx, c.cy - cy);
-      if (d < bestD) { bestD = d; best = c; }
-    }
-    return { bed: e.ambientTemper(), central: best.temper, n: e.board.clusters.length };
+    return {
+      beds: [...e.ambientTempers()].sort(),
+      present: [...new Set(
+        e.board.clusters
+          .filter((c) => !c.refined && !c.decoy && !c.fifth)
+          .map((c) => c.temper),
+      )].sort(),
+    };
   });
-  check("several groups: the bed is the most central one",
-    many.bed === many.central, `${many.bed} vs ${many.central} of ${many.n}`);
+  eq("several groups: every present temper plays, layered",
+    many.beds, many.present);
 
+  // Refining a temper's last group dissolves that temper out of the room.
   const g = await findGroup(page);
-  const other = await page.evaluate((id) => {
-    const e = window.__mdr;
-    const c = e.board.clusters.find((k) => k.id !== id && !k.refined && !k.decoy);
-    return c ? c.temper : null;
-  }, g.id);
   await tap(page, origin, g.ctr);
-  const held = await page.evaluate(() => ({
-    carrying: window.__mdr.packet !== null,
-    bed: window.__mdr.ambientTemper(),
-  }));
-  check("the packet lifted", held.carrying);
-  check("holding a group: the bed follows it into the hand",
-    held.bed === g.temper, `${held.bed} vs ${g.temper}`);
-  if (other && other !== g.temper) {
-    check("  and it is no longer the other group's", held.bed !== other);
-  }
+  check("the packet lifted", (await state(page)).carrying);
   check("and it still carries to the bin", await carryToBin(page, origin, g));
+  const after = await page.evaluate((t) => {
+    const e = window.__mdr;
+    const gone = !e.board.clusters.some(
+      (c) => c.temper === t && !c.refined && !c.decoy && !c.fifth,
+    );
+    return { gone, still: e.ambientTempers().has(t) };
+  }, g.temper);
+  if (after.gone) {
+    check("a refined temper leaves the room", !after.still);
+  }
 
   // A decoy has no temper to give off, and the fifth is never named.
   await load(page, 45);                      // COLD HARBOR — carries the fifth
@@ -894,9 +888,9 @@ section("ambient temper");
     const f = e.board.clusters.find((k) => k.fifth);
     if (!f) return null;
     e.board.clusters.forEach((c) => { if (c !== f) c.refined = true; });
-    return e.ambientTemper();
+    return [...e.ambientTempers()];
   });
-  check("the fifth temper gives off nothing", quiet === null, String(quiet));
+  eq("the fifth temper gives off nothing", quiet, []);
 }
 
 // ═══ 9. the bin catches what is brought near it ══════════════════════

@@ -2002,39 +2002,26 @@ export class GameEngine {
     getAudio().tick();
   }
 
+  /** Scratch for ambientTempers, reused so no frame allocates. */
+  private ambientScratch = new Set<Temper>();
+
   /**
-   * Which temper the board is giving off underneath everything.
-   *
-   * One group and it is that group's. Several and it is whichever sits
-   * nearest the middle of the board — the one the eye is already on —
-   * until the refiner takes hold of one, at which point the room is about
-   * the thing in their hand. A decoy gives off nothing, and the fifth is
-   * never named by anything, least of all by the sound of the room.
+   * Which tempers the board is giving off underneath everything: all of
+   * them. Every temper with an unrefined group on screen plays its bed at
+   * once — playtesting chose the chord over the soloist — and each
+   * dissolves out as its last group is refined. A decoy gives off
+   * nothing, and the fifth is never named by anything, least of all by
+   * the sound of the room.
    */
-  private ambientTemper(): Temper | null {
-    const held = this.packet;
-    if (held) {
-      const c = this.board.clusters[held.clusterId];
-      return c && !c.decoy && !c.fifth ? held.temper : null;
-    }
-    const g = this.layout.grid;
-    const cx = g.x + g.w / 2;
-    const cy = g.y + g.h / 2;
-    let best: Cluster | null = null;
-    let bestD = Infinity;
+  ambientTempers(): ReadonlySet<Temper> {
+    const set = this.ambientScratch;
+    set.clear();
     for (const c of this.board.clusters) {
       if (c.refined || c.decoy || c.fifth) continue;
       if (this.board.nodes[c.members[0]]?.retired) continue;
-      // A group under the lens is the group being considered, wherever it
-      // happens to sit.
-      const d =
-        c.id === this.latchedId ? -1 : Math.hypot(c.cx - cx, c.cy - cy);
-      if (d < bestD) {
-        bestD = d;
-        best = c;
-      }
+      set.add(c.temper);
     }
-    return best?.temper ?? null;
+    return set;
   }
 
   private updateAgitation(dt: number, live: boolean): void {
@@ -2180,7 +2167,7 @@ export class GameEngine {
 
     const audio = getAudio();
     for (const t of TEMPERS) audio.setProximity(t, peak[t]);
-    audio.setAmbient(live ? this.ambientTemper() : null);
+    audio.setAmbient(live ? this.ambientTempers() : null);
     // The ambient cadence answers to a live probe only. Driving it from a
     // decaying probe after release re-fires one pulse a frame later, which
     // replaces (and so destroys) the lift or rejection pattern that the
