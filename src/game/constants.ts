@@ -139,9 +139,13 @@ export const TIME_CREDIT = 5;
  * See docs/ONBOARDING.md for the levers behind every number here.
  */
 
-/** Orientation motion is louder than any real file: it has to be noticed
- *  by someone who does not yet know to look for motion. */
-const OR_SUBTLETY = [1.35, 1.3, 1.25, 1.15] as const;
+/** Orientation motion is a touch louder than the later files: it has to
+ *  be noticed by someone who does not yet know to look for motion. But
+ *  only a touch — at the original 1.35 the groups jumped around like a
+ *  fire alarm, and a thing that obvious is scenery, not a discovery. The
+ *  stillness before the emergence does the announcing now; the motion
+ *  itself just has to be findable once you are looking. */
+const OR_SUBTLETY = [0.95, 0.9, 0.85, 0.8] as const;
 
 /**
  * The orientation sequence: 29 screens in four stages, none of which hides

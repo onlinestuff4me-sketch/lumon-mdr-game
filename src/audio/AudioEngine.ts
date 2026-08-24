@@ -257,23 +257,24 @@ export class AudioEngine {
 
     // Frolic's continuous body. With no finger down the arpeggio never
     // fires, and the pluck chain rests at zero — so without this, frolic's
-    // bed would be silence. A thin whine fluttering at ballast speed is
-    // what a lively fixture sounds like: unmistakably the bright temper,
-    // and unmistakably electricity rather than music. It lives behind
-    // `amp` like everything else, so the probe's brightness rules it and
-    // a mute kills it dead.
+    // bed would be silence. A low tone rippling at ballast speed: the
+    // flutter is what carries the bright, quick character, so the carrier
+    // can sit right down among the hum's own harmonics — at 1180Hz it cut
+    // through everything it was supposed to hide in. Wired straight to
+    // `amp`, past the bandpass, so its pitch is not at the mercy of the
+    // probe filter; the amp still rules it and a mute still kills it dead.
     const whine = ctx.createOscillator();
     whine.type = "sine";
-    whine.frequency.value = 1180;
+    whine.frequency.value = 190;
     const whineGain = ctx.createGain();
-    whineGain.gain.value = 0.5;
+    whineGain.gain.value = 0.34;
     const flutter = ctx.createOscillator();
     flutter.type = "sine";
     flutter.frequency.value = 6.7;
     const flutterDepth = ctx.createGain();
-    flutterDepth.gain.value = 0.3;
+    flutterDepth.gain.value = 0.22;
     flutter.connect(flutterDepth).connect(whineGain.gain);
-    whine.connect(whineGain).connect(filter);
+    whine.connect(whineGain).connect(amp);
     whine.start();
     flutter.start();
 
