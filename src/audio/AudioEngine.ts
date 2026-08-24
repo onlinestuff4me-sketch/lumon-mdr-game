@@ -20,22 +20,19 @@ type VoiceParam = {
   baseCutoff: number;
   peakCutoff: number;
   peakGain: number;
-  /** How much of the ambient bed this voice takes, relative to the others.
-   *  Malice's distorted body carries much further than the same gain of
-   *  woe's sine drone, so it steps further back. Default 1. */
-  bedScale?: number;
+  /**
+   * The intensity this voice plays at while its temper is merely present
+   * on screen, 0..1 on the same scale a probe drives. Bench-tuned: woe
+   * and dread run at full probe level even un-probed, frolic and malice
+   * stay genuinely ambient.
+   */
+  bed: number;
 };
 
 const SMOOTH = 0.05; // setTargetAtTime time-constant for proximity moves
-/**
- * The ambient bed: the temper of the group the refiner is looking at,
- * playing under everything at a fraction of probe volume. Loud enough to
- * colour the room, quiet enough that finding a group with the lens is
- * still unmistakably louder than not having found one.
- */
-const AMBIENT_GAIN = 0.13;
-/** Slower than SMOOTH, so one group's temper dissolves into the next
- *  rather than switching. */
+/** Slower than SMOOTH, so a temper leaving the screen dissolves out
+ *  rather than switching off. The bed's LEVEL now lives per voice (see
+ *  VoiceParam.bed) — bench-tuned, not derived from one global gain. */
 const AMBIENT_SMOOTH = 0.8;
 /**
  * The electric hum the whole terminal sits in: mains frequency and its
@@ -45,7 +42,7 @@ const AMBIENT_SMOOTH = 0.8;
  * is an atmosphere. Two slightly detuned fundamentals beat against each
  * other so the hum breathes instead of being a test tone.
  */
-const HUM_GAIN = 0.05;
+const HUM_GAIN = 0.09;
 const HUM_SMOOTH = 0.6;
 /** How far the bed steps back while a probe is live, so the two never
  *  argue over which temper the refiner is being told about. */
@@ -147,7 +144,7 @@ export class AudioEngine {
     // ── the mains hum ────────────────────────────────────────────────
     const humFilter = ctx.createBiquadFilter();
     humFilter.type = "lowpass";
-    humFilter.frequency.value = 260;
+    humFilter.frequency.value = 360;
     const humAmp = ctx.createGain();
     humAmp.gain.value = 0;
     humFilter.connect(humAmp);
@@ -208,7 +205,7 @@ export class AudioEngine {
     a.frequency.value = 50;
     const b = ctx.createOscillator();
     b.type = "sine";
-    b.frequency.value = 48.4;
+    b.frequency.value = 50 - 2.9;
     const sub = ctx.createOscillator();
     sub.type = "triangle";
     sub.frequency.value = 25;
@@ -218,14 +215,14 @@ export class AudioEngine {
     a.connect(mix);
     b.connect(mix);
     const subGain = ctx.createGain();
-    subGain.gain.value = 0.35;
+    subGain.gain.value = 0.55;
     sub.connect(subGain).connect(mix);
 
     // And the whole thing sighs: the cutoff drags down and back, slower
     // than the beat, so no two swells are quite alike.
     const lfo = ctx.createOscillator();
     lfo.type = "sine";
-    lfo.frequency.value = 0.22;
+    lfo.frequency.value = 0.47;
     const lfoDepth = ctx.createGain();
     lfoDepth.gain.value = 40;
     lfo.connect(lfoDepth).connect(filter.frequency);
@@ -239,7 +236,10 @@ export class AudioEngine {
       oscillators: [a, b, sub, lfo],
       baseCutoff: 120,
       peakCutoff: 340,
-      peakGain: 0.8,
+      peakGain: 1.0,
+      // Bench verdict: woe present should sound like woe probed. The bed
+      // IS the probe level; the lens adds nothing but the duck's release.
+      bed: 1.0,
     };
   }
 
@@ -269,17 +269,20 @@ export class AudioEngine {
     // failure mode this rig exists for is frolic quietly vanishing.
     mix.gain.value = 1.0;
     h6.connect(mix);
+    // Bench-zeroed: the 400Hz harmonic came out entirely — tuned frolic
+    // is the bare 300Hz alone, slower and shallower than built. The node
+    // stays wired at zero so brightness remains one number away.
     const h8Gain = ctx.createGain();
-    h8Gain.gain.value = 0.45;
+    h8Gain.gain.value = 0;
     h8.connect(h8Gain).connect(mix);
 
     const flicker = ctx.createGain();
     flicker.gain.value = 0.5;
     const flutter = ctx.createOscillator();
     flutter.type = "sine";
-    flutter.frequency.value = 7.3;
+    flutter.frequency.value = 2.6;
     const flutterDepth = ctx.createGain();
-    flutterDepth.gain.value = 0.45;
+    flutterDepth.gain.value = 0.27;
     flutter.connect(flutterDepth).connect(flicker.gain);
 
     mix.connect(flicker).connect(filter).connect(amp).connect(out);
@@ -291,7 +294,8 @@ export class AudioEngine {
       oscillators: [h6, h8, flutter],
       baseCutoff: 900,
       peakCutoff: 2400,
-      peakGain: 0.55,
+      peakGain: 0.3,
+      bed: 0.16,
     };
   }
 
@@ -312,7 +316,7 @@ export class AudioEngine {
     a.frequency.value = 100;
     const b = ctx.createOscillator();
     b.type = "sine";
-    b.frequency.value = 103;
+    b.frequency.value = 100 + 8;
 
     const mix = ctx.createGain();
     mix.gain.value = 0.5;
@@ -321,11 +325,11 @@ export class AudioEngine {
 
     const trem = ctx.createOscillator();
     trem.type = "sine";
-    trem.frequency.value = 11;
+    trem.frequency.value = 11.5;
     const tremDepth = ctx.createGain();
-    tremDepth.gain.value = 0.22;
+    tremDepth.gain.value = 0.5;
     const tremTarget = ctx.createGain();
-    tremTarget.gain.value = 0.78;
+    tremTarget.gain.value = 0.5;
     trem.connect(tremDepth).connect(tremTarget.gain);
 
     mix.connect(tremTarget).connect(filter).connect(amp).connect(out);
@@ -337,7 +341,10 @@ export class AudioEngine {
       oscillators: [a, b, trem],
       baseCutoff: 260,
       peakCutoff: 1000,
-      peakGain: 0.62,
+      // Above 1 on purpose: the bench's slider topped out and playtesting
+      // asked for more. The limiter is what keeps four beds honest.
+      peakGain: 1.3,
+      bed: 1.0,
     };
   }
 
@@ -363,16 +370,16 @@ export class AudioEngine {
     const pre = ctx.createGain();
     pre.gain.value = 0.4;
     const shaper = ctx.createWaveShaper();
-    shaper.curve = makeDistortionCurve(24);
+    shaper.curve = makeDistortionCurve(60);
     shaper.oversample = "2x";
 
     const surge = ctx.createGain();
-    surge.gain.value = 0.55;
+    surge.gain.value = 0.69;
     const surgeLfo = ctx.createOscillator();
     surgeLfo.type = "sine";
-    surgeLfo.frequency.value = 0.55;
+    surgeLfo.frequency.value = 0.75;
     const surgeDepth = ctx.createGain();
-    surgeDepth.gain.value = 0.4;
+    surgeDepth.gain.value = 0.31;
     surgeLfo.connect(surgeDepth).connect(surge.gain);
 
     osc.connect(pre);
@@ -387,9 +394,7 @@ export class AudioEngine {
       baseCutoff: 320,
       peakCutoff: 1500,
       peakGain: 0.5,
-      // Distortion survives quietness: at the same gain as a clean drone
-      // the grain still reads as a voice. It sits further back in the bed.
-      bedScale: 0.7,
+      bed: 0.09,
     };
   }
 
@@ -410,18 +415,16 @@ export class AudioEngine {
   }
 
   /**
-   * The bed: which temper the groups currently on screen are giving off.
-   *
-   * One group and it is that group's; several and it is the one nearest
-   * the middle of the board, until the refiner takes hold of one, at which
-   * point it is that one's. Only ever one temper at a time — a chord of
-   * four tempers is not a feeling, it is noise — and the crossfade between
-   * them is slow enough to be a change of mood rather than a cut.
+   * The beds: every temper with a group on screen plays at once, each at
+   * its own bench-tuned intensity, layered over the hum. Playtesting
+   * chose the chord over the soloist — the room sounds like everything
+   * that is in it, and a temper dissolves out as its last group is
+   * refined. `tempers` is presence; the per-voice `bed` decides how
+   * loud presence is.
    */
-  setAmbient(temper: Temper | null, level = 1): void {
-    const want = clamp01(level);
+  setAmbient(tempers: ReadonlySet<Temper> | null): void {
     for (const t of Object.keys(this.ambient) as Temper[]) {
-      const next = t === temper ? want : 0;
+      const next = tempers?.has(t) ? 1 : 0;
       if (this.ambient[t] === next) continue;
       this.ambient[t] = next;
       this.apply(t, AMBIENT_SMOOTH);
@@ -434,8 +437,7 @@ export class AudioEngine {
     // The bed ducks under a live probe: the lens is the thing answering
     // the question, and it must always be the louder answer.
     const duck = this.anyProbe() ? AMBIENT_DUCK : 1;
-    const bed =
-      this.ambient[temper] * AMBIENT_GAIN * duck * (voice?.bedScale ?? 1);
+    const bed = this.ambient[temper] * (voice?.bed ?? 0) * duck;
     const shaped = near * near * (3 - 2 * near);
     const level = Math.max(shaped, bed);
     this.intensities[temper] = level;

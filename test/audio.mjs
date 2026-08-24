@@ -54,26 +54,61 @@ await page.evaluate(() => {
 });
 await page.waitForFunction(() => !!window.__limiter, null, { timeout: 5000 });
 
+/**
+ * Broadband RMS, beat-averaged. The hum's detuned 50Hz pair beats at
+ * 0.4Hz, swinging its own RMS by a third over a 2.5 second cycle — a
+ * short window reads a random phase of that swell, which once made an
+ * audible voice measure *below* the hum-only baseline. Five seconds
+ * covers two full beats.
+ */
 const rms = () =>
   page.evaluate(async () => {
     const ctx = window.__actx;
     if (!window.__an) {
       window.__an = ctx.createAnalyser();
       window.__an.fftSize = 4096;
+      window.__an.smoothingTimeConstant = 0.4;
       window.__limiter.connect(window.__an);
     }
     const an = window.__an;
     const buf = new Float32Array(an.fftSize);
     let acc = 0;
-    for (let i = 0; i < 10; i++) {
+    const N = 25;
+    for (let i = 0; i < N; i++) {
       an.getFloatTimeDomainData(buf);
       let s = 0;
       for (const v of buf) s += v * v;
       acc += Math.sqrt(s / buf.length);
-      await new Promise((r) => setTimeout(r, 90));
+      await new Promise((r) => setTimeout(r, 200));
     }
-    return acc / 10;
+    return acc / N;
   });
+
+/**
+ * Power inside one frequency band, averaged the same way. This is the
+ * instrument that can hear a quiet voice under a loud hum: each temper
+ * owns a band the hum barely reaches, so its energy there is unmistakable
+ * however the mix is balanced.
+ */
+const bandPower = (lo, hi) =>
+  page.evaluate(async ({ lo, hi }) => {
+    const ctx = window.__actx;
+    const an = window.__an;
+    const buf = new Float32Array(an.frequencyBinCount);
+    const hzPerBin = ctx.sampleRate / an.fftSize;
+    const b0 = Math.max(0, Math.floor(lo / hzPerBin));
+    const b1 = Math.min(buf.length - 1, Math.ceil(hi / hzPerBin));
+    let acc = 0;
+    const N = 20;
+    for (let i = 0; i < N; i++) {
+      an.getFloatFrequencyData(buf);
+      let s = 0;
+      for (let b = b0; b <= b1; b++) s += Math.pow(10, buf[b] / 10);
+      acc += s;
+      await new Promise((r) => setTimeout(r, 150));
+    }
+    return acc / N;
+  }, { lo, hi });
 
 section("audio bed exists");
 
@@ -82,17 +117,27 @@ await page.waitForTimeout(1500);
 const hum = await rms();
 check("the hum itself is playing", hum > 0.004, `rms ${hum.toFixed(4)}`);
 
+// Each temper's signature band, chosen where the hum has little to say:
+// woe's weight sits at and below the mains pair, frolic's harmonic at
+// 300Hz is far above every hum partial, dread's waver rides the second
+// harmonic, and malice's distortion sprays energy above the hum's
+// lowpass. The mix is bench-tuned by a human, so no broadband ratio can
+// be asserted — but a voice that is playing at all lights its own band
+// up by multiples, and one that has gone silent (which has now shipped
+// three times) cannot.
+const BANDS = { WO: [20, 60], FC: [250, 350], DR: [90, 120], MA: [200, 500] };
+const base = {};
+for (const t of Object.keys(BANDS)) base[t] = await bandPower(BANDS[t][0], BANDS[t][1]);
+
 // Single-temper orientation screens: 0-2 WO, 3-5 FC, 6-8 DR, 9-11 MA.
-// Each temper's bed must be measurably more than the bare hum. 1.2x is
-// deliberately a floor, not a taste target — the LFO-swept voices (woe's
-// sigh) vary between samples, and this check exists to catch silence.
 for (const [name, lvl] of [["WO", 1], ["FC", 4], ["DR", 7], ["MA", 10]]) {
   await page.evaluate((i) => window.__mdr.startLevel(i), lvl);
   await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });
   await page.waitForTimeout(2500); // the crossfade is deliberately slow
-  const v = await rms();
-  check(`${name} bed adds energy over the hum`, v > hum * 1.2,
-    `${(v / hum).toFixed(2)}x`);
+  const p = await bandPower(BANDS[name][0], BANDS[name][1]);
+  const gain = p / (base[name] || 1e-12);
+  check(`${name} lights up its own band`, gain > 2,
+    `${gain.toFixed(1)}x band power`);
 }
 
 // And a mute must take all of it away.
