@@ -31,10 +31,20 @@ const SMOOTH = 0.05; // setTargetAtTime time-constant for proximity moves
  * colour the room, quiet enough that finding a group with the lens is
  * still unmistakably louder than not having found one.
  */
-const AMBIENT_GAIN = 0.26;
+const AMBIENT_GAIN = 0.09;
 /** Slower than SMOOTH, so one group's temper dissolves into the next
  *  rather than switching. */
-const AMBIENT_SMOOTH = 0.5;
+const AMBIENT_SMOOTH = 0.8;
+/**
+ * The electric hum the whole terminal sits in: mains frequency and its
+ * first harmonics, always on while the audio is unmuted. It exists so the
+ * temper bed has something to hide in — a lone quiet voice in silence is
+ * still a voice you listen to, but the same voice folded into room tone
+ * is an atmosphere. Two slightly detuned fundamentals beat against each
+ * other so the hum breathes instead of being a test tone.
+ */
+const HUM_GAIN = 0.05;
+const HUM_SMOOTH = 0.6;
 /** How far the bed steps back while a probe is live, so the two never
  *  argue over which temper the refiner is being told about. */
 const AMBIENT_DUCK = 0.4;
@@ -68,6 +78,7 @@ export class AudioEngine {
    *  filters. Synthesising 16k samples inside a pointerup handler was a
    *  guaranteed frame hitch at the exact moment of negative feedback. */
   private noiseBuffer: AudioBuffer | null = null;
+  private humAmp: GainNode | null = null;
 
   get isReady(): boolean {
     return this.ctx !== null && this.ctx.state === "running";
@@ -133,6 +144,34 @@ export class AudioEngine {
     this.voices.set("FC", this.buildFrolic(ctx, bus));
     this.voices.set("DR", this.buildDread(ctx, bus));
     this.voices.set("MA", this.buildMalice(ctx, bus));
+
+    // ── the mains hum ────────────────────────────────────────────────
+    const humFilter = ctx.createBiquadFilter();
+    humFilter.type = "lowpass";
+    humFilter.frequency.value = 260;
+    const humAmp = ctx.createGain();
+    humAmp.gain.value = 0;
+    humFilter.connect(humAmp);
+    humAmp.connect(bus);
+    // 50 and 50.4Hz together beat at a third of a hertz — the slow swell
+    // of a transformer, free, with no LFO to leak through a mute.
+    const partials: [number, number][] = [
+      [50, 0.55],
+      [50.4, 0.55],
+      [100, 0.4],
+      [150, 0.15],
+    ];
+    for (const [freq, g] of partials) {
+      const osc = ctx.createOscillator();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      const og = ctx.createGain();
+      og.gain.value = g;
+      osc.connect(og).connect(humFilter);
+      osc.start();
+    }
+    this.humAmp = humAmp;
+    this.refreshHum();
   }
 
   /** WOE — a 60 Hz minor drone that sags. */
@@ -217,7 +256,11 @@ export class AudioEngine {
 
     const tick = (intensity: number, now: number) => {
       if (intensity <= 0.02) return;
-      const interval = 0.26 - 0.14 * intensity;
+      // Below a real probe the arpeggio slows right down: at bed level it
+      // is one distant note most of a second apart, not a melody. The two
+      // curves meet at 0.2 so a rising probe never hears the tempo jump.
+      const interval =
+        intensity >= 0.2 ? 0.26 - 0.14 * intensity : 0.9 - 3.34 * intensity;
       if (now < this.nextArpAt) return;
       const t = Math.max(now, this.nextArpAt || now);
       const f = 880 * steps[this.arpStep % steps.length];
@@ -321,7 +364,10 @@ export class AudioEngine {
 
     const tick = (intensity: number, now: number) => {
       if (intensity <= 0.02) return;
-      const interval = 0.62 - 0.26 * intensity;
+      // Same whisper-level stretch as frolic's arpeggio, meeting the probe
+      // curve at 0.2: the bed gets a slow distant pulse, not a heartbeat.
+      const interval =
+        intensity >= 0.2 ? 0.62 - 0.26 * intensity : 1.2 - 3.16 * intensity;
       if (now < this.nextKickAt) return;
       const t = Math.max(now, this.nextKickAt || now);
       kick.gain.cancelScheduledValues(t);
@@ -343,6 +389,16 @@ export class AudioEngine {
       peakCutoff: 2200,
       peakGain: 0.55,
     };
+  }
+
+  private refreshHum(): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.humAmp) return;
+    this.humAmp.gain.setTargetAtTime(
+      this.muted ? 0 : HUM_GAIN,
+      ctx.currentTime,
+      HUM_SMOOTH,
+    );
   }
 
   /** Set a temper's proximity intensity, 0..1. Cheap; call every frame. */
@@ -405,6 +461,9 @@ export class AudioEngine {
   tick(): void {
     const ctx = this.ctx;
     if (!ctx || ctx.state !== "running" || this.muted) return;
+    // Re-asserted every frame so the hum comes back after a hardStop —
+    // one setTargetAtTime on an already-settled param costs nothing.
+    this.refreshHum();
     const now = ctx.currentTime;
     for (const [temper, voice] of this.voices) {
       voice.tick?.(this.intensities[temper], now);
@@ -553,6 +612,7 @@ export class AudioEngine {
 
   setMuted(muted: boolean): void {
     this.muted = muted;
+    this.refreshHum();
     if (muted) {
       for (const voice of this.voices.values()) {
         const ctx = this.ctx;
@@ -577,6 +637,10 @@ export class AudioEngine {
     for (const voice of this.voices.values()) {
       voice.amp.gain.cancelScheduledValues(ctx.currentTime);
       voice.amp.gain.setValueAtTime(0, ctx.currentTime);
+    }
+    if (this.humAmp) {
+      this.humAmp.gain.cancelScheduledValues(ctx.currentTime);
+      this.humAmp.gain.setValueAtTime(0, ctx.currentTime);
     }
     for (const t of Object.keys(this.intensities) as Temper[]) {
       this.intensities[t] = 0;
