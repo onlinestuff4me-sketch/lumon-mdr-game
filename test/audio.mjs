@@ -117,6 +117,20 @@ await page.waitForTimeout(1500);
 const hum = await rms();
 check("the hum itself is playing", hum > 0.004, `rms ${hum.toFixed(4)}`);
 
+// The room's own layers: the buzz lives in its bandpass around 700Hz and
+// the keyboards' clicks around 2.8kHz — bands where nothing else plays.
+// Both are compared against a reference band (7-9kHz) that only holds
+// noise-floor, so "is it there at all" needs no absolute scale.
+{
+  const ref = await bandPower(7000, 9000);
+  const buzzP = await bandPower(550, 900);
+  const keysP = await bandPower(2200, 3400);
+  check("the buzz is in the hum", buzzP > 3 * ref,
+    `${(buzzP / (ref || 1e-12)).toFixed(1)}x over the noise floor`);
+  check("the keyboards are typing", keysP > 3 * ref,
+    `${(keysP / (ref || 1e-12)).toFixed(1)}x over the noise floor`);
+}
+
 // Each temper's signature band, chosen where the hum has little to say:
 // woe's weight sits at and below the mains pair, frolic's harmonic at
 // 300Hz is far above every hum partial, dread's waver rides the second

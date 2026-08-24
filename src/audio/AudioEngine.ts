@@ -44,6 +44,25 @@ const AMBIENT_SMOOTH = 0.8;
  */
 const HUM_GAIN = 0.09;
 const HUM_SMOOTH = 0.6;
+/**
+ * The buzz: the hum's dirty edge. A sawtooth on the mains frequency,
+ * bandpassed well above the hum's fundamentals so it reads as electrical
+ * fizz rather than more bass. Level is relative to the hum, so turning
+ * the room up keeps its character.
+ */
+const HUM_BUZZ = 0.12;
+const HUM_BUZZ_TONE = 700;
+/**
+ * The keyboards: the rest of the office, typing. Synthesised, not
+ * sampled — each key is a noise click plus a low thump, matching the
+ * measured profile of the reference recording (a broad click centred
+ * near 3kHz over a thump at 150Hz), fired in human bursts with pauses.
+ * Very soft: it should be noticed only when it stops.
+ */
+const TYPING_GAIN = 0.03;
+const TYPING_RATE = 8; // keys per second inside a burst
+const TYPING_THUMP = 0.5; // low-body weight, 0..1
+const TYPING_CLICK_HZ = 2800; // click bandpass centre
 /** How far the bed steps back while a probe is live, so the two never
  *  argue over which temper the refiner is being told about. */
 const AMBIENT_DUCK = 0.4;
@@ -75,6 +94,10 @@ export class AudioEngine {
    *  guaranteed frame hitch at the exact moment of negative feedback. */
   private noiseBuffer: AudioBuffer | null = null;
   private humAmp: GainNode | null = null;
+  private typingAmp: GainNode | null = null;
+  private typingClick: BiquadFilterNode | null = null;
+  private typingNextAt = 0;
+  private typingBurstLeft = 0;
 
   get isReady(): boolean {
     return this.ctx !== null && this.ctx.state === "running";
@@ -166,6 +189,35 @@ export class AudioEngine {
       osc.connect(og).connect(humFilter);
       osc.start();
     }
+    // The buzz joins past the warmth lowpass — warmth is for the hum's
+    // body, and a buzz that the lowpass strangles is no buzz at all. It
+    // still lives behind humAmp, so level and mute rule it.
+    const buzz = ctx.createOscillator();
+    buzz.type = "sawtooth";
+    buzz.frequency.value = 50;
+    const buzzFilter = ctx.createBiquadFilter();
+    buzzFilter.type = "bandpass";
+    buzzFilter.frequency.value = HUM_BUZZ_TONE;
+    buzzFilter.Q.value = 0.8;
+    const buzzGain = ctx.createGain();
+    buzzGain.gain.value = HUM_BUZZ;
+    buzz.connect(buzzFilter).connect(buzzGain).connect(humAmp);
+    buzz.start();
+
+    // ── the keyboards ────────────────────────────────────────────────
+    // A shared click filter and amp; each keystroke is a one-shot noise
+    // burst through them plus a thump blip, scheduled from tick().
+    const typingClick = ctx.createBiquadFilter();
+    typingClick.type = "bandpass";
+    typingClick.frequency.value = TYPING_CLICK_HZ;
+    typingClick.Q.value = 0.9;
+    const typingAmp = ctx.createGain();
+    typingAmp.gain.value = 0;
+    typingClick.connect(typingAmp);
+    typingAmp.connect(bus);
+    this.typingClick = typingClick;
+    this.typingAmp = typingAmp;
+
     this.humAmp = humAmp;
     this.refreshHum();
   }
@@ -205,7 +257,7 @@ export class AudioEngine {
     a.frequency.value = 50;
     const b = ctx.createOscillator();
     b.type = "sine";
-    b.frequency.value = 50 - 2.9;
+    b.frequency.value = 50 - 2.5;
     const sub = ctx.createOscillator();
     sub.type = "triangle";
     sub.frequency.value = 25;
@@ -215,14 +267,14 @@ export class AudioEngine {
     a.connect(mix);
     b.connect(mix);
     const subGain = ctx.createGain();
-    subGain.gain.value = 0.55;
+    subGain.gain.value = 0.7;
     sub.connect(subGain).connect(mix);
 
     // And the whole thing sighs: the cutoff drags down and back, slower
     // than the beat, so no two swells are quite alike.
     const lfo = ctx.createOscillator();
     lfo.type = "sine";
-    lfo.frequency.value = 0.47;
+    lfo.frequency.value = 0.5;
     const lfoDepth = ctx.createGain();
     lfoDepth.gain.value = 40;
     lfo.connect(lfoDepth).connect(filter.frequency);
@@ -280,9 +332,9 @@ export class AudioEngine {
     flicker.gain.value = 0.5;
     const flutter = ctx.createOscillator();
     flutter.type = "sine";
-    flutter.frequency.value = 2.6;
+    flutter.frequency.value = 2.1;
     const flutterDepth = ctx.createGain();
-    flutterDepth.gain.value = 0.27;
+    flutterDepth.gain.value = 0.28;
     flutter.connect(flutterDepth).connect(flicker.gain);
 
     mix.connect(flicker).connect(filter).connect(amp).connect(out);
@@ -295,7 +347,7 @@ export class AudioEngine {
       baseCutoff: 900,
       peakCutoff: 2400,
       peakGain: 0.3,
-      bed: 0.16,
+      bed: 0.3,
     };
   }
 
@@ -406,6 +458,59 @@ export class AudioEngine {
       ctx.currentTime,
       HUM_SMOOTH,
     );
+    this.typingAmp?.gain.setTargetAtTime(
+      this.muted ? 0 : TYPING_GAIN,
+      ctx.currentTime,
+      HUM_SMOOTH,
+    );
+  }
+
+  /**
+   * One keystroke: a click of noise through the shared bandpass and a low
+   * thump, both with fast envelopes. The BufferSource-per-shot pattern is
+   * the same one every SFX here uses — sources are one-shot by design.
+   */
+  private clack(at: number): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.noiseBuffer || !this.typingClick) return;
+    const src = ctx.createBufferSource();
+    src.buffer = this.noiseBuffer;
+    src.playbackRate.value = 0.8 + Math.random() * 0.5;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0.0001, at);
+    env.gain.linearRampToValueAtTime(0.6 + Math.random() * 0.4, at + 0.003);
+    env.gain.exponentialRampToValueAtTime(0.0001, at + 0.035 + Math.random() * 0.03);
+    src.connect(env).connect(this.typingClick);
+    src.start(at, Math.random() * 0.5, 0.09);
+
+    // The thump under the click: the desk hearing the key.
+    if (this.typingAmp && TYPING_THUMP > 0.01) {
+      const th = ctx.createOscillator();
+      th.type = "sine";
+      th.frequency.setValueAtTime(150 + Math.random() * 60, at);
+      const thEnv = ctx.createGain();
+      thEnv.gain.setValueAtTime(0.0001, at);
+      thEnv.gain.linearRampToValueAtTime(TYPING_THUMP * 0.5, at + 0.004);
+      thEnv.gain.exponentialRampToValueAtTime(0.0001, at + 0.05);
+      th.connect(thEnv).connect(this.typingAmp);
+      th.start(at);
+      th.stop(at + 0.07);
+    }
+  }
+
+  /** Human typing: bursts of keys with thinking pauses between them. */
+  private scheduleTyping(now: number): void {
+    if (this.muted || !this.typingAmp) return;
+    if (now < this.typingNextAt) return;
+    if (this.typingBurstLeft > 0) {
+      this.clack(now + 0.01);
+      this.typingBurstLeft--;
+      const interval = 1 / TYPING_RATE;
+      this.typingNextAt = now + interval * (0.6 + Math.random() * 0.8);
+    } else {
+      this.typingBurstLeft = 3 + Math.floor(Math.random() * 9);
+      this.typingNextAt = now + 0.4 + Math.random() * 1.8;
+    }
   }
 
   /** Set a temper's proximity intensity, 0..1. Cheap; call every frame. */
@@ -474,6 +579,7 @@ export class AudioEngine {
     const ctx = this.ctx;
     if (!ctx || ctx.state !== "running" || this.muted) return;
     this.refreshHum();
+    this.scheduleTyping(ctx.currentTime);
   }
 
   /** Drop the probe voices. The bed is not a probe and survives this —
@@ -647,6 +753,10 @@ export class AudioEngine {
     if (this.humAmp) {
       this.humAmp.gain.cancelScheduledValues(ctx.currentTime);
       this.humAmp.gain.setValueAtTime(0, ctx.currentTime);
+    }
+    if (this.typingAmp) {
+      this.typingAmp.gain.cancelScheduledValues(ctx.currentTime);
+      this.typingAmp.gain.setValueAtTime(0, ctx.currentTime);
     }
     for (const t of Object.keys(this.intensities) as Temper[]) {
       this.intensities[t] = 0;
