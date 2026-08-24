@@ -122,9 +122,37 @@ check("the hum itself is playing", hum > 0.004, `rms ${hum.toFixed(4)}`);
 // Both are compared against a reference band (7-9kHz) that only holds
 // noise-floor, so "is it there at all" needs no absolute scale.
 {
-  const ref = await bandPower(7000, 9000);
-  const buzzP = await bandPower(550, 900);
-  check("the buzz is in the hum", buzzP > 3 * ref,
+  // The buzz is continuous and the keyboards are transient, and both can
+  // share spectrum — so the buzz is detected by MEDIAN band power over
+  // short windows, which a passing keystroke cannot move. The band
+  // brackets HUM_BUZZ_TONE (1580Hz in AudioEngine.ts) and must move with
+  // it: an earlier version measured the band the buzz had been tuned out
+  // of, and flaked on the skirt of the filter.
+  const bandMedian = (lo, hi) =>
+    page.evaluate(async ({ lo, hi }) => {
+      const ctx = window.__actx;
+      const an = window.__an;
+      const buf = new Float32Array(an.frequencyBinCount);
+      const hzPerBin = ctx.sampleRate / an.fftSize;
+      const b0 = Math.floor(lo / hzPerBin);
+      const b1 = Math.ceil(hi / hzPerBin);
+      const prev = an.smoothingTimeConstant;
+      an.smoothingTimeConstant = 0;
+      const powers = [];
+      for (let i = 0; i < 40; i++) {
+        an.getFloatFrequencyData(buf);
+        let s = 0;
+        for (let b = b0; b <= b1; b++) s += Math.pow(10, buf[b] / 10);
+        powers.push(s);
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      an.smoothingTimeConstant = prev;
+      powers.sort((a, b) => a - b);
+      return powers[(powers.length / 2) | 0];
+    }, { lo, hi });
+  const ref = await bandMedian(7000, 9000);
+  const buzzP = await bandMedian(1400, 1750);
+  check("the buzz is in the hum", buzzP > 3 * (ref || 1e-12),
     `${(buzzP / (ref || 1e-12)).toFixed(1)}x over the noise floor`);
 
   // The keyboards are counted, not averaged. Typing is bursts with
