@@ -1,9 +1,11 @@
 # Onboarding and the phased introduction of mechanics
 
-> Status: implemented. The queue is 46 screens — 21 orientation, one probe
-> file, calibration, four Act I, four Act II, and seven in Act III — across
-> 18 archive rows. The tuning sheet that produced these numbers is served
-> at **`/tool`** alongside the game.
+> Status: implemented. Orientation is generated from the six-rung ramp
+> table `ORIENT_STAGES` in `src/game/constants.ts` — one group alone, two
+> of the same, two tempers told apart, doubled, the full bin deck arriving
+> before the full temper deck, then everything. Screens per rung are tuned
+> on the Orientation Ramp Planner artifact; the acts after orientation are
+> unchanged.
 
 The design rule behind everything here: **a player is never asked to do two
 new things at once, and never meets a new rule for the first time under a

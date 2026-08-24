@@ -137,8 +137,13 @@ export interface LevelDef {
   readonly seed: number;
   /** Which tempers appear in this file. Early files carry one temper, so
    *  the player learns a single signature at a time; only the bins for
-   *  these tempers are shown. */
+   *  these tempers are shown unless `showBins` widens the deck. */
   readonly tempers: readonly Temper[];
+  /** Bins displayed on the deck, when wider than the file's content — the
+   *  orientation stage that first shows all four bins over a two-temper
+   *  board uses this to introduce bins that must NOT be fed. Completion
+   *  only ever requires the content tempers. */
+  readonly showBins?: readonly Temper[];
   /** Minimum clear cells between two clusters. Early files space them far
    *  apart so each one can be found and read on its own; later files let
    *  them crowd. */

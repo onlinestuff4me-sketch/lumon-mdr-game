@@ -12,7 +12,7 @@
  */
 import {
   open, state, findGroup, touchFor, drag, tap, touchTap, load, setMode,
-  boxAndBin, carryToBin, section, check, eq, summary,
+  boxAndBin, carryToBin, byName, section, check, eq, summary,
 } from "./harness.mjs";
 
 const { browser, page, origin, errors, cdp } = await open();
@@ -80,7 +80,7 @@ section("gesture lifecycle");
 // ═══ 2. reachability: every part of the board and deck ═══════════════
 section("reachability");
 {
-  await load(page, 30);            // calibration: four tempers, probe mode
+  await load(page, await byName(page, "CALIBRATION")); // four tempers, probe mode
   const reach = await page.evaluate(() => {
     const e = window.__mdr;
     const L = e.layout;
@@ -132,8 +132,8 @@ section("reachability");
 // ═══ 3. full playthroughs ════════════════════════════════════════════
 section("playthroughs");
 {
-  // Orientation, tap-only, all the way through a stage-3 screen.
-  await load(page, 24);
+  // Orientation, tap-only, all the way through the final full-deck screen.
+  await load(page, 12);
   let guard = 0;
   while ((await state(page)).progress < 100 && guard++ < 10) {
     const g = await findGroup(page);
@@ -143,12 +143,12 @@ section("playthroughs");
     await carryToBin(page, origin, g);
   }
   const s = await state(page);
-  check("orientation 25/29 reaches 100% by tapping alone", s.progress === 100,
+  check("the last orientation screen reaches 100% by tapping alone", s.progress === 100,
     `${s.progress}% after ${guard} attempts`);
 }
 {
   // A real file, boxed and carried — the marquee path must still work.
-  await load(page, 31);
+  await load(page, await byName(page, "DRANESVILLE"));
   let guard = 0;
   while ((await state(page)).progress < 100 && guard++ < 12) {
     let g = await findGroup(page);
@@ -195,7 +195,7 @@ section("mechanics");
   eq("and drives no audio (probe stays 0)", still.probe, 0);
 }
 {
-  await load(page, 40);            // JESUP — decoys
+  await load(page, await byName(page, "JESUP"));   // decoys
   const d = await findGroup(page, "decoy");
   check("decoy seeded", !!d);
   if (d) {
@@ -234,7 +234,7 @@ section("mechanics");
   }
 }
 {
-  await load(page, 45);            // COLD HARBOR — the fifth
+  await load(page, await byName(page, "COLD HARBOR")); // the fifth
   const f = await findGroup(page, "fifth");
   check("fifth temper seeded on cold harbor", !!f);
   if (f) {
@@ -246,9 +246,9 @@ section("mechanics");
   }
 }
 {
-  await load(page, 44);            // YAKIMA — redaction
+  await load(page, await byName(page, "YAKIMA"));  // redaction
   const red = (await state(page)).muted;
-  await load(page, 38);            // MOONBEAM — not redacted
+  await load(page, await byName(page, "MOONBEAM")); // not redacted
   const restored = (await state(page)).muted;
   check("redacted file mutes", red);
   check("the next file restores audio", !restored);
@@ -258,7 +258,7 @@ section("mechanics");
   // BELLINGHAM opens in PROBE and also allows tap-to-select, so the tap must
   // be hit-tested with the offset the lens is actually drawn at. Aiming the
   // lens at the group and tapping has to lift it.
-  await load(page, 29);
+  await load(page, await byName(page, "BELLINGHAM"));
   const surfaced = await page.evaluate(async () => {
     for (let i = 0; i < 50; i++) {
       if (window.__mdr.board.clusters[0].agitation > 0.4) return true;
@@ -280,7 +280,7 @@ section("mechanics");
   // A tap must refuse exactly what a box refuses. On the pulse file the
   // group is hidden five seconds out of seven; blind-tapping while it is
   // down would lift it with no probing and take the lesson with it.
-  await load(page, 29);
+  await load(page, await byName(page, "BELLINGHAM"));
   const sank = await page.evaluate(async () => {
     for (let i = 0; i < 60; i++) {
       if (window.__mdr.board.clusters[0].agitation < 0.05) return true;
@@ -298,7 +298,7 @@ section("mechanics");
 }
 {
   // The morph must not consume a quota cluster — that softlocks NANNING.
-  await load(page, 42);
+  await load(page, await byName(page, "NANNING"));
   const supply = await page.evaluate(() => {
     const e = window.__mdr;
     const counts = {};
@@ -333,7 +333,7 @@ section("mechanics");
 {
   // A redacted file's forced mute must never reach saved settings.
   await page.evaluate(() => window.__mdr.setMuted(false));
-  await load(page, 44);
+  await load(page, await byName(page, "YAKIMA"));
   await page.evaluate(() => window.__mdr.setAssist(true));
   const stored = await page.evaluate(() => {
     try { return JSON.parse(localStorage.getItem("lumon.mdr.settings.v1") ?? "{}").muted; }
@@ -512,7 +512,7 @@ section("reticle and hint");
 }
 {
   // Starting on empty board still draws a box, so boxing stays available.
-  await load(page, 24);
+  await load(page, 12);
   const g = await findGroup(page);
   const pad = 26;
   await drag(
@@ -538,7 +538,7 @@ section("reticle and hint");
 // glyphs, the way a thumb does it.
 section("taps land where the finger is");
 {
-  const SCREENS = [0, 4, 8, 12, 16, 20, 24, 28];
+  const SCREENS = [0, 2, 4, 6, 8, 10, 12];
   let attempts = 0;
   const missed = [];
   const stuck = [];
@@ -791,7 +791,7 @@ section("arrival");
 
   // A later file has no emergence — its groups answer to a probe, and
   // making the refiner wait two seconds for nothing would be a bug.
-  await load(page, 31);
+  await load(page, await byName(page, "DRANESVILLE"));
   const settled = await page.evaluate(() => window.__mdr.settled);
   check("a probe file is ready as soon as it has been drawn", settled);
 }
@@ -850,7 +850,7 @@ section("ambient temper");
   });
   eq("one group on screen: its temper alone plays", solo.beds, [solo.group]);
 
-  await load(page, 28);                      // four groups, four tempers
+  await load(page, 12);                      // the full-deck screen
   const many = await page.evaluate(() => {
     const e = window.__mdr;
     return {
@@ -882,7 +882,7 @@ section("ambient temper");
   }
 
   // A decoy has no temper to give off, and the fifth is never named.
-  await load(page, 45);                      // COLD HARBOR — carries the fifth
+  await load(page, await byName(page, "COLD HARBOR")); // carries the fifth
   const quiet = await page.evaluate(() => {
     const e = window.__mdr;
     const f = e.board.clusters.find((k) => k.fifth);
@@ -980,7 +980,8 @@ section("saves");
 
   // Loading the older attempt picks up ITS bookmark, not the new one's.
   await page.getByText("LOAD A PREVIOUS SAVE (2)").click();
-  await page.getByText("1/46 FILES").click();
+  const totalFiles = await page.evaluate(() => window.__mdr.levels.length);
+  await page.getByText(`1/${totalFiles} FILES`).click();
   await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });
   eq("loading the older save resumes its own place",
     await page.evaluate(() => window.__mdr.levelIndex), 1);

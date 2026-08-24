@@ -3,7 +3,7 @@
  * runs in about a second, and covers the things that silently make a file
  * unwinnable rather than visibly broken.
  */
-import { LEVELS, COLS, ROWS, MIN_CAPTURE, TEMPERS } from "../src/game/constants";
+import { LEVELS, COLS, ROWS, MIN_CAPTURE, TEMPERS, ORIENT_STAGES } from "../src/game/constants";
 import { assignMorphs, boardExtras, createBoard } from "../src/game/grid";
 
 let bad = 0;
@@ -87,8 +87,8 @@ for (const lv of LEVELS) {
       }
     }
   }
-  if (lv.binHint && lv.tempers.length !== 1) {
-    fail(`${lv.id}: binHint on a multi-bin file would point at the answer`);
+  if (lv.binHint && (lv.showBins ?? lv.tempers).length !== 1) {
+    fail(`${lv.id}: binHint on a multi-bin deck would point at the answer`);
   }
 }
 ok(`every screen seeds a winnable, well-formed board`);
@@ -109,7 +109,16 @@ console.log(`\n── placement gradient ${"─".repeat(38)}`);
     rs.push(per.reduce((a, v) => a + v, 0) / per.length);
   }
   const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
-  const centre = mean(rs.slice(0, 4)), mid = mean(rs.slice(4, 12)), edge = mean(rs.slice(12));
+  // Rung boundaries from the ramp table itself, grouped by focus band.
+  const bands: Record<string, number[]> = { centre: [], mid: [], edge: [] };
+  {
+    let i = 0;
+    const FOCUS = ["centre", "centre", "mid", "mid", "edge", "edge"];
+    ORIENT_STAGES.forEach((st, sIdx) => {
+      for (let k = 0; k < st.screens; k++) bands[FOCUS[sIdx]].push(rs[i++]);
+    });
+  }
+  const centre = mean(bands.centre), mid = mean(bands.mid), edge = mean(bands.edge);
   console.log(`  centre ${centre.toFixed(2)}   mid ${mid.toFixed(2)}   edge ${edge.toFixed(2)}`);
   if (!(centre < mid && mid < edge)) fail("groups do not move outwards across orientation");
   if (centre > 0.3) fail(`the first screens are not central enough (${centre.toFixed(2)})`);
@@ -120,7 +129,10 @@ console.log(`\n── placement gradient ${"─".repeat(38)}`);
 console.log(`\n── the shape of the queue ${"─".repeat(34)}`);
 {
   const orient = LEVELS.filter((l) => l.id.startsWith("orientation-"));
-  if (orient.length !== 29) fail(`want 29 orientation screens, got ${orient.length}`);
+  const total = ORIENT_STAGES.reduce((n, st) => n + st.screens, 0);
+  if (orient.length !== total) {
+    fail(`want ${total} orientation screens (per the ramp table), got ${orient.length}`);
+  }
   if (orient.slice(0, -1).some((l) => l.ceremony !== "none")) {
     fail("every orientation screen but the last must advance itself");
   }
@@ -130,55 +142,45 @@ console.log(`\n── the shape of the queue ${"─".repeat(34)}`);
   if (!orient.every((l) => l.tapToSelect && l.minCapture === 1 && l.selfAgitate)) {
     fail("an orientation screen is misconfigured");
   }
-  // Stage A — three screens of each temper, in numbered order.
-  for (let t = 0; t < 4; t++) {
-    const three = orient.slice(t * 3, t * 3 + 3);
-    const names = three.map((l) => l.tempers[0]);
-    if (new Set(names).size !== 1 || names[0] !== TEMPERS[t]) {
-      fail(`stage A block ${t + 1} is ${names.join(",")}, want three of ${TEMPERS[t]}`);
+  // Every screen matches its rung: temper count, groups per temper, bins.
+  {
+    let i = 0;
+    ORIENT_STAGES.forEach((st, sIdx) => {
+      for (let k = 0; k < st.screens; k++, i++) {
+        const l = orient[i];
+        const bins = l.showBins ?? l.tempers;
+        if (l.tempers.length !== st.tempers) {
+          fail(`${l.id}: rung ${sIdx + 1} wants ${st.tempers} tempers, has ${l.tempers.length}`);
+        }
+        if (l.quota !== st.groupsPerTemper) {
+          fail(`${l.id}: rung ${sIdx + 1} wants ${st.groupsPerTemper} groups per temper, quota is ${l.quota}`);
+        }
+        if (bins.length !== Math.max(st.tempers, st.bins)) {
+          fail(`${l.id}: rung ${sIdx + 1} wants ${st.bins} bins shown, deck has ${bins.length}`);
+        }
+        if (!l.tempers.every((t) => bins.includes(t))) {
+          fail(`${l.id}: a content temper has no bin on the deck`);
+        }
+      }
+    });
+  }
+  // Every temper gets at least one solo screen before any discrimination,
+  // and multi-temper screens keep one temper from the screen before, so
+  // there is always something familiar to anchor on.
+  {
+    const soloed = new Set(
+      orient.filter((l) => l.tempers.length === 1).map((l) => l.tempers[0]),
+    );
+    for (const t of TEMPERS) {
+      if (!soloed.has(t)) fail(`${t} never gets a solo screen`);
     }
-    if (three.some((l) => l.tempers.length !== 1 || l.quota !== 1)) {
-      fail(`stage A block ${t + 1} is not one group of one temper`);
+    for (let i = 1; i < orient.length; i++) {
+      const cur = orient[i];
+      if (cur.tempers.length < 2 || cur.tempers.length === 4) continue;
+      if (!cur.tempers.some((t) => orient[i - 1].tempers.includes(t))) {
+        fail(`${cur.id} (${cur.tempers.join("+")}) shares nothing with the screen before`);
+      }
     }
-  }
-  // Stage B — eight screens of two groups of a single temper, opening on
-  // the temper stage A just finished with and cycling.
-  const b = orient.slice(12, 20);
-  if (b.length !== 8) fail(`stage B should be 8 screens, got ${b.length}`);
-  if (b.some((l) => l.tempers.length !== 1 || l.quota !== 2)) {
-    fail("stage B screens must be two groups of one temper");
-  }
-  if (b[0].tempers[0] !== orient[11].tempers[0]) {
-    fail(`stage B opens on ${b[0].tempers[0]}, but stage A ended on ${orient[11].tempers[0]}`);
-  }
-  const bSeen: Record<string, number> = {};
-  for (const l of b) bSeen[l.tempers[0]] = (bSeen[l.tempers[0]] ?? 0) + 1;
-  for (const t of TEMPERS) {
-    if (bSeen[t] !== 2) fail(`stage B shows ${t} ${bSeen[t] ?? 0} times, want 2`);
-  }
-  // Stage C — the first discrimination. It must open on the two tempers the
-  // player has just seen, and every screen must keep one temper from the
-  // screen before it, so there is always something familiar to anchor on.
-  const c = orient.slice(20, 24);
-  if (c.length !== 4) fail(`stage C should be 4 screens, got ${c.length}`);
-  if (c.some((l) => l.tempers.length !== 2)) fail("stage C screens must carry two tempers");
-  const recent = [orient[19].tempers[0], orient[18].tempers[0]];
-  if (!recent.every((t) => c[0].tempers.includes(t))) {
-    fail(`stage C opens on ${c[0].tempers.join("+")}, want the two most recent ${recent.join("+")}`);
-  }
-  for (let i = 1; i < c.length; i++) {
-    if (!c[i].tempers.some((t) => c[i - 1].tempers.includes(t))) {
-      fail(`stage C screen ${i + 1} (${c[i].tempers.join("+")}) shares nothing with ${c[i - 1].tempers.join("+")}`);
-    }
-  }
-  const cSeen: Record<string, number> = {};
-  for (const l of c) for (const t of l.tempers) cSeen[t] = (cSeen[t] ?? 0) + 1;
-  for (const t of TEMPERS) {
-    if (cSeen[t] !== 2) fail(`stage C shows ${t} ${cSeen[t] ?? 0} times, want 2`);
-  }
-  // Stage D — the full deck.
-  if (orient.slice(24).some((l) => l.tempers.length !== 4)) {
-    fail("stage D screens must carry all four tempers");
   }
   // Every Act III mechanic is taught before it is used.
   const first = (pred: (l: (typeof LEVELS)[number]) => boolean, teach: string, what: string) => {
@@ -193,7 +195,7 @@ console.log(`\n── the shape of the queue ${"─".repeat(34)}`);
   const fifth = LEVELS.filter((l) => l.fifth);
   if (fifth.length !== 1 || fifth[0].id !== "cold-harbor") fail("the fifth belongs on cold harbor only");
   if (fifth[0]?.teaches) fail("the fifth temper must never be taught");
-  ok("29 orientation screens in four stages, each anchored on the last");
+  ok(`${orient.length} orientation screens matching the ramp table, each anchored on the last`);
 }
 
 console.log(bad ? `\nFAILED — ${bad} problems` : "\nPASSED");
