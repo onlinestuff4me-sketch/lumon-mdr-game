@@ -32,6 +32,7 @@ a menu, and should be unable to answer "what is it?" until it opens.
 | Ladder scale | **Rescale to the game we have** | All eleven rewards become earnable on the 30 screens that exist. Extending the campaign to 50 files first would put every reward behind a content-authoring project. The lane tables below leave named headroom so a longer campaign extends them rather than renumbering them. |
 | Forecast reveal | **After the first reward pops** | Screens 1–2 stay clean. The finger trap arrives with no warning, and the forecast appears immediately behind it carrying the next sealed goal. The system explains itself by having already paid out once. |
 | Pacing unit | **Screens**, with named files as landmarks | Files are too coarse here: 18 names, and the first 13 screens share one. Screens give 30 rungs, which is where the density has to live. |
+| Canon posture | **Reach for the show's own names first** | Recognition is the point: a refiner who spots something they know grins, and a grin is worth more than an original joke of equal quality. Where the show establishes a name, use it. Where it does not, write in the same register and record it as original. The one line that does not move is the audit's: an item the show only ever *mentions* can be named in text, never given an invented face. |
 | Bin credit | **On file completion, once per file** | A file abandoned or failed credits nothing; replaying a file credits nothing a second time. Counters stay monotonic and cannot be farmed. |
 
 ---
@@ -311,6 +312,27 @@ brightness first**, with colour as the redundant channel it already is. The
 supplied MDE reference images assume colour is always on; they are behaviour
 references, not a palette instruction.
 
+### The genre menu
+
+Decided: **the show's names, as many as we can verify, led by `DEFIANT JAZZ`.**
+This overrides the lore document's instruction to avoid the show's menu — the
+grin of recognition is the reason the menu exists at all.
+
+The list is built in that order of preference:
+
+1. `DEFIANT JAZZ`, which the episode is named for and the scene establishes
+   beyond doubt.
+2. Every other genre legible on the on-screen MDE card. **Each one needs a
+   frame check against the episode before it ships as canon** — a name
+   remembered rather than verified is exactly the kind of invention the canon
+   audit exists to catch, and a wrong one is a grin that curdles.
+3. Original names in the same register to fill the menu out, recorded as
+   original in production notes: `SANCTIONED POLKA`, `PERMITTED SWING`,
+   `COMPLIANT CALYPSO`, `SUPERVISED DISCO`.
+
+Repeat visits unlock another selection rather than a voucher prop, and picking
+the same genre three times earns the `PREFERENCE DETECTED` warning.
+
 ---
 
 ## Part 9 — Sequencing
@@ -348,7 +370,7 @@ one may occupy a locked slot.
 | D2 — DESIGN's collision example merges two MDE rewards | Queue, never merge — the PRD, lore doc and manifest all agree against it (Part 4) |
 | D4, D5 — temper lane half-specified, two answers for when it appears | Rungs at 10 and 20 per temper, lane revealed after screen 15 (Part 3) |
 | D6 — two save vocabularies | One schema, this one (Part 6) |
+| D3 — MDE genre names: the show's menu, or written for this branch | The show's, led by `DEFIANT JAZZ`, verified by frame check; originals fill the rest (Part 8) |
 
-Unresolved and still needing a product answer: **D3**, whether MDE genre names are
-taken from the show's on-screen menu or written for this branch. It does not block
-M1–M4.
+No source conflict is left open. The standing posture in Part 0 settles the
+general case: where the show establishes something, this game uses it.

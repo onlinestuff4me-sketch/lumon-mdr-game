@@ -214,7 +214,7 @@ export function HandbookModal({
               Incentives are awarded on schedule. The schedule is not yours
               to know beyond its next entry.
             </p>
-            <IncentiveForecast progress={progress} wide />
+            <IncentiveForecast progress={progress} variant="handbook" />
             <p className="mt-2 text-[9px] leading-snug text-phos-600">
               {progress.binsTotal} groups refined ·{" "}
               {progress.perfectScreensTotal} screens without error
