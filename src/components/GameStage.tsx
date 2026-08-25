@@ -3,6 +3,7 @@ import { getAudio } from "../audio/AudioEngine";
 import { haptics } from "../audio/haptics";
 import { LEVELS } from "../game/constants";
 import { loadArchive, recordCompletion } from "../game/archive";
+import { creditScreen, loadProgress, type Progress } from "../game/progress";
 import {
   loadRuns,
   recordRunProgress,
@@ -31,6 +32,7 @@ export function GameStage() {
   const [handbook, setHandbook] = useState(false);
   const [archive, setArchive] = useState<ReadonlySet<string>>(loadArchive);
   const [runStore, setRunStore] = useState<RunStore>(loadRuns);
+  const [progress, setProgress] = useState<Progress>(loadProgress);
 
   const openHandbook = useCallback(() => {
     // Read the archive here rather than tracking it in an effect: the
@@ -137,7 +139,23 @@ export function GameStage() {
     // for the same reason: closing the tab on the completion screen must
     // lose nothing.
     setRunStore(recordRunProgress(hud.levelIndex));
-  }, [hud.phase, hud.levelIndex]);
+    // ── the incentive ledger ─────────────────────────────────────────
+    // Same boundary, same reason, and deliberately before anything is
+    // drawn: a threshold crossed here is written to storage as owed, so a
+    // tab closed on the completion screen loses the ceremony and keeps the
+    // reward. The ledger credits a level id once, which is what makes this
+    // safe to run on a re-render and safe on a replayed file.
+    if (level) {
+      setProgress(
+        creditScreen({
+          levelId: level.id,
+          tempers: level.tempers,
+          quota: level.quota,
+          perfect: engine.perfect,
+        }),
+      );
+    }
+  }, [hud.phase, hud.levelIndex, engine]);
 
   // ── page visibility: stop the loop, the drones and the buzzing ──────
   useEffect(() => {
@@ -351,6 +369,7 @@ export function GameStage() {
             onPace={(p) => engine.setPace(p)}
             archive={archive}
             levelIndex={hud.levelIndex}
+            progress={progress}
           />
         ) : null}
 
@@ -361,6 +380,7 @@ export function GameStage() {
             no phase can change underneath it. */}
         <PhaseOverlay
           hud={hud}
+          progress={progress}
           onStart={() => play(0)}
           onNext={() => engine.nextLevel()}
           onRestart={() => engine.restart()}

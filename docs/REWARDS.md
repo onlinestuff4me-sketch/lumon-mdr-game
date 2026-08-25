@@ -1,10 +1,14 @@
 # Incentives: the reward ladder, the forecast, and the reveal
 
-> Status: **plan, not built.** No application code exists for any of this yet.
-> This document is the bridge between `product-context/` — the imported product
-> specification for MDR rewards, lore and media — and the game that actually
-> ships. Where the two disagree, the disagreement is recorded here with the
-> decision that resolved it, per the conflict-logging rule in
+> Status: **M1 shipped; the rest is plan.** The ledger, the ladder and the
+> forecast are in `src/game/progress.ts`, `src/game/rewards.ts` and
+> `src/components/IncentiveForecast.tsx`. No reward has a face yet: the
+> reveal sequence in Part 5 is M2.
+>
+> This document is the bridge between `product-context/` — the imported
+> product specification for MDR rewards, lore and media — and the game that
+> actually ships. Where the two disagree, the disagreement is recorded here
+> with the decision that resolved it, per the conflict-logging rule in
 > `product-context/README.md`.
 
 The product specification was written for a 50-file campaign whose bin counter
@@ -26,7 +30,7 @@ a menu, and should be unable to answer "what is it?" until it opens.
 | Decision | Choice | Why |
 |---|---|---|
 | Ladder scale | **Rescale to the game we have** | All eleven rewards become earnable on the 30 screens that exist. Extending the campaign to 50 files first would put every reward behind a content-authoring project. The lane tables below leave named headroom so a longer campaign extends them rather than renumbering them. |
-| Forecast reveal | **After the first reward pops** | Screens 1–2 stay clean. The eraser arrives with no warning, and the forecast appears immediately behind it carrying the next sealed goal. The system explains itself by having already paid out once. |
+| Forecast reveal | **After the first reward pops** | Screens 1–2 stay clean. The finger trap arrives with no warning, and the forecast appears immediately behind it carrying the next sealed goal. The system explains itself by having already paid out once. |
 | Pacing unit | **Screens**, with named files as landmarks | Files are too coarse here: 18 names, and the first 13 screens share one. Screens give 30 rungs, which is where the density has to live. |
 | Bin credit | **On file completion, once per file** | A file abandoned or failed credits nothing; replaying a file credits nothing a second time. Counters stay monotonic and cannot be farmed. |
 
@@ -60,8 +64,8 @@ learning to read a temper is never shown four counters at once.
 
 | Screen | File | Reward | Size | Source threshold |
 |---:|---|---|---|---|
-| 1 | ORIENTATION | **R01 Eraser** | Minor | file 1 |
-| 2 | ORIENTATION | **R02 Finger Trap** | Minor | file 2 |
+| 1 | ORIENTATION | **R02 Finger Trap** | Minor | file 2 |
+| 2 | ORIENTATION | **R01 Eraser** | Minor | file 1 |
 | 3 | ORIENTATION | **R03 Outie Fact** I | Minor | file 3 |
 | 5 | ORIENTATION | **R05 Melon Bar** | Minor | file 5 |
 | 9 | ORIENTATION | **R06 Wellness I** — 3 facts | Major | file 9 |
@@ -75,7 +79,13 @@ learning to read a temper is never shown four counters at once.
 | 28 | SIENA | **R19 Waffle Party I** — with 90 bins | Major | file 34 + 200 bins |
 | 30 | COLD HARBOR | **R22 Waffle Party II** — with 105 bins, after R19 | Landmark | file 50 + 750 bins |
 
-Two placements deliberately move against the source ordering, and both are
+The first two swap the order the source documents give them. The finger trap
+is the funnier object and the better hook: a thing that spins and traps a
+finger says "this game gives you toys" in a way that a rubber eraser does
+not, and the eraser lands harder second, as the joke about what Lumon
+thinks a reward is.
+
+Two further placements move against the source ordering, and both are
 mechanical:
 
 - **MDE I sits on screen 13**, the first screen carrying all four tempers, because
@@ -176,26 +186,71 @@ when its turn comes. Collisions queue; they never merge and never drop.
 
 ---
 
-## Part 5 — The reveal
+## Part 5 — The reveal, and what happens when two arrive at once
 
-Fired at a safe boundary only — the existing `complete` phase, before NEXT FILE.
-Never mid-file, never during a first attempt at a new mechanic.
+### When a reward may appear
 
-1. **Persist `earned_pending`** — before a single frame of playback, so a force-quit
-   cannot lose or reroll the reward.
-2. **Anticipation, 0.5–1.5 s** — the results panel clears, the room tone ducks, a
+Only at a completion boundary: the screen is refined, the board is cleared,
+and the next file has not begun loading. Never mid-file, never over a first
+attempt at a new mechanic, never on top of another reward.
+
+The thirteen orientation screens need one addition to make that true. They
+carry no ceremony today — the engine holds `complete` for 900 ms and wipes
+straight into the next screen. **An owed reward suspends that auto-advance.**
+The cleared board stays where it is, the sealed card enters over it, and the
+wipe into the next file does not start until the queue is empty. Nothing is
+ever loading behind a celebration.
+
+### The sequence, once
+
+1. **Persist `earned_pending`** — before a single frame is drawn, so a force
+   quit cannot lose or reroll the reward.
+2. **Anticipation, 0.5–1.5 s** — the results clear, the room tone ducks, a
    sealed `INCENTIVE EARNED` card enters.
-3. **Reveal** — the seal opens; name and media appear together, for the first time.
-4. **Celebration, 5–8 s** for an object; longer for MDE and Waffle, both skippable
-   after first viewing. Video where one exists, poster where it does not, still
-   where motion is reduced — and a claim that never blocks on media loading.
-5. **Possession** — the reward enters the shelf with an `ACQUIRED` state.
+3. **Reveal** — the seal opens; name and media appear together, for the
+   first time.
+4. **Celebration, 5–8 s** for an object; longer for the dance experience and
+   the Waffle tiers, both skippable after first viewing. Video where one
+   exists, poster where it does not, still where motion is reduced — and a
+   claim that never waits on media loading.
+5. **Possession** — the reward enters the shelf with an `ACQUIRED` state,
+   and `claimed` is written.
 6. **Renewed anticipation** — the next sealed threshold appears immediately.
 
-Reduced motion substitutes a clean fade, the still, and a short sound. Every
-celebration is dismissible from a control that is present from the first frame.
+Every card carries a dismiss control from its first frame. Reduced motion
+substitutes a clean fade, the still image and a short sound.
 
----
+### When two arrive at once
+
+A screen that also crosses a bin threshold earns two rewards on the same
+boundary. This is designed for, not avoided — but it is never allowed to
+read as one confused event.
+
+- **They stack; they never merge and never drop.** Each keeps its own full
+  reveal. The source specification is explicit about this, and DESIGN's
+  worked example that merges two dance-experience rewards is the one place
+  it contradicts itself; the queue wins.
+- **The count is on the card.** From the first frame the header reads
+  `INCENTIVE 1 OF 2`, so a dismissal never reads as the end of the payout.
+- **One clears before the next enters.** The first card exits, a beat of
+  cleared board, then the second enters — never a crossfade, never two
+  rewards sharing a frame.
+- **Order is fixed and published:** the screens lane before the bins lane,
+  and within a lane, the lower threshold first. Deterministic, so two
+  players who earn the same pair see the same order.
+- **At most one major per boundary.** If the queue holds two major events,
+  the second stays queued for the next completion boundary rather than
+  running back to back. It is not lost and not re-rolled: the forecast shows
+  `EARNED · PENDING` until it presents.
+- **A reload mid-queue re-presents from the front.** `presenting` is not a
+  resting state — the ledger reads it back as owed. This is already true in
+  the code as of M1.
+
+### What the player is never made to wait for
+
+Non-skippable time is capped at 15 seconds per boundary, and the queue does
+not extend that cap by stacking: the second card in a pair is skippable
+immediately.
 
 ## Part 6 — State and saves
 
@@ -264,7 +319,7 @@ Each milestone ends with something a player can see working.
 
 | # | Milestone | Player-visible result |
 |---|---|---|
-| M1 | Counters, save store, forecast surface | Finishing a screen shows real progress toward a sealed goal |
+| M1 | Counters, save store, forecast surface — **shipped** | Finishing a screen shows real progress toward a sealed goal |
 | M2 | Reveal sequence + the six image/video rewards of Lane A | The eraser, finger trap, melon bar, egg bar, watermelon and crystal all pop and enter the shelf |
 | M3 | Lane B, the incentive shelf, collision queue | Two lanes run at once and simultaneous unlocks both get their own reveal |
 | M4 | Wellness — fact bank, cards, captions, speech | Fact cards typeset at runtime, captioned, with speech optional |

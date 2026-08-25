@@ -5,6 +5,8 @@
  */
 import { LEVELS, COLS, ROWS, MIN_CAPTURE, TEMPERS, ORIENT_STAGES } from "../src/game/constants";
 import { assignMorphs, boardExtras, createBoard } from "../src/game/grid";
+import { LADDER, forecast, newlyEarned } from "../src/game/rewards";
+import { applyCompletion, counters, emptyProgress, type Progress } from "../src/game/progress";
 
 let bad = 0;
 const fail = (m: string) => { bad++; console.log("  FAIL " + m); };
@@ -196,6 +198,164 @@ console.log(`\n── the shape of the queue ${"─".repeat(34)}`);
   if (fifth.length !== 1 || fifth[0].id !== "cold-harbor") fail("the fifth belongs on cold harbor only");
   if (fifth[0]?.teaches) fail("the fifth temper must never be taught");
   ok(`${orient.length} orientation screens matching the ramp table, each anchored on the last`);
+}
+
+// ── the incentive ladder ─────────────────────────────────────────────
+// The rescale in docs/REWARDS.md only means anything if every rung is
+// actually reachable by playing the game that exists. These tests play it.
+
+console.log(`\n── incentive ladder ${"─".repeat(41)}`);
+{
+  /** Refine every screen in order, crediting the ledger as the game does. */
+  const playthrough = (perfect = true) => {
+    let p: Progress = emptyProgress();
+    const earnedAt: Record<string, number> = {};
+    LEVELS.forEach((lv, i) => {
+      const step = applyCompletion(p, {
+        levelId: lv.id,
+        tempers: lv.tempers,
+        quota: lv.quota,
+        perfect,
+      });
+      p = step.progress;
+      for (const rung of step.earned) {
+        if (earnedAt[rung.id] !== undefined) fail(`${rung.id} earned twice`);
+        earnedAt[rung.id] = i + 1;
+        // Claiming is what M2 will do at the boundary; the ledger only has
+        // to hold the promise until then. Claim here so prerequisites
+        // (Waffle II waits for Waffle I) are exercised the way they ship.
+        p.rewardState[rung.id] = "claimed";
+      }
+      p.rewardQueue = [];
+    });
+    return { p, earnedAt };
+  };
+
+  const { p, earnedAt } = playthrough();
+
+  if (p.screensCompleted !== LEVELS.length) {
+    fail(`credited ${p.screensCompleted} screens, not ${LEVELS.length}`);
+  }
+  const handBins = LEVELS.reduce((n, l) => n + l.quota * l.tempers.length, 0);
+  if (p.binsTotal !== handBins) fail(`credited ${p.binsTotal} bins, not ${handBins}`);
+  const byTemper = TEMPERS.reduce((n, t) => n + p.binsByTemper[t], 0);
+  if (byTemper !== p.binsTotal) fail("per-temper bins do not sum to the total");
+
+  // The finding that started all of this: no reward may sit past the end.
+  for (const rung of LADDER) {
+    if (earnedAt[rung.id] === undefined) {
+      fail(`${rung.id} (${rung.reward}) is never earned in a full playthrough`);
+    }
+  }
+  ok(`all ${LADDER.length} rungs earned in ${LEVELS.length} screens / ${p.binsTotal} bins`);
+
+  // Front-loading, measured rather than asserted in prose: the first three
+  // screens each pay, and no two consecutive screens after that go by
+  // without something.
+  for (const at of [1, 2, 3]) {
+    if (!Object.values(earnedAt).includes(at)) fail(`screen ${at} pays nothing`);
+  }
+  {
+    let gap = 0;
+    let worst = 0;
+    for (let i = 1; i <= LEVELS.length; i++) {
+      gap = Object.values(earnedAt).includes(i) ? 0 : gap + 1;
+      worst = Math.max(worst, gap);
+    }
+    if (worst > 2) fail(`${worst} screens in a row with no incentive`);
+    ok(`longest gap between incentives is ${worst} screens`);
+  }
+
+  // Boundaries: one below earns nothing, exactly at earns it, and a rung
+  // is never earned twice however far the counter runs past it.
+  for (const rung of LADDER) {
+    const lane = rung.lane;
+    const below = { screens: 0, bins: 0, [lane]: rung.at - 1 } as unknown as {
+      screens: number;
+      bins: number;
+    };
+    const at = { screens: 1e4, bins: 1e4 };
+    const justBelow = newlyEarned({ screens: 0, bins: 0 }, below, new Set());
+    if (justBelow.some((r) => r.id === rung.id)) {
+      fail(`${rung.id} earned one short of its threshold`);
+    }
+    if (!newlyEarned({ screens: 0, bins: 0 }, at, new Set()).some((r) => r.id === rung.id)) {
+      // Compound and prerequisite rungs are the exception only when their
+      // second condition is unmet, and `at` satisfies every counter.
+      if (!rung.after) fail(`${rung.id} not earned when both counters are past it`);
+    }
+    if (newlyEarned(at, at, new Set()).length !== 0) fail("a still counter earned something");
+  }
+  ok("every rung earns at its threshold and never one short");
+
+  // Idempotency: the completion effect can run more than once per screen.
+  {
+    const first = applyCompletion(emptyProgress(), {
+      levelId: LEVELS[0].id,
+      tempers: LEVELS[0].tempers,
+      quota: LEVELS[0].quota,
+      perfect: true,
+    });
+    const again = applyCompletion(first.progress, {
+      levelId: LEVELS[0].id,
+      tempers: LEVELS[0].tempers,
+      quota: LEVELS[0].quota,
+      perfect: true,
+    });
+    if (again.progress !== first.progress) fail("re-crediting a screen changed the ledger");
+    if (again.earned.length !== 0) fail("re-crediting a screen earned a reward again");
+    ok("a screen credits once, however often the boundary fires");
+  }
+
+  // The forecast shows the next threshold and never the one after it.
+  {
+    let p2: Progress = emptyProgress();
+    for (const lv of LEVELS) {
+      const lanes = forecast(counters(p2));
+      for (const lane of lanes) {
+        if (lane.target <= lane.current && lane.remaining !== 0) {
+          fail(`${lane.lane} forecast points behind the counter`);
+        }
+        const rungs = LADDER.filter((r) => r.lane === lane.lane).map((r) => r.at);
+        const next = rungs.filter((n) => n > lane.current).sort((a, b) => a - b)[0];
+        // A compound rung whose other counter is unmet stays put, which is
+        // the only case where the target is not strictly ahead.
+        if (next !== undefined && lane.target > next && !lane.also) {
+          fail(`${lane.lane} forecast skipped ${next} to show ${lane.target}`);
+        }
+      }
+      p2 = applyCompletion(p2, {
+        levelId: lv.id,
+        tempers: lv.tempers,
+        quota: lv.quota,
+        perfect: true,
+      }).progress;
+    }
+    if (forecast(counters(p2)).length !== 0) fail("the forecast still promises something after the last file");
+    ok("the forecast shows one threshold per lane, and stops when the ladder does");
+  }
+
+  // Perfect play, and its opposite.
+  {
+    const mixed = playthrough(false).p;
+    if (mixed.perfectScreensTotal !== 0) fail("an imperfect run counted perfect screens");
+    if (mixed.perfectScreenStreak !== 0) fail("an imperfect run kept a streak");
+    if (p.perfectScreensTotal !== LEVELS.length) fail("a clean run lost a perfect screen");
+    ok("perfect screens and streaks track the drops");
+  }
+
+  // Waffle II is compound and waits for Waffle I.
+  {
+    const waffleII = LADDER.find((r) => r.id === "S30");
+    if (!waffleII?.after?.length || !waffleII.also) fail("S30 lost its compound conditions");
+    const withoutFirst = newlyEarned(
+      { screens: 29, bins: 100 },
+      { screens: 30, bins: 105 },
+      new Set(),
+    );
+    if (withoutFirst.some((r) => r.id === "S30")) fail("Waffle II arrived without Waffle I");
+    ok("the Waffle tiers need both counters, in order");
+  }
 }
 
 console.log(bad ? `\nFAILED — ${bad} problems` : "\nPASSED");

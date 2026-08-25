@@ -3,9 +3,13 @@ import { CircleHelp, Play, RotateCcw, ChevronRight, FolderOpen } from "lucide-re
 import { LEVELS, PRAISE } from "../game/constants";
 import type { HudSnapshot } from "../game/engine";
 import { activeRun, continueIndex, type RunStore } from "../game/runs";
+import type { Progress } from "../game/progress";
+import { IncentiveForecast } from "./IncentiveForecast";
 
 interface Props {
   hud: HudSnapshot;
+  /** The incentive ledger, for the forecast under the addendum. */
+  progress: Progress;
   onStart: () => void;
   onNext: () => void;
   onRestart: () => void;
@@ -45,6 +49,7 @@ const BTN =
 
 export function PhaseOverlay({
   hud,
+  progress,
   onStart,
   onNext,
   onRestart,
@@ -195,6 +200,13 @@ export function PhaseOverlay({
               FILED · HANDBOOK &gt; ARCHIVE
             </p>
           </div>
+          {/* What the next incentive costs. Under the addendum rather than
+              over it: the file just refined gets its own moment first, and
+              the forecast is the thing that sends the refiner back in. */}
+          <div className="mt-3 flex justify-center">
+            <IncentiveForecast progress={progress} />
+          </div>
+
           {hud.untimed ? null : (
             <p className="mt-2 text-[9px] tracking-[0.14em] text-phos-600">
               TIME REMAINING: {Math.ceil(hud.timeLeft)}s

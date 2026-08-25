@@ -1,0 +1,216 @@
+/**
+ * The incentive ledger: what has been refined, what has been earned, and
+ * what is still waiting to be handed over.
+ *
+ * Its own key, beside the archive and the runs, and for the same reason:
+ * a settings migration must never be able to wipe a player's incentives.
+ * Reads and writes are guarded the way the others are — storage throws
+ * outright in private windows and with site data blocked, and a lost
+ * ledger must never stop the terminal booting.
+ *
+ * Two rules the rest of the system leans on:
+ *
+ * 1. **Counters only ever go up, and only on first completion.** A screen
+ *    credits its bins once, keyed by level id. Replaying an early file to
+ *    farm the bin ladder does nothing, and neither does failing one — a
+ *    file that was never completed was never credited.
+ * 2. **Earning and claiming are separate.** Crossing a threshold writes
+ *    `earned_pending` before anything is drawn. A force quit mid-ceremony
+ *    loses the ceremony, never the reward.
+ *
+ * The ledger is global rather than per-run. It matches the archive next
+ * door — a document once read has been read — and it is what the source
+ * specification means by monotonic counters: the shelf is a collection of
+ * objects the refiner owns, not a scoreboard that resets with the quarter.
+ */
+
+import { TEMPERS } from "./constants";
+import { newlyEarned, type Counters, type Rung } from "./rewards";
+import type { Temper } from "./types";
+
+export type RewardState = "earned_pending" | "presenting" | "claimed";
+
+export interface Progress {
+  version: number;
+  screensCompleted: number;
+  binsTotal: number;
+  binsByTemper: Record<Temper, number>;
+  /** Level ids already credited. The whole of the idempotency guarantee. */
+  creditedLevelIds: string[];
+  perfectScreensTotal: number;
+  perfectScreenStreak: number;
+  /** Rung id -> where it is in its life. Absent means locked. */
+  rewardState: Record<string, RewardState>;
+  /** Rung ids earned and not yet presented, oldest first. */
+  rewardQueue: string[];
+  /** Fact ids already spoken, so a Wellness card never repeats one. */
+  seenFactIds: string[];
+}
+
+const KEY = "lumon.mdr.progress.v1";
+const VERSION = 1;
+
+export function emptyProgress(): Progress {
+  return {
+    version: VERSION,
+    screensCompleted: 0,
+    binsTotal: 0,
+    binsByTemper: { WO: 0, FC: 0, DR: 0, MA: 0 },
+    creditedLevelIds: [],
+    perfectScreensTotal: 0,
+    perfectScreenStreak: 0,
+    rewardState: {},
+    rewardQueue: [],
+    seenFactIds: [],
+  };
+}
+
+export function counters(p: Progress): Counters {
+  return { screens: p.screensCompleted, bins: p.binsTotal };
+}
+
+export function claimedIds(p: Progress): Set<string> {
+  return new Set(
+    Object.entries(p.rewardState)
+      .filter(([, state]) => state === "claimed")
+      .map(([id]) => id),
+  );
+}
+
+/** A completed screen, as the ledger needs to see it. */
+export interface Completion {
+  readonly levelId: string;
+  /** The tempers the file actually used — one bin each. */
+  readonly tempers: readonly Temper[];
+  /** Groups refined per temper. */
+  readonly quota: number;
+  /** True when the screen was finished without a rejected drop. */
+  readonly perfect: boolean;
+}
+
+/**
+ * Credit a completed screen. Pure: hand it a ledger, get a new one back
+ * plus whatever that crossing just earned.
+ *
+ * Re-crediting the same level id returns the ledger untouched and no
+ * rewards, which is what makes the caller safe to run on every render of
+ * the completion phase.
+ */
+export function applyCompletion(
+  p: Progress,
+  done: Completion,
+): { progress: Progress; earned: Rung[] } {
+  if (p.creditedLevelIds.includes(done.levelId)) {
+    return { progress: p, earned: [] };
+  }
+
+  const before = counters(p);
+  const binsByTemper = { ...p.binsByTemper };
+  for (const t of done.tempers) binsByTemper[t] += done.quota;
+
+  const next: Progress = {
+    ...p,
+    screensCompleted: p.screensCompleted + 1,
+    binsTotal: p.binsTotal + done.quota * done.tempers.length,
+    binsByTemper,
+    creditedLevelIds: [...p.creditedLevelIds, done.levelId],
+    perfectScreensTotal: p.perfectScreensTotal + (done.perfect ? 1 : 0),
+    perfectScreenStreak: done.perfect ? p.perfectScreenStreak + 1 : 0,
+    rewardState: { ...p.rewardState },
+    rewardQueue: [...p.rewardQueue],
+  };
+
+  const earned = newlyEarned(before, counters(next), claimedIds(p));
+  for (const rung of earned) {
+    next.rewardState[rung.id] = "earned_pending";
+    next.rewardQueue.push(rung.id);
+  }
+  return { progress: next, earned };
+}
+
+// ── persistence ──────────────────────────────────────────────────────
+
+function coerce(raw: unknown): Progress {
+  const base = emptyProgress();
+  if (!raw || typeof raw !== "object") return base;
+  const p = raw as Partial<Progress>;
+  const num = (v: unknown, fallback: number) =>
+    typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : fallback;
+  const ids = (v: unknown) =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+
+  const binsByTemper = { ...base.binsByTemper };
+  const saved = p.binsByTemper;
+  if (saved && typeof saved === "object") {
+    for (const t of TEMPERS) binsByTemper[t] = num(saved[t], 0);
+  }
+
+  const rewardState: Record<string, RewardState> = {};
+  if (p.rewardState && typeof p.rewardState === "object") {
+    for (const [id, state] of Object.entries(p.rewardState)) {
+      if (
+        state === "earned_pending" ||
+        state === "presenting" ||
+        state === "claimed"
+      ) {
+        // A reward caught mid-ceremony by a force quit comes back as owed,
+        // not as shown: "presenting" is never a resting state.
+        rewardState[id] = state === "presenting" ? "earned_pending" : state;
+      }
+    }
+  }
+
+  const queue = ids(p.rewardQueue).filter(
+    (id) => rewardState[id] === "earned_pending",
+  );
+  // Anything owed but missing from the queue is put back on the end of it,
+  // so a partial write can lose the order of a celebration but never the
+  // celebration itself.
+  for (const [id, state] of Object.entries(rewardState)) {
+    if (state === "earned_pending" && !queue.includes(id)) queue.push(id);
+  }
+
+  return {
+    version: VERSION,
+    screensCompleted: num(p.screensCompleted, 0),
+    binsTotal: num(p.binsTotal, 0),
+    binsByTemper,
+    creditedLevelIds: ids(p.creditedLevelIds),
+    perfectScreensTotal: num(p.perfectScreensTotal, 0),
+    perfectScreenStreak: num(p.perfectScreenStreak, 0),
+    rewardState,
+    rewardQueue: queue,
+    seenFactIds: ids(p.seenFactIds),
+  };
+}
+
+export function loadProgress(): Progress {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return emptyProgress();
+    return coerce(JSON.parse(raw));
+  } catch {
+    return emptyProgress();
+  }
+}
+
+export function saveProgress(p: Progress): void {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(p));
+  } catch {
+    /* Storage unavailable — the ledger lasts only this session. */
+  }
+}
+
+/**
+ * Credit a completed screen and persist the result in one step.
+ *
+ * Persistence happens before the caller can draw anything, which is the
+ * order the reward contract requires: earned state reaches storage ahead
+ * of the ceremony that announces it.
+ */
+export function creditScreen(done: Completion): Progress {
+  const { progress } = applyCompletion(loadProgress(), done);
+  saveProgress(progress);
+  return progress;
+}
