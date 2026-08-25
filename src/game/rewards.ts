@@ -119,6 +119,14 @@ const BIN_LADDER: readonly Rung[] = [
 
 export const LADDER: readonly Rung[] = [...SCREEN_LADDER, ...BIN_LADDER];
 
+const BY_ID = new Map(LADDER.map((r) => [r.id, r]));
+
+/** The rung a queued id refers to. Unknown ids are dropped, so a save
+ *  written by a future version cannot crash an older one. */
+export function rungById(id: string): Rung | undefined {
+  return BY_ID.get(id);
+}
+
 export const LANE_LABEL: Record<Lane, string> = {
   screens: "SCREENS COMPLETED",
   bins: "BINS REFINED",

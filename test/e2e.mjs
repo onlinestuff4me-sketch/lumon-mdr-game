@@ -12,7 +12,7 @@
  */
 import {
   open, state, findGroup, touchFor, drag, tap, touchTap, load, setMode,
-  boxAndBin, carryToBin, byName, section, check, eq, summary,
+  boxAndBin, carryToBin, byName, section, check, eq, summary, settleIncentives,
 } from "./harness.mjs";
 
 const { browser, page, origin, errors, cdp } = await open();
@@ -368,6 +368,9 @@ section("mechanics");
   const banner = await page.evaluate(() =>
     [...document.querySelectorAll("h1")].some((h) => h.textContent.trim() === "100%"));
   check("no 100% banner on a screen that advances itself", !banner);
+  // An incentive earned here would hold the board deliberately; this test
+  // is about what the screen does once nothing is owed.
+  await settleIncentives(page);
   await page.waitForTimeout(1400);
   eq("and it advanced", (await state(page)).level, 1);
 }
@@ -693,6 +696,7 @@ section("taps land where the finger is");
     if (!(await state(page)).carrying) break;
     await carryToBin(page, origin, g);
   }
+  await settleIncentives(page);
   const took = await page.evaluate(() => {
     const e = window.__mdr;
     if (e.getSnapshot().phase !== "complete") return "not in the window";
@@ -850,6 +854,9 @@ section("arrival");
     if (!(await state(page)).carrying) break;
     await carryToBin(page, origin, g);
   }
+  // Same as above: the wipe is what is under test, so nothing may be
+  // holding the board when it starts.
+  await settleIncentives(page);
   const seen = await page.evaluate(async () => {
     const e = window.__mdr;
     const from = e.levelIndex;
@@ -1026,6 +1033,113 @@ section("saves");
   await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });
   eq("loading the older save resumes its own place",
     await page.evaluate(() => window.__mdr.levelIndex), 1);
+}
+
+// ═══ 11. the incentive pops, stacks, and holds the queue ═════════════
+section("incentives");
+{
+  const ledger = () =>
+    page.evaluate(() => JSON.parse(localStorage.getItem("lumon.mdr.progress.v1") ?? "null"));
+  const seed = async (p) => {
+    await page.evaluate((v) => localStorage.setItem("lumon.mdr.progress.v1", v), JSON.stringify(p));
+  };
+  /** Finish an orientation screen by tapping its groups into their bins. */
+  const finish = async (index) => {
+    await load(page, index);
+    let guard = 0;
+    while ((await state(page)).progress < 100 && guard++ < 10) {
+      const g = await findGroup(page);
+      if (!g) break;
+      await tap(page, origin, await touchFor(page, g.one, "marquee"));
+      if (!(await state(page)).carrying) break;
+      await carryToBin(page, origin, g);
+    }
+    await page.waitForTimeout(150);
+  };
+  const seen = (text) => page.getByText(text, { exact: false }).count();
+
+  // ── one incentive: sealed, opened, accepted ──────────────────────
+  await seed({
+    version: 1, screensCompleted: 0, binsTotal: 0,
+    binsByTemper: { WO: 0, FC: 0, DR: 0, MA: 0 },
+    creditedLevelIds: [], perfectScreensTotal: 0, perfectScreenStreak: 0,
+    rewardState: {}, rewardQueue: [], seenFactIds: [],
+  });
+  await finish(0);
+
+  check("finishing the first screen seals an incentive", (await seen("INCENTIVE EARNED")) === 1);
+  check("and says nothing about what it is", (await seen("FINGER TRAP")) === 0);
+  eq("nothing is owed unclaimed in storage yet", (await ledger()).rewardState.S01, "earned_pending");
+
+  // The board must not run on underneath it: an orientation screen would
+  // otherwise auto-advance 900ms after clearing.
+  await page.waitForTimeout(1400);
+  eq("the next screen does not load behind the card",
+    await page.evaluate(() => window.__mdr.levelIndex), 0);
+
+  await page.waitForFunction(() => !!document.body.innerText.match(/FINGER TRAP/), null, { timeout: 4000 });
+  check("the seal opens itself, name and picture together", (await seen("FINGER TRAP")) === 1);
+  check("with its plate on screen",
+    (await page.locator('img[alt="FINGER TRAP"], video').count()) >= 1);
+
+  await page.getByText("ACCEPT INCENTIVE").click();
+  await page.waitForTimeout(400);
+  eq("accepting claims it", (await ledger()).rewardState.S01, "claimed");
+  eq("and empties the queue", (await ledger()).rewardQueue.length, 0);
+  await page.waitForFunction(() => window.__mdr.levelIndex === 1, null, { timeout: 6000 });
+  check("and the held screen advances once the card is gone", true);
+
+  // ── two at once: they stack, they do not merge ───────────────────
+  await seed({
+    version: 1, screensCompleted: 1, binsTotal: 39,
+    binsByTemper: { WO: 39, FC: 0, DR: 0, MA: 0 },
+    creditedLevelIds: ["orientation-01"],
+    perfectScreensTotal: 1, perfectScreenStreak: 1,
+    rewardState: { S01: "claimed" }, rewardQueue: [], seenFactIds: [],
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  await finish(1);
+
+  check("a screen that crosses two thresholds stacks them",
+    (await seen("INCENTIVE 1 OF 2")) === 1);
+  await page.getByText("OPEN").click();
+  await page.waitForTimeout(250);
+  check("the first is the screen-lane reward", (await seen("STANDARD REFINER ERASER")) === 1);
+  check("and the second is not on screen with it", (await seen("MELON BAR")) === 0);
+
+  await page.getByText("ACCEPT · NEXT").click();
+  await page.waitForTimeout(300);
+  check("accepting the first brings up the second", (await seen("INCENTIVE 2 OF 2")) === 1);
+  await page.waitForFunction(() => !!document.body.innerText.match(/MELON BAR/), null, { timeout: 4000 });
+  const mid = await ledger();
+  eq("the first is claimed", mid.rewardState.S02, "claimed");
+  eq("the second is still owed", mid.rewardState.B040, "earned_pending");
+
+  await page.getByText("ACCEPT INCENTIVE").click();
+  await page.waitForTimeout(400);
+  const done = await ledger();
+  eq("both end up claimed", [done.rewardState.S02, done.rewardState.B040], ["claimed", "claimed"]);
+  eq("with nothing left in the queue", done.rewardQueue.length, 0);
+
+  // ── a force quit mid-ceremony keeps the reward ───────────────────
+  await seed({
+    version: 1, screensCompleted: 2, binsTotal: 2,
+    binsByTemper: { WO: 2, FC: 0, DR: 0, MA: 0 },
+    creditedLevelIds: ["orientation-01", "orientation-02"],
+    perfectScreensTotal: 2, perfectScreenStreak: 2,
+    rewardState: {}, rewardQueue: [], seenFactIds: [],
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  await finish(2);
+  await page.waitForTimeout(300);
+  const owedBefore = (await ledger()).rewardQueue.length;
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  const owedAfter = (await ledger()).rewardQueue.length;
+  check("a reload during the ceremony loses the ceremony, not the reward",
+    owedBefore === 1 && owedAfter === 1, `${owedBefore} -> ${owedAfter}`);
 }
 
 // ═══ 11. nothing threw ═══════════════════════════════════════════════

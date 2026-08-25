@@ -219,6 +219,30 @@ export async function tap(page, origin, at) {
   await page.waitForTimeout(120);
 }
 
+/**
+ * Accept any incentive standing between a completed screen and the next
+ * one, and return how many there were.
+ *
+ * A completed screen may now be holding the board while it hands the
+ * refiner something — that is the feature, and it is asserted directly in
+ * the incentives section. Everywhere else the reward is beside the point:
+ * a test about the wipe, or about a touch during the auto-advance window,
+ * wants the transition it was always about, whether or not that particular
+ * screen happened to cross a threshold. This clears the way without
+ * pretending the cards are not there.
+ */
+export async function settleIncentives(page) {
+  const card = page.locator("button", { hasText: /^(OPEN|ACCEPT)/ });
+  let cleared = 0;
+  for (let i = 0; i < 8; i++) {
+    if ((await card.count()) === 0) break;
+    await card.first().click();
+    cleared++;
+    await page.waitForTimeout(220);
+  }
+  return cleared;
+}
+
 /** Load a file. Allowed as *setup* — never to make progress inside a test. */
 /**
  * Load a file and wait for it to be ready to play, not for a fixed time.

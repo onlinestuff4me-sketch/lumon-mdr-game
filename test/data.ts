@@ -6,7 +6,9 @@
 import { LEVELS, COLS, ROWS, MIN_CAPTURE, TEMPERS, ORIENT_STAGES } from "../src/game/constants";
 import { assignMorphs, boardExtras, createBoard } from "../src/game/grid";
 import { LADDER, forecast, newlyEarned } from "../src/game/rewards";
+import { CATALOG } from "../src/game/catalog";
 import { applyCompletion, counters, emptyProgress, type Progress } from "../src/game/progress";
+import { existsSync } from "node:fs";
 
 let bad = 0;
 const fail = (m: string) => { bad++; console.log("  FAIL " + m); };
@@ -356,6 +358,40 @@ console.log(`\n── incentive ladder ${"─".repeat(41)}`);
     if (withoutFirst.some((r) => r.id === "S30")) fail("Waffle II arrived without Waffle I");
     ok("the Waffle tiers need both counters, in order");
   }
+}
+
+// ── reward media ─────────────────────────────────────────────────────
+// The manifest's own first validation rule, applied to what we derived
+// from it: every path a reward promises has to exist. A reveal that 404s
+// is the one failure a player cannot work around.
+
+console.log(`\n── reward media ${"─".repeat(45)}`);
+{
+  let files = 0;
+  for (const [id, def] of Object.entries(CATALOG)) {
+    for (const [kind, url] of Object.entries(def)) {
+      if (kind === "name" || kind === "line") continue;
+      const path = `public/${String(url).replace(/^\.?\//, "")}`;
+      files++;
+      if (!existsSync(path)) fail(`${id}: ${kind} is missing — ${path}`);
+    }
+    if (!def.video !== !def.still) {
+      fail(`${id}: a clip needs a reduced-motion still, and a still needs a clip`);
+    }
+    if (!def.name || !def.line) fail(`${id}: a reward needs a name and a line`);
+  }
+  ok(`${files} media files, all present, every clip with a still`);
+
+  // Rewards with no record here are later milestones and stay queued. The
+  // list is explicit so that a typo in a rung's reward id fails loudly
+  // rather than silently becoming "a milestone for later".
+  const LATER = new Set(["R03", "R06", "R07", "R19", "R22"]);
+  for (const rung of LADDER) {
+    const known = rung.reward in CATALOG || LATER.has(rung.reward);
+    if (!known) fail(`${rung.id} awards ${rung.reward}, which is neither built nor deferred`);
+  }
+  const presentable = LADDER.filter((r) => r.reward in CATALOG).length;
+  ok(`${presentable} of ${LADDER.length} rungs can present today; the rest wait their milestone`);
 }
 
 console.log(bad ? `\nFAILED — ${bad} problems` : "\nPASSED");

@@ -1,9 +1,12 @@
 # Incentives: the reward ladder, the forecast, and the reveal
 
-> Status: **M1 shipped; the rest is plan.** The ledger, the ladder and the
-> forecast are in `src/game/progress.ts`, `src/game/rewards.ts` and
-> `src/components/IncentiveForecast.tsx`. No reward has a face yet: the
-> reveal sequence in Part 5 is M2.
+> Status: **M1 and M2 shipped; the rest is plan.** The ledger, the ladder,
+> the forecast and the reveal are in `src/game/progress.ts`,
+> `src/game/rewards.ts`, `src/game/catalog.ts`,
+> `src/components/IncentiveForecast.tsx` and
+> `src/components/RewardReveal.tsx`. Six objects pop today; the fact cards,
+> Wellness, the dance experience and the Waffle tiers wait their milestone
+> and stay queued rather than being claimed unseen.
 >
 > This document is the bridge between `product-context/` — the imported
 > product specification for MDR rewards, lore and media — and the game that
@@ -342,8 +345,8 @@ Each milestone ends with something a player can see working.
 | # | Milestone | Player-visible result |
 |---|---|---|
 | M1 | Counters, save store, forecast surface — **shipped** | Finishing a screen shows real progress toward a sealed goal |
-| M2 | Reveal sequence + the six image/video rewards of Lane A | The eraser, finger trap, melon bar, egg bar, watermelon and crystal all pop and enter the shelf |
-| M3 | Lane B, the incentive shelf, collision queue | Two lanes run at once and simultaneous unlocks both get their own reveal |
+| M2 | Reveal sequence + the six image/video rewards of Lane A — **shipped** | The eraser, finger trap, melon bar, egg bar, watermelon and crystal all pop, stack when two land together, and hold the board while they do |
+| M3 | The incentive shelf | Claimed objects can be found and inspected again, instead of being seen once |
 | M4 | Wellness — fact bank, cards, captions, speech | Fact cards typeset at runtime, captioned, with speech optional |
 | M5 | MDE I and the office-scene handoff | The number field becomes a dance floor and returns cleanly |
 | M6 | Lanes C and D; then Waffle tiers | Mastery counters appear as the game widens; the campaign ends on the ritual |

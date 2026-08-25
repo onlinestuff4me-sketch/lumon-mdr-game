@@ -28,6 +28,17 @@ import { TEMPERS } from "./constants";
 import { newlyEarned, type Counters, type Rung } from "./rewards";
 import type { Temper } from "./types";
 
+/**
+ * `presenting` is read but never written.
+ *
+ * The guarantee the reward contract actually needs is that *earned* is in
+ * storage before any ceremony begins, and that happens at the boundary,
+ * in `applyCompletion`. A second write when the card appears would buy
+ * nothing: both states mean the same thing to a save being loaded, which
+ * is that the refiner is owed something. It stays in the type because a
+ * save written by a version that did write it must still load, and
+ * `coerce` turns it back into what it means.
+ */
 export type RewardState = "earned_pending" | "presenting" | "claimed";
 
 export interface Progress {
@@ -128,6 +139,21 @@ export function applyCompletion(
   return { progress: next, earned };
 }
 
+/**
+ * Claim a reward: it has been seen, and it leaves the queue.
+ *
+ * Idempotent, because the accept control can be pressed twice before the
+ * card has finished leaving. A claim never re-runs and never re-awards.
+ */
+export function claimReward(p: Progress, id: string): Progress {
+  if (p.rewardState[id] === "claimed") return p;
+  return {
+    ...p,
+    rewardState: { ...p.rewardState, [id]: "claimed" },
+    rewardQueue: p.rewardQueue.filter((q) => q !== id),
+  };
+}
+
 // ── persistence ──────────────────────────────────────────────────────
 
 function coerce(raw: unknown): Progress {
@@ -213,4 +239,11 @@ export function creditScreen(done: Completion): Progress {
   const { progress } = applyCompletion(loadProgress(), done);
   saveProgress(progress);
   return progress;
+}
+
+/** Persisted `claimed`, the moment the refiner accepts. */
+export function claim(p: Progress, id: string): Progress {
+  const next = claimReward(p, id);
+  saveProgress(next);
+  return next;
 }
