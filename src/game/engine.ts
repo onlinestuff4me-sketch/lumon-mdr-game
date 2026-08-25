@@ -489,7 +489,12 @@ export class GameEngine {
 
   private buildSnapshot(): HudSnapshot {
     const level = LEVELS[this.levelIndex];
-    const bins: BinView[] = level.tempers.map((t) => {
+    // Every bin the deck shows, not just the ones this file can fill: the
+    // layout reserves a cell for each shown bin, so emitting only the
+    // content tempers left the real bins sitting in scattered cells of a
+    // half-empty grid. A bin with nothing to feed it renders inert at 0%.
+    const shown = level.showBins ?? level.tempers;
+    const bins: BinView[] = shown.map((t) => {
       const b = this.bins[t];
       const fresh = this.elapsed - b.lastHitAt < 0.5;
       return {
@@ -503,9 +508,12 @@ export class GameEngine {
         hover: this.hoverBin === t,
       };
     });
+    // Progress tracks completion, and completion only ever requires the
+    // content tempers — averaging over an unfillable bin would cap the
+    // meter at 50% on a file that is finished.
     const progress =
-      bins.reduce((sum, b) => sum + Math.min(1, b.fill), 0) /
-      Math.max(1, bins.length);
+      level.tempers.reduce((sum, t) => sum + Math.min(1, this.bins[t].fill), 0) /
+      Math.max(1, level.tempers.length);
     return {
       phase: this.phase,
       paused: this.paused,
@@ -533,7 +541,7 @@ export class GameEngine {
       // 900ms — the twenty-one interruptions the sequence exists to avoid.
       ceremony: level.ceremony ?? "full",
       teaching: level.teaches === true,
-      activeTempers: level.showBins ?? level.tempers,
+      activeTempers: shown,
       stage: level.stage ?? null,
       lore: level.lore,
       isLastLevel: this.levelIndex >= LEVELS.length - 1,
