@@ -1142,6 +1142,63 @@ section("incentives");
     owedBefore === 1 && owedAfter === 1, `${owedBefore} -> ${owedAfter}`);
 }
 
+// ═══ 11b. facts are typeset, spoken, and kept ════════════════════════
+section("wellness");
+{
+  const ledger = () =>
+    page.evaluate(() => JSON.parse(localStorage.getItem("lumon.mdr.progress.v1") ?? "null"));
+  const seed = (p) =>
+    page.evaluate((v) => localStorage.setItem("lumon.mdr.progress.v1", v), JSON.stringify(p));
+  const finish = async (index) => {
+    await load(page, index);
+    let guard = 0;
+    while ((await state(page)).progress < 100 && guard++ < 10) {
+      const g = await findGroup(page);
+      if (!g) break;
+      await tap(page, origin, await touchFor(page, g.one, "marquee"));
+      if (!(await state(page)).carrying) break;
+      await carryToBin(page, origin, g);
+    }
+    await page.waitForTimeout(150);
+  };
+
+  // Two screens short of the first fact card.
+  await seed({
+    version: 1, screensCompleted: 2, binsTotal: 2,
+    binsByTemper: { WO: 2, FC: 0, DR: 0, MA: 0 },
+    creditedLevelIds: ["orientation-01", "orientation-02"],
+    perfectScreensTotal: 2, perfectScreenStreak: 2,
+    rewardState: { S01: "claimed", S02: "claimed" },
+    rewardQueue: [], seenFactIds: [], factsByRung: {}, inspectCounts: {},
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  await finish(2);
+
+  const chosen = (await ledger()).factsByRung.S03 ?? [];
+  check("the sentence is chosen and stored when the card is earned", chosen.length === 1,
+    JSON.stringify(chosen));
+
+  await page.waitForFunction(() => /A FACT ABOUT YOUR OUTIE/.test(document.body.innerText),
+    null, { timeout: 5000 });
+  // The sentence is typeset on the plate itself — real text over the
+  // image, never baked into it — and it appears once: the line underneath
+  // is Lumon's framing, not the same words again.
+  const shown = await page.evaluate(() =>
+    [...document.body.innerText.matchAll(/Your outie[^\n]*/g)].map((m) => m[0]));
+  check("the fact is typeset on the card, exactly once",
+    shown.length === 1 && shown[0].endsWith("."), JSON.stringify(shown));
+  check("and the caption below it is the framing line",
+    /Wellness has prepared a statement/.test(await page.evaluate(() => document.body.innerText)));
+
+  // The same sentence, after a reload mid-ceremony: never rerolled.
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  const after = (await ledger()).factsByRung.S03 ?? [];
+  check("and a reload cannot draw a different one", after.join() === chosen.join(),
+    `${chosen.join()} -> ${after.join()}`);
+}
+
 // ═══ 11. nothing threw ═══════════════════════════════════════════════
 section("console");
 check("no page errors", errors.length === 0, errors.join(" | "));

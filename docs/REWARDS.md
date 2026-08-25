@@ -1,12 +1,11 @@
 # Incentives: the reward ladder, the forecast, and the reveal
 
-> Status: **M1 and M2 shipped; the rest is plan.** The ledger, the ladder,
-> the forecast and the reveal are in `src/game/progress.ts`,
-> `src/game/rewards.ts`, `src/game/catalog.ts`,
-> `src/components/IncentiveForecast.tsx` and
-> `src/components/RewardReveal.tsx`. Six objects pop today; the fact cards,
-> Wellness, the dance experience and the Waffle tiers wait their milestone
-> and stay queued rather than being claimed unseen.
+> Status: **M1–M4 shipped; the dance experience and the Waffle tiers are
+> plan.** The ledger, the ladder, the forecast, the reveal, the fact bank
+> and the shelf are in `src/game/`, `src/components/IncentiveForecast.tsx`,
+> `RewardReveal.tsx` and `IncentiveShelf.tsx`. Fifteen of the twenty rungs
+> present today; the five that award the dance experience or a Waffle tier
+> stay queued rather than being claimed unseen.
 >
 > This document is the bridge between `product-context/` — the imported
 > product specification for MDR rewards, lore and media — and the game that
@@ -36,6 +35,7 @@ a menu, and should be unable to answer "what is it?" until it opens.
 | Forecast reveal | **After the first reward pops** | Screens 1–2 stay clean. The finger trap arrives with no warning, and the forecast appears immediately behind it carrying the next sealed goal. The system explains itself by having already paid out once. |
 | Pacing unit | **Screens**, with named files as landmarks | Files are too coarse here: 18 names, and the first 13 screens share one. Screens give 30 rungs, which is where the density has to live. |
 | Canon posture | **Reach for the show's own names first** | Recognition is the point: a refiner who spots something they know grins, and a grin is worth more than an original joke of equal quality. Where the show establishes a name, use it. Where it does not, write in the same register and record it as original. The one line that does not move is the audit's: an item the show only ever *mentions* can be named in text, never given an invented face. |
+| Wellness voice | **The browser's speech synthesis, not shipped clips** | The fact bank assumes cached voice recordings. Forty-nine of them would be the first audio files in a repository that synthesises every other sound at runtime, and megabytes of download for a phone. The system voice is neutral, imitates no one, needs no network, and is never required: the sentence is on screen either way, and the mute switch turns it off. |
 | Bin credit | **On file completion, once per file** | A file abandoned or failed credits nothing; replaying a file credits nothing a second time. Counters stay monotonic and cannot be farmed. |
 
 ---
@@ -346,8 +346,8 @@ Each milestone ends with something a player can see working.
 |---|---|---|
 | M1 | Counters, save store, forecast surface — **shipped** | Finishing a screen shows real progress toward a sealed goal |
 | M2 | Reveal sequence + the six image/video rewards of Lane A — **shipped** | The eraser, finger trap, melon bar, egg bar, watermelon and crystal all pop, stack when two land together, and hold the board while they do |
-| M3 | The incentive shelf | Claimed objects can be found and inspected again, instead of being seen once |
-| M4 | Wellness — fact bank, cards, captions, speech | Fact cards typeset at runtime, captioned, with speech optional |
+| M3 | The incentive shelf — **shipped** | Claimed objects can be found and opened again in the handbook, and every fact heard is kept in a Wellness record |
+| M4 | Wellness — fact bank, cards, captions, speech — **shipped** | Fact cards typeset at runtime on the blank plate, sessions read three or four sentences, and the voice is the browser's own so no audio ships |
 | M5 | MDE I and the office-scene handoff | The number field becomes a dance floor and returns cleanly |
 | M6 | Lanes C and D; then Waffle tiers | Mastery counters appear as the game widens; the campaign ends on the ritual |
 

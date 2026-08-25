@@ -7,12 +7,16 @@ import { LEVELS, COLS, ROWS, MIN_CAPTURE, TEMPERS, ORIENT_STAGES } from "../src/
 import { assignMorphs, boardExtras, createBoard } from "../src/game/grid";
 import { LADDER, forecast, newlyEarned } from "../src/game/rewards";
 import { CATALOG } from "../src/game/catalog";
+import { FACTS, FACT_PLAN, factById, factCount, pickFacts } from "../src/game/facts";
 import { applyCompletion, counters, emptyProgress, type Progress } from "../src/game/progress";
 import { existsSync } from "node:fs";
 
 let bad = 0;
 const fail = (m: string) => { bad++; console.log("  FAIL " + m); };
 const ok = (m: string) => console.log("  ok   " + m);
+const eqIds = (m: string, a: string[], b: string[]) => {
+  if (a.join(",") !== b.join(",")) fail(`${m} — ${a.join(",")} vs ${b.join(",")}`);
+};
 
 console.log(`\n── board invariants, all ${LEVELS.length} screens ${"─".repeat(24)}`);
 for (const lv of LEVELS) {
@@ -370,7 +374,7 @@ console.log(`\n── reward media ${"─".repeat(45)}`);
   let files = 0;
   for (const [id, def] of Object.entries(CATALOG)) {
     for (const [kind, url] of Object.entries(def)) {
-      if (kind === "name" || kind === "line") continue;
+      if (kind === "name" || kind === "line" || kind === "kind") continue;
       const path = `public/${String(url).replace(/^\.?\//, "")}`;
       files++;
       if (!existsSync(path)) fail(`${id}: ${kind} is missing — ${path}`);
@@ -392,6 +396,69 @@ console.log(`\n── reward media ${"─".repeat(45)}`);
   }
   const presentable = LADDER.filter((r) => r.reward in CATALOG).length;
   ok(`${presentable} of ${LADDER.length} rungs can present today; the rest wait their milestone`);
+}
+
+// ── the fact bank ────────────────────────────────────────────────────
+// The rules here are the fact bank's own: two labelled pools kept apart,
+// one sentence used for card, caption and voice alike, a mature entry that
+// nothing selects while there is no setting to allow it, and a draw that
+// is decided once and cannot be rerolled by closing the app.
+
+console.log(`\n── outie facts ${"─".repeat(46)}`);
+{
+  const canon = FACTS.filter((f) => f.label === "CANON_WELLNESS_CLAIM");
+  const original = FACTS.filter((f) => f.label === "ORIGINAL_APOCRYPHA");
+  if (canon.length !== 25) fail(`${canon.length} show-derived facts, not 25`);
+  if (original.length !== 24) fail(`${original.length} original facts, not 24`);
+  if (new Set(FACTS.map((f) => f.id)).size !== FACTS.length) fail("duplicate fact ids");
+  if (new Set(FACTS.map((f) => f.text)).size !== FACTS.length) fail("duplicate fact text");
+  for (const f of FACTS) {
+    if (!f.text.trim().endsWith(".")) fail(`${f.id} is not a sentence`);
+    if (!/^Your outie/.test(f.text)) fail(`${f.id} does not read as a Wellness claim`);
+  }
+  ok(`${canon.length} show-derived and ${original.length} original facts, all distinct`);
+
+  // Every rung that awards a fact card or a session has a plan, and every
+  // plan belongs to such a rung.
+  for (const rung of LADDER) {
+    const wants = rung.reward === "R03" ? 1 : rung.reward === "R06" ? -1 : 0;
+    const planned = factCount(rung.id);
+    if (wants === 1 && planned !== 1) fail(`${rung.id} is a fact card but reads ${planned} facts`);
+    if (wants === -1 && planned < 3) fail(`${rung.id} is a session but reads only ${planned} facts`);
+    if (wants === 0 && planned !== 0) fail(`${rung.id} awards ${rung.reward} but has a fact plan`);
+  }
+  for (const id of Object.keys(FACT_PLAN)) {
+    if (!LADDER.some((r) => r.id === id)) fail(`${id} has a fact plan but is not a rung`);
+  }
+  ok("every fact card and session has a plan, and every plan has a rung");
+
+  // A draw is deterministic, respects the pools it asked for, never
+  // repeats a sentence the refiner has already heard, and never reaches
+  // for the mature entry while nothing can allow it.
+  {
+    const seen: string[] = [];
+    let mature = 0;
+    for (const rungId of Object.keys(FACT_PLAN)) {
+      const first = pickFacts(rungId, seen);
+      const again = pickFacts(rungId, seen);
+      eqIds(`${rungId} draws the same sentences twice running`, first, again);
+      const plan = FACT_PLAN[rungId];
+      const drawn = first.map((id) => factById(id)!);
+      if (drawn.some((f) => !f)) fail(`${rungId} drew an id that is not in the bank`);
+      const gotCanon = drawn.filter((f) => f.label === "CANON_WELLNESS_CLAIM").length;
+      const gotOriginal = drawn.filter((f) => f.label === "ORIGINAL_APOCRYPHA").length;
+      if (gotCanon !== plan.canon || gotOriginal !== plan.original) {
+        fail(`${rungId} wanted ${plan.canon}/${plan.original}, drew ${gotCanon}/${gotOriginal}`);
+      }
+      for (const id of first) {
+        if (seen.includes(id)) fail(`${rungId} repeated ${id}, already heard`);
+      }
+      mature += drawn.filter((f) => f.mature).length;
+      seen.push(...first);
+    }
+    if (mature > 0) fail(`${mature} mature facts were selected with no setting to allow them`);
+    ok(`${seen.length} sentences drawn across the ladder, none repeated, none mature`);
+  }
 }
 
 console.log(bad ? `\nFAILED — ${bad} problems` : "\nPASSED");

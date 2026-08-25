@@ -35,9 +35,13 @@ const WIDTH = 720;
 const HEIGHT = 1280;
 const QUALITY = 0.82;
 
-/** Everything M2 presents: a poster each, and motion where it exists. */
+/** Everything the game presents: a poster each, motion where it exists. */
 const ASSETS = [
   { id: "r01_eraser", still: false },
+  // The blank card plate. Its sentence is typeset at runtime — nothing
+  // legible is ever baked into a generated image.
+  { id: "r03_outie_fact_card", still: false },
+  { id: "r06_wellness_session", still: true },
   { id: "r02_finger_trap", still: true },
   { id: "r05_melon_bar", still: true },
   { id: "r08_crystal_portrait_gift", still: true },

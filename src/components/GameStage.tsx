@@ -3,8 +3,15 @@ import { getAudio } from "../audio/AudioEngine";
 import { haptics } from "../audio/haptics";
 import { LEVELS } from "../game/constants";
 import { loadArchive, recordCompletion } from "../game/archive";
-import { claim, creditScreen, loadProgress, type Progress } from "../game/progress";
+import {
+  claim,
+  creditScreen,
+  inspect,
+  loadProgress,
+  type Progress,
+} from "../game/progress";
 import { presentable } from "../game/catalog";
+import { factById, type Fact } from "../game/facts";
 import { rungById } from "../game/rewards";
 import { RewardReveal } from "./RewardReveal";
 import {
@@ -51,7 +58,11 @@ export function GameStage() {
    * for the next completed screen instead of running back to back.
    */
   const owed = (() => {
-    const out: { rungId: string; reward: NonNullable<ReturnType<typeof presentable>> }[] = [];
+    const out: {
+      rungId: string;
+      reward: NonNullable<ReturnType<typeof presentable>>;
+      facts: Fact[];
+    }[] = [];
     let majorShown = false;
     for (const id of progress.rewardQueue) {
       const rung = rungById(id);
@@ -62,7 +73,12 @@ export function GameStage() {
         if (majorShown) continue;
         majorShown = true;
       }
-      out.push({ rungId: id, reward });
+      // Chosen and stored when the reward was earned; looked up here, never
+      // drawn here.
+      const facts = (progress.factsByRung[id] ?? [])
+        .map(factById)
+        .filter((f): f is Fact => !!f);
+      out.push({ rungId: id, reward, facts });
     }
     return out;
   })();
@@ -429,6 +445,7 @@ export function GameStage() {
             archive={archive}
             levelIndex={hud.levelIndex}
             progress={progress}
+            onInspect={(rewardId) => setProgress((p) => inspect(p, rewardId))}
           />
         ) : null}
 
@@ -474,8 +491,10 @@ export function GameStage() {
             // same card with different contents.
             key={owed[0].rungId}
             reward={owed[0].reward}
+            facts={owed[0].facts}
             index={stackIndex}
             total={stackTotal}
+            muted={hud.muted}
             onAccept={() => {
               const id = owed[0].rungId;
               setProgress((p) => claim(p, id));

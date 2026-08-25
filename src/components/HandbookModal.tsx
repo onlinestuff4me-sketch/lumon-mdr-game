@@ -5,13 +5,16 @@ import type { Pace } from "../game/constants";
 import { LEVELS, PACE } from "../game/constants";
 import { MIN_CAPTURE, PROBE_RADIUS, TEMPERS, TEMPER_DEFS } from "../game/constants";
 import type { Progress } from "../game/progress";
+import type { RewardId } from "../game/rewards";
 import { IncentiveForecast } from "./IncentiveForecast";
+import { IncentiveShelf, WellnessRecord } from "./IncentiveShelf";
 
 interface Props {
   onClose: () => void;
   assist: boolean;
-  /** The incentive ledger, for the forecast above the archive. */
+  /** The incentive ledger: the forecast, the shelf and the Wellness record. */
   progress: Progress;
+  onInspect: (rewardId: RewardId) => void;
   onAssist: (on: boolean) => void;
   muted: boolean;
   onMuted: (on: boolean) => void;
@@ -73,6 +76,7 @@ export function HandbookModal({
   onClose,
   assist,
   progress,
+  onInspect,
   onAssist,
   muted,
   onMuted,
@@ -224,6 +228,9 @@ export function HandbookModal({
             </p>
           </>
         ) : null}
+
+        <IncentiveShelf progress={progress} onInspect={onInspect} />
+        <WellnessRecord progress={progress} />
 
         <h3 className="crt-text-glow mb-1 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300">
           PERPETUITY WING · ARCHIVE

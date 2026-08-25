@@ -1,38 +1,59 @@
 import { useEffect, useState } from "react";
 import { ChevronRight } from "lucide-react";
+import { speech } from "../audio/speech";
 import type { RewardDef } from "../game/catalog";
+import type { Fact } from "../game/facts";
 
 /**
  * The incentive pop: sealed, then opened.
  *
- * Three rules this component exists to keep, all of them from
- * `docs/REWARDS.md` Part 5:
+ * Four rules this component exists to keep, all of them from
+ * `docs/REWARDS.md` Part 5 and the fact bank's playback specification:
  *
  * 1. **The name and the picture arrive together, and not before.** Until
  *    the seal opens there is nothing on screen that could identify what is
  *    inside — no silhouette, no colour, no category, no filename in the
  *    markup.
- * 2. **Nothing is ever non-skippable.** The accept control is live from the
- *    first frame; pressing it during the seal opens it early, and pressing
- *    it after takes the reward.
+ * 2. **Nothing is ever non-skippable.** The control is live from the first
+ *    frame; while the card is sealed it opens it, and after that it moves
+ *    on. Speech never gates it.
  * 3. **One card at a time.** Two rewards never share a frame. The stack is
- *    the caller's business; this draws whichever one it is handed, and says
- *    how many are behind it.
+ *    the caller's business; this draws whichever one it is handed, and
+ *    says how many are behind it.
+ * 4. **Written, captioned and spoken are the same sentence.** There is one
+ *    string per fact and all three read it, so they cannot drift.
  */
 
-/** Seconds the sealed card holds before it opens itself. */
+/** How long the sealed card holds before it opens itself. */
 const SEAL_MS = 900;
 
 interface Props {
   reward: RewardDef;
+  /**
+   * The sentences this reward reads, already chosen and already stored.
+   * One for a fact card, three or four for a Wellness session, none for
+   * an object.
+   */
+  facts: readonly Fact[];
   /** 1-based position in this boundary's stack, and its length. */
   index: number;
   total: number;
+  /** The terminal's mute switch. Silence is a supported way to play. */
+  muted: boolean;
   onAccept: () => void;
 }
 
-export function RewardReveal({ reward, index, total, onAccept }: Props) {
+export function RewardReveal({
+  reward,
+  facts,
+  index,
+  total,
+  muted,
+  onAccept,
+}: Props) {
   const [open, setOpen] = useState(false);
+  /** Which sentence of a session is on the card. */
+  const [step, setStep] = useState(0);
   // Read once, at mount: this decides between a clip and a still, and a
   // preference that changed mid-celebration would swap the media under the
   // refiner's eyes.
@@ -50,12 +71,34 @@ export function RewardReveal({ reward, index, total, onAccept }: Props) {
     return () => clearTimeout(t);
   }, []);
 
+  const fact = facts[step] ?? null;
+
+  // The voice follows the sentence on screen, and leaves with the card.
+  useEffect(() => {
+    if (!open || !fact || muted) return;
+    speech.say(fact.text);
+    return () => speech.stop();
+  }, [open, fact, muted]);
+
+  useEffect(() => () => speech.stop(), []);
+
   const showVideo = open && !reduced && !!reward.video && !clipFailed;
+  const lastStep = step >= facts.length - 1;
+  const advances = facts.length > 1 && !lastStep;
+
+  const label = !open
+    ? "OPEN"
+    : advances
+      ? "CONTINUE"
+      : index < total
+        ? "ACCEPT · NEXT"
+        : "ACCEPT INCENTIVE";
 
   return (
     <div className="absolute inset-0 z-70 flex flex-col items-center justify-center bg-phos-950/97 px-7 text-center">
       <p className="text-[9px] tracking-[0.3em] text-phos-600">
         {total > 1 ? `INCENTIVE ${index} OF ${total}` : "INCENTIVE"}
+        {open && facts.length > 1 ? ` · ${step + 1}/${facts.length}` : ""}
       </p>
 
       {open ? (
@@ -67,7 +110,14 @@ export function RewardReveal({ reward, index, total, onAccept }: Props) {
 
           {/* The clip plays once rather than looping: an object that turns
               forever is scenery. It settles on its last frame and waits. */}
-          <div className="mt-4 w-full max-w-[240px] overflow-hidden rounded-[3px] border border-phos-600 bg-black">
+          <div
+            className={`relative mt-4 w-full max-w-[240px] overflow-hidden rounded-[3px] border border-phos-600 ${
+              // Cream behind the fact card rather than black: the sentence
+              // is typeset over the plate, so if the plate never loads the
+              // words must still be on something they can be read against.
+              reward.kind === "fact" ? "bg-[#e9e5d9]" : "bg-black"
+            }`}
+          >
             {showVideo ? (
               <video
                 className="block h-auto w-full"
@@ -85,10 +135,29 @@ export function RewardReveal({ reward, index, total, onAccept }: Props) {
                 alt={reward.name}
               />
             )}
+
+            {/* Typeset onto the blank plate at runtime, never baked into
+                the image: the card, the caption below and the voice are
+                one string, and a generated picture cannot be trusted to
+                spell. The box is placed over the card in the plate. */}
+            {reward.kind === "fact" && fact ? (
+              <p
+                className="absolute flex items-center justify-center text-center text-[9px] leading-relaxed text-[#2b3a30]"
+                style={{ left: "27%", right: "25%", top: "26%", bottom: "34%" }}
+              >
+                {fact.text}
+              </p>
+            ) : null}
           </div>
 
+          {/* The caption carries the spoken sentence for a session, where
+              the picture is a room and the words are only in the air. A
+              fact card has already typeset its sentence on the card, so
+              repeating it underneath would be the same words twice; it
+              gets Lumon's framing line instead. Either way there is real
+              text on screen for every word that is spoken. */}
           <p className="mt-3 max-w-[260px] text-[10px] italic leading-relaxed text-phos-400">
-            {reward.line}
+            {fact && reward.kind !== "fact" ? fact.text : reward.line}
           </p>
         </>
       ) : (
@@ -114,14 +183,19 @@ export function RewardReveal({ reward, index, total, onAccept }: Props) {
       )}
 
       {/* Live from the first frame, which is what keeps every part of this
-          skippable: while the card is sealed it opens it, and after that it
-          takes the reward. Nothing here ever makes the refiner wait. */}
+          skippable: while the card is sealed it opens it, then it steps
+          through the sentences, then it takes the reward. */}
       <button
         type="button"
-        onClick={() => (open ? onAccept() : setOpen(true))}
+        onClick={() => {
+          if (!open) return setOpen(true);
+          if (advances) return setStep((n) => n + 1);
+          speech.stop();
+          onAccept();
+        }}
         className="mt-5 inline-flex items-center gap-2 rounded-[3px] border border-phos-400 bg-phos-600/25 px-5 py-2.5 text-[11px] font-bold tracking-[0.22em] text-phos-200 crt-text-glow active:bg-phos-600/50"
       >
-        {!open ? "OPEN" : index < total ? "ACCEPT · NEXT" : "ACCEPT INCENTIVE"}
+        {label}
         <ChevronRight size={12} strokeWidth={2.6} />
       </button>
     </div>

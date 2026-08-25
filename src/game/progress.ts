@@ -25,6 +25,7 @@
  */
 
 import { TEMPERS } from "./constants";
+import { pickFacts } from "./facts";
 import { newlyEarned, type Counters, type Rung } from "./rewards";
 import type { Temper } from "./types";
 
@@ -56,6 +57,22 @@ export interface Progress {
   rewardQueue: string[];
   /** Fact ids already spoken, so a Wellness card never repeats one. */
   seenFactIds: string[];
+  /**
+   * The sentences each rung will read, chosen when it was earned.
+   *
+   * Written before any card opens, which is the whole point: a force quit
+   * during a Wellness session must bring back the same facts, not a fresh
+   * draw. Kept after claiming too, so the archive can list what was heard.
+   */
+  factsByRung: Record<string, string[]>;
+  /**
+   * How often each claimed reward has been opened on the shelf.
+   *
+   * Harmless on its own, and the counter the "please enjoy all incentives
+   * equally" survey will read later. It never changes what a refiner is
+   * given.
+   */
+  inspectCounts: Record<string, number>;
 }
 
 const KEY = "lumon.mdr.progress.v1";
@@ -73,6 +90,8 @@ export function emptyProgress(): Progress {
     rewardState: {},
     rewardQueue: [],
     seenFactIds: [],
+    factsByRung: {},
+    inspectCounts: {},
   };
 }
 
@@ -129,12 +148,21 @@ export function applyCompletion(
     perfectScreenStreak: done.perfect ? p.perfectScreenStreak + 1 : 0,
     rewardState: { ...p.rewardState },
     rewardQueue: [...p.rewardQueue],
+    factsByRung: { ...p.factsByRung },
   };
 
   const earned = newlyEarned(before, counters(next), claimedIds(p));
+  const seen = [...p.seenFactIds];
   for (const rung of earned) {
     next.rewardState[rung.id] = "earned_pending";
     next.rewardQueue.push(rung.id);
+    // The sentences are drawn here, at the boundary, and stored with the
+    // reward. Nothing downstream is allowed to roll for them.
+    const facts = pickFacts(rung.id, seen);
+    if (facts.length) {
+      next.factsByRung[rung.id] = facts;
+      seen.push(...facts);
+    }
   }
   return { progress: next, earned };
 }
@@ -147,10 +175,26 @@ export function applyCompletion(
  */
 export function claimReward(p: Progress, id: string): Progress {
   if (p.rewardState[id] === "claimed") return p;
+  // Whatever was read out is now heard, and will not come round again.
+  const heard = p.factsByRung[id] ?? [];
+  const seenFactIds = [...p.seenFactIds];
+  for (const f of heard) if (!seenFactIds.includes(f)) seenFactIds.push(f);
   return {
     ...p,
     rewardState: { ...p.rewardState, [id]: "claimed" },
     rewardQueue: p.rewardQueue.filter((q) => q !== id),
+    seenFactIds,
+  };
+}
+
+/** Someone opened a claimed incentive on the shelf and looked at it. */
+export function inspectReward(p: Progress, rewardId: string): Progress {
+  return {
+    ...p,
+    inspectCounts: {
+      ...p.inspectCounts,
+      [rewardId]: (p.inspectCounts[rewardId] ?? 0) + 1,
+    },
   };
 }
 
@@ -196,6 +240,21 @@ function coerce(raw: unknown): Progress {
     if (state === "earned_pending" && !queue.includes(id)) queue.push(id);
   }
 
+  const factsByRung: Record<string, string[]> = {};
+  if (p.factsByRung && typeof p.factsByRung === "object") {
+    for (const [rung, list] of Object.entries(p.factsByRung)) {
+      const clean = ids(list);
+      if (clean.length) factsByRung[rung] = clean;
+    }
+  }
+
+  const inspectCounts: Record<string, number> = {};
+  if (p.inspectCounts && typeof p.inspectCounts === "object") {
+    for (const [id, n] of Object.entries(p.inspectCounts)) {
+      inspectCounts[id] = num(n, 0);
+    }
+  }
+
   return {
     version: VERSION,
     screensCompleted: num(p.screensCompleted, 0),
@@ -207,6 +266,8 @@ function coerce(raw: unknown): Progress {
     rewardState,
     rewardQueue: queue,
     seenFactIds: ids(p.seenFactIds),
+    factsByRung,
+    inspectCounts,
   };
 }
 
@@ -244,6 +305,14 @@ export function creditScreen(done: Completion): Progress {
 /** Persisted `claimed`, the moment the refiner accepts. */
 export function claim(p: Progress, id: string): Progress {
   const next = claimReward(p, id);
+  saveProgress(next);
+  return next;
+}
+
+/** Persisted inspection, so the equal-enjoyment audit has something to
+ *  be disappointed about later. */
+export function inspect(p: Progress, rewardId: string): Progress {
+  const next = inspectReward(p, rewardId);
   saveProgress(next);
   return next;
 }
