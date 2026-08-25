@@ -127,6 +127,47 @@ section("reachability");
     JSON.stringify(deck));
   check("and nothing sits between the board and the bins",
     !!deck && deck.binsTop - deck.gridBottom < 4, JSON.stringify(deck));
+
+  // A deck can show more bins than the file can fill (the orientation rung
+  // that introduces bins which must NOT be fed). The layout reserves a cell
+  // for each shown bin, so if the deck renders only the content tempers the
+  // real bins land in scattered cells of a half-empty grid. Reachability
+  // alone never caught that: it probes layout rects, not the DOM.
+  const wideIdx = await page.evaluate(() =>
+    window.__mdr.levels.findIndex((l) => l.showBins && l.showBins.length > l.tempers.length));
+  check("a file exists whose deck is wider than its content", wideIdx >= 0);
+  if (wideIdx >= 0) {
+    await load(page, wideIdx);
+    const deckCells = await page.evaluate(() => {
+      const e = window.__mdr;
+      const L = e.layout;
+      const shown = [...e.getSnapshot().activeTempers];
+      const st = document.querySelector('[role="application"]').getBoundingClientRect();
+      const cells = new Map();
+      for (const n of document.querySelectorAll('[aria-label="Temper bins"] > div')) {
+        const m = /^\d\d: ([A-Z]+)/.exec(n.textContent?.trim() ?? "");
+        if (m) cells.set(m[1], n.getBoundingClientRect());
+      }
+      let placed = 0;
+      for (const t of shown) {
+        const r = L.binRects[t];
+        const b = cells.get(t);
+        if (b && Math.abs(b.left - st.left - r.x) < 2 && Math.abs(b.top - st.top - r.y) < 2) {
+          placed++;
+        }
+      }
+      return { shown, rendered: [...cells.keys()], placed,
+               content: [...e.levels[e.levelIndex].tempers] };
+    });
+    eq("the deck renders a bin for every shown temper",
+      deckCells.rendered.length, deckCells.shown.length);
+    eq("and each sits in the cell the layout reserved for it",
+      deckCells.placed, deckCells.shown.length);
+    check("including bins this file cannot fill",
+      deckCells.shown.length > deckCells.content.length,
+      JSON.stringify(deckCells));
+  }
+  await load(page, 0);
 }
 
 // ═══ 3. full playthroughs ════════════════════════════════════════════
@@ -308,7 +349,7 @@ section("mechanics");
     }
     const m = e.board.clusters.find((c) => c.morph);
     return { counts, quota: e.quota, from: m?.temper, to: m?.morphTo,
-             tempers: [...e.getSnapshot().activeTempers] };
+             tempers: [...e.levels[e.levelIndex].tempers] };
   });
   check("a morphing cluster exists and is an extra", !!supply.from && !!supply.to);
   const after = { ...supply.counts };
