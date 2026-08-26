@@ -4,6 +4,18 @@ import { haptics } from "../audio/haptics";
 import { LEVELS } from "../game/constants";
 import { loadArchive, recordCompletion } from "../game/archive";
 import {
+  claim,
+  creditScreen,
+  inspect,
+  loadProgress,
+  type Progress,
+} from "../game/progress";
+import { presentable } from "../game/catalog";
+import { factById, type Fact } from "../game/facts";
+import { rungById } from "../game/rewards";
+import { RewardReveal } from "./RewardReveal";
+import { MdeStage } from "./MdeStage";
+import {
   loadRuns,
   recordRunProgress,
   startNewRun,
@@ -21,6 +33,15 @@ import { HUD } from "./HUD";
 import { PhaseOverlay } from "./PhaseOverlay";
 import { Viewport } from "./Viewport";
 
+/** A stable seed per rung, so the same session rebuilds the same floor. */
+function hashRung(id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h = Math.imul(h ^ id.charCodeAt(i), 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
+
 export function GameStage() {
   const { engine, hud } = useEngine();
   const stageRef = useRef<HTMLDivElement | null>(null);
@@ -31,6 +52,68 @@ export function GameStage() {
   const [handbook, setHandbook] = useState(false);
   const [archive, setArchive] = useState<ReadonlySet<string>>(loadArchive);
   const [runStore, setRunStore] = useState<RunStore>(loadRuns);
+  const [progress, setProgress] = useState<Progress>(loadProgress);
+
+  /**
+   * What this boundary owes the refiner, in the order it will be shown.
+   *
+   * Derived from the ledger rather than stored: the queue in the save is
+   * the truth, and a second copy in React state is a second thing that can
+   * be wrong after a reload.
+   *
+   * Two rules shape it. A reward whose presentation is a later milestone —
+   * the fact cards, the Wellness sessions, the dance experience, the Waffle
+   * tiers — stays in the queue untouched rather than being claimed unseen.
+   * And at most one major event presents per boundary: a second one waits
+   * for the next completed screen instead of running back to back.
+   */
+  const owed = (() => {
+    const out: {
+      rungId: string;
+      reward: NonNullable<ReturnType<typeof presentable>>;
+      facts: Fact[];
+    }[] = [];
+    let majorShown = false;
+    for (const id of progress.rewardQueue) {
+      const rung = rungById(id);
+      if (!rung) continue;
+      const reward = presentable(rung.reward);
+      if (!reward) continue;
+      if (rung.size !== "minor") {
+        if (majorShown) continue;
+        majorShown = true;
+      }
+      // Chosen and stored when the reward was earned; looked up here, never
+      // drawn here.
+      const facts = (progress.factsByRung[id] ?? [])
+        .map(factById)
+        .filter((f): f is Fact => !!f);
+      out.push({ rungId: id, reward, facts });
+    }
+    return out;
+  })();
+
+  // Only between files, never over a live board.
+  const revealing = hud.phase === "complete" && owed.length > 0;
+
+  /**
+   * Which card of this boundary's stack is on screen — `INCENTIVE 1 OF 2`,
+   * then `2 OF 2`.
+   *
+   * Counted rather than measured, because `owed` shrinks as cards are
+   * accepted: reading the length live would relabel the second card of a
+   * pair as the only one, and that count is the whole reason a refiner
+   * knows not to read the first dismissal as the end of the payout.
+   *
+   * Keyed by the boundary it belongs to — this screen, this completion —
+   * so it resets itself when the next one opens without an effect to clear
+   * it.
+   */
+  const boundary = `${hud.levelIndex}:${progress.screensCompleted}`;
+  const [accepted, setAccepted] = useState({ boundary: "", n: 0 });
+  const acceptedHere = accepted.boundary === boundary ? accepted.n : 0;
+  const stackTotal = owed.length + acceptedHere;
+  const stackIndex = acceptedHere + 1;
 
   const openHandbook = useCallback(() => {
     // Read the archive here rather than tracking it in an effect: the
@@ -52,10 +135,14 @@ export function GameStage() {
     setHandbook(false);
   }, []);
 
-  // Reconciles both directions, and is the sole resume path.
+  // Reconciles every reason the game might be held, and is the sole resume
+  // path. The reveal uses the same pause the handbook does, which is what
+  // suspends the orientation screens' 900ms auto-advance: the cleared board
+  // stays put and the next file does not begin loading behind a
+  // celebration.
   useEffect(() => {
-    engine.setPaused(handbook);
-  }, [engine, handbook]);
+    engine.setPaused(handbook || revealing);
+  }, [engine, handbook, revealing]);
 
   // ── canvas attach + sizing ──────────────────────────────────────────
   useLayoutEffect(() => {
@@ -137,7 +224,24 @@ export function GameStage() {
     // for the same reason: closing the tab on the completion screen must
     // lose nothing.
     setRunStore(recordRunProgress(hud.levelIndex));
-  }, [hud.phase, hud.levelIndex]);
+    // ── the incentive ledger ─────────────────────────────────────────
+    // Same boundary, same reason, and deliberately before anything is
+    // drawn: a threshold crossed here is written to storage as owed, so a
+    // tab closed on the completion screen loses the ceremony and keeps the
+    // reward. The ledger credits a level id once, which is what makes this
+    // safe to run on a re-render and safe on a replayed file.
+    if (level) {
+      setProgress(
+        creditScreen({
+          levelId: level.id,
+          tempers: level.tempers,
+          quota: level.quota,
+          perfect: engine.perfect,
+          countsForPerfect: (level.showBins ?? level.tempers).length > 1,
+        }),
+      );
+    }
+  }, [hud.phase, hud.levelIndex, engine]);
 
   // ── page visibility: stop the loop, the drones and the buzzing ──────
   useEffect(() => {
@@ -351,6 +455,8 @@ export function GameStage() {
             onPace={(p) => engine.setPace(p)}
             archive={archive}
             levelIndex={hud.levelIndex}
+            progress={progress}
+            onInspect={(rewardId) => setProgress((p) => inspect(p, rewardId))}
           />
         ) : null}
 
@@ -361,6 +467,7 @@ export function GameStage() {
             no phase can change underneath it. */}
         <PhaseOverlay
           hud={hud}
+          progress={progress}
           onStart={() => play(0)}
           onNext={() => engine.nextLevel()}
           onRestart={() => engine.restart()}
@@ -385,6 +492,49 @@ export function GameStage() {
             play(run ? continueIndex(run, LEVELS.length) : 0);
           }}
         />
+
+        {/* Above the phase overlay and the handbook alike: a celebration
+            owns the screen while it runs. */}
+        {revealing && owed[0].reward.kind === "experience" ? (
+          // The dance experience is not a card: it takes the floor, and
+          // the floor is the number field the refiner has just cleared.
+          <MdeStage
+            key={owed[0].rungId}
+            reward={owed[0].reward}
+            seed={hashRung(owed[0].rungId)}
+            muted={hud.muted}
+            onDone={() => {
+              const id = owed[0].rungId;
+              setProgress((p) => claim(p, id));
+              setAccepted((a) =>
+                a.boundary === boundary
+                  ? { boundary, n: a.n + 1 }
+                  : { boundary, n: 1 },
+              );
+            }}
+          />
+        ) : revealing ? (
+          <RewardReveal
+            // Remount per card: a new incentive starts sealed, and a key is
+            // how React is told these are different cards rather than the
+            // same card with different contents.
+            key={owed[0].rungId}
+            reward={owed[0].reward}
+            facts={owed[0].facts}
+            index={stackIndex}
+            total={stackTotal}
+            muted={hud.muted}
+            onAccept={() => {
+              const id = owed[0].rungId;
+              setProgress((p) => claim(p, id));
+              setAccepted((a) =>
+                a.boundary === boundary
+                  ? { boundary, n: a.n + 1 }
+                  : { boundary, n: 1 },
+              );
+            }}
+          />
+        ) : null}
 
         {/* Below the coach band, not inside it: at hudH + 6 this badge sat
             on top of the ticker and clipped the line telling the player what

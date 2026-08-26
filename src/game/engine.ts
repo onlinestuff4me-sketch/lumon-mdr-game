@@ -288,6 +288,15 @@ export class GameEngine {
   private lastRefined: Temper = "WO";
   /** Elapsed time at which a finished no-ceremony screen advances. */
   private advanceAt = -1;
+  /**
+   * No rejected drop on this screen yet.
+   *
+   * Reset per file rather than per attempt: a retry is a fresh screen and
+   * gets a fresh chance at a clean one. Only a drop into the wrong bin
+   * spoils it — a marquee that caught nothing, a packet put down on open
+   * board, or any other gesture that costs nothing is not a mistake.
+   */
+  private flawless = true;
   /** The player's own audio setting, held while a file redacts it. */
   private mutedBeforeRedaction: boolean | null = null;
   /** Elapsed time the current packet was lifted, so the bin hint can wait
@@ -632,6 +641,7 @@ export class GameEngine {
     this.refreshLayout();
     this.orientHintAt = level.selfAgitate === true ? 13 : -1;
     this.advanceAt = -1;
+    this.flawless = true;
     this.lensHoldUntil = -1;
     this.reticle.scale = 1;
     this.lastTouchAt = -1e9;
@@ -681,6 +691,18 @@ export class GameEngine {
     if (this.wipe) return false;
     if (LEVELS[this.levelIndex].selfAgitate !== true) return true;
     return this.emergence >= 0.999;
+  }
+
+  /**
+   * Whether this screen has been refined without a wrong bin so far.
+   *
+   * Read at the completion boundary by the incentive ledger, which is the
+   * only thing that cares. Not part of the HUD snapshot: nothing on screen
+   * shows it during play, and a per-frame flag that nothing draws is a
+   * per-frame diff for nothing.
+   */
+  get perfect(): boolean {
+    return this.flawless;
   }
 
   nextLevel(): void {
@@ -1771,6 +1793,7 @@ export class GameEngine {
       const bin = this.bins[target];
       bin.lastHitAt = this.elapsed;
       bin.lastHitOk = false;
+      this.flawless = false;
       this.scatterBack(cluster, packet);
       getAudio().buzz();
       haptics.reject();
@@ -1826,6 +1849,7 @@ export class GameEngine {
       const bin = this.bins[target];
       bin.lastHitAt = this.elapsed;
       bin.lastHitOk = false;
+      this.flawless = false;
       this.scatterBack(cluster, packet);
       getAudio().buzz();
       haptics.reject();

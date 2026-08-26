@@ -5,10 +5,18 @@
  */
 import { LEVELS, COLS, ROWS, MIN_CAPTURE, TEMPERS, ORIENT_STAGES } from "../src/game/constants";
 import { assignMorphs, boardExtras, createBoard } from "../src/game/grid";
+import { LADDER, forecast, newlyEarned } from "../src/game/rewards";
+import { CATALOG } from "../src/game/catalog";
+import { FACTS, FACT_PLAN, factById, factCount, pickFacts } from "../src/game/facts";
+import { applyCompletion, counters, emptyProgress, type Progress } from "../src/game/progress";
+import { existsSync } from "node:fs";
 
 let bad = 0;
 const fail = (m: string) => { bad++; console.log("  FAIL " + m); };
 const ok = (m: string) => console.log("  ok   " + m);
+const eqIds = (m: string, a: string[], b: string[]) => {
+  if (a.join(",") !== b.join(",")) fail(`${m} — ${a.join(",")} vs ${b.join(",")}`);
+};
 
 console.log(`\n── board invariants, all ${LEVELS.length} screens ${"─".repeat(24)}`);
 for (const lv of LEVELS) {
@@ -196,6 +204,303 @@ console.log(`\n── the shape of the queue ${"─".repeat(34)}`);
   if (fifth.length !== 1 || fifth[0].id !== "cold-harbor") fail("the fifth belongs on cold harbor only");
   if (fifth[0]?.teaches) fail("the fifth temper must never be taught");
   ok(`${orient.length} orientation screens matching the ramp table, each anchored on the last`);
+}
+
+// ── the incentive ladder ─────────────────────────────────────────────
+// The rescale in docs/REWARDS.md only means anything if every rung is
+// actually reachable by playing the game that exists. These tests play it.
+
+console.log(`\n── incentive ladder ${"─".repeat(41)}`);
+{
+  /** Refine every screen in order, crediting the ledger as the game does. */
+  const playthrough = (perfect = true) => {
+    let p: Progress = emptyProgress();
+    const earnedAt: Record<string, number> = {};
+    LEVELS.forEach((lv, i) => {
+      const step = applyCompletion(p, {
+        levelId: lv.id,
+        tempers: lv.tempers,
+        quota: lv.quota,
+        perfect,
+        countsForPerfect: (lv.showBins ?? lv.tempers).length > 1,
+      });
+      p = step.progress;
+      for (const rung of step.earned) {
+        if (earnedAt[rung.id] !== undefined) fail(`${rung.id} earned twice`);
+        earnedAt[rung.id] = i + 1;
+        // Claiming is what M2 will do at the boundary; the ledger only has
+        // to hold the promise until then. Claim here so prerequisites
+        // (Waffle II waits for Waffle I) are exercised the way they ship.
+        p.rewardState[rung.id] = "claimed";
+      }
+      p.rewardQueue = [];
+    });
+    return { p, earnedAt };
+  };
+
+  const { p, earnedAt } = playthrough();
+
+  if (p.screensCompleted !== LEVELS.length) {
+    fail(`credited ${p.screensCompleted} screens, not ${LEVELS.length}`);
+  }
+  const handBins = LEVELS.reduce((n, l) => n + l.quota * l.tempers.length, 0);
+  if (p.binsTotal !== handBins) fail(`credited ${p.binsTotal} bins, not ${handBins}`);
+  const byTemper = TEMPERS.reduce((n, t) => n + p.binsByTemper[t], 0);
+  if (byTemper !== p.binsTotal) fail("per-temper bins do not sum to the total");
+
+  // The finding that started all of this: no reward may sit past the end.
+  for (const rung of LADDER) {
+    if (earnedAt[rung.id] === undefined) {
+      fail(`${rung.id} (${rung.reward}) is never earned in a full playthrough`);
+    }
+  }
+  ok(`all ${LADDER.length} rungs earned in ${LEVELS.length} screens / ${p.binsTotal} bins`);
+
+  // Front-loading, measured rather than asserted in prose: the first three
+  // screens each pay, and no two consecutive screens after that go by
+  // without something.
+  for (const at of [1, 2, 3]) {
+    if (!Object.values(earnedAt).includes(at)) fail(`screen ${at} pays nothing`);
+  }
+  {
+    let gap = 0;
+    let worst = 0;
+    for (let i = 1; i <= LEVELS.length; i++) {
+      gap = Object.values(earnedAt).includes(i) ? 0 : gap + 1;
+      worst = Math.max(worst, gap);
+    }
+    if (worst > 2) fail(`${worst} screens in a row with no incentive`);
+    ok(`longest gap between incentives is ${worst} screens`);
+  }
+
+  // Boundaries: one below earns nothing, exactly at earns it, and a rung
+  // is never earned twice however far the counter runs past it.
+  {
+    const zero = {
+      screens: 0, bins: 0, perfectStreak: 0, perfectTotal: 0,
+      byTemper: { WO: 0, FC: 0, DR: 0, MA: 0 },
+    };
+    /** Counters that put exactly this rung's counter at `n`. */
+    const at = (rung: (typeof LADDER)[number], n: number) => {
+      const byTemper = { WO: 0, FC: 0, DR: 0, MA: 0 };
+      if (rung.lane === "temper") {
+        if (rung.allTempers) for (const t of TEMPERS) byTemper[t] = n;
+        else byTemper[rung.temper!] = n;
+      }
+      return {
+        ...zero,
+        byTemper,
+        screens: rung.lane === "screens" ? n : 0,
+        bins: rung.lane === "bins" ? n : 0,
+        perfectStreak: rung.lane === "perfect" ? n : 0,
+        perfectTotal: rung.lane === "perfect" ? n : 0,
+      };
+    };
+    /** Every counter far past every threshold. */
+    const past = {
+      screens: 1e4, bins: 1e4, perfectStreak: 1e4, perfectTotal: 1e4,
+      byTemper: { WO: 1e4, FC: 1e4, DR: 1e4, MA: 1e4 },
+    };
+
+    for (const rung of LADDER) {
+      const below = newlyEarned(zero, at(rung, rung.at - 1), new Set());
+      if (below.some((r) => r.id === rung.id)) {
+        fail(`${rung.id} earned one short of its threshold`);
+      }
+      const met = newlyEarned(zero, at(rung, rung.at), new Set());
+      const compound = !!rung.also || !!rung.after;
+      if (!compound && !met.some((r) => r.id === rung.id)) {
+        fail(`${rung.id} did not earn at its own threshold`);
+      }
+      if (!newlyEarned(zero, past, new Set()).some((r) => r.id === rung.id) && !rung.after) {
+        fail(`${rung.id} not earned when every counter is past it`);
+      }
+    }
+    if (newlyEarned(past, past, new Set()).length !== 0) fail("a still counter earned something");
+    ok("every rung earns at its threshold and never one short");
+  }
+
+  // Idempotency: the completion effect can run more than once per screen.
+  {
+    const one = {
+      levelId: LEVELS[0].id,
+      tempers: LEVELS[0].tempers,
+      quota: LEVELS[0].quota,
+      perfect: true,
+      countsForPerfect: true,
+    };
+    const first = applyCompletion(emptyProgress(), one);
+    const again = applyCompletion(first.progress, one);
+    if (again.progress !== first.progress) fail("re-crediting a screen changed the ledger");
+    if (again.earned.length !== 0) fail("re-crediting a screen earned a reward again");
+    ok("a screen credits once, however often the boundary fires");
+  }
+
+  // The forecast shows the next threshold and never the one after it.
+  {
+    let p2: Progress = emptyProgress();
+    for (const lv of LEVELS) {
+      const lanes = forecast(counters(p2));
+      for (const lane of lanes) {
+        if (lane.target <= lane.current && lane.remaining !== 0) {
+          fail(`${lane.lane} forecast points behind the counter`);
+        }
+        const rungs = LADDER.filter((r) => r.lane === lane.lane).map((r) => r.at);
+        const next = rungs.filter((n) => n > lane.current).sort((a, b) => a - b)[0];
+        // A compound rung whose other counter is unmet stays put, which is
+        // the only case where the target is not strictly ahead.
+        if (next !== undefined && lane.target > next && !lane.also) {
+          fail(`${lane.lane} forecast skipped ${next} to show ${lane.target}`);
+        }
+      }
+      p2 = applyCompletion(p2, {
+        levelId: lv.id,
+        tempers: lv.tempers,
+        quota: lv.quota,
+        perfect: true,
+        countsForPerfect: (lv.showBins ?? lv.tempers).length > 1,
+      }).progress;
+    }
+    if (forecast(counters(p2)).length !== 0) fail("the forecast still promises something after the last file");
+    ok("the forecast shows one threshold per lane, and stops when the ladder does");
+  }
+
+  // Perfect play, and its opposite.
+  {
+    const mixed = playthrough(false).p;
+    const eligible = LEVELS.filter((l) => (l.showBins ?? l.tempers).length > 1).length;
+    if (mixed.perfectScreensTotal !== 0) fail("an imperfect run counted perfect screens");
+    if (mixed.perfectScreenStreak !== 0) fail("an imperfect run kept a streak");
+    if (p.perfectScreensTotal !== eligible) {
+      fail(`a clean run counted ${p.perfectScreensTotal} perfect screens, not ${eligible}`);
+    }
+    ok(`perfect screens track the drops, on the ${eligible} screens with a bin to get wrong`);
+  }
+
+  // Waffle II is compound and waits for Waffle I.
+  {
+    const waffleII = LADDER.find((r) => r.id === "S30");
+    if (!waffleII?.after?.length || !waffleII.also) fail("S30 lost its compound conditions");
+    const full = { byTemper: { WO: 30, FC: 30, DR: 30, MA: 30 }, perfectStreak: 0, perfectTotal: 0 };
+    const withoutFirst = newlyEarned(
+      { ...full, screens: 29, bins: 100 },
+      { ...full, screens: 30, bins: 105 },
+      new Set(),
+    );
+    if (withoutFirst.some((r) => r.id === "S30")) fail("Waffle II arrived without Waffle I");
+    ok("the Waffle tiers need both counters, in order");
+  }
+}
+
+// ── reward media ─────────────────────────────────────────────────────
+// The manifest's own first validation rule, applied to what we derived
+// from it: every path a reward promises has to exist. A reveal that 404s
+// is the one failure a player cannot work around.
+
+console.log(`\n── reward media ${"─".repeat(45)}`);
+{
+  let files = 0;
+  for (const [id, def] of Object.entries(CATALOG)) {
+    for (const [kind, url] of Object.entries(def)) {
+      if (kind === "name" || kind === "line" || kind === "kind") continue;
+      const path = `public/${String(url).replace(/^\.?\//, "")}`;
+      files++;
+      if (!existsSync(path)) fail(`${id}: ${kind} is missing — ${path}`);
+    }
+    if (!def.name || !def.line) fail(`${id}: a reward needs a name and a line`);
+  }
+  // Posters only, deliberately: the celebration clips are held back, and
+  // the encoder that brings them back lives in tools/. A stray .mp4 in the
+  // build directory means someone re-added one by hand.
+  ok(`${files} plates, all present`);
+
+  // Rewards with no record here are later milestones and stay queued. The
+  // list is explicit so that a typo in a rung's reward id fails loudly
+  // rather than silently becoming "a milestone for later".
+  const LATER = new Set<string>();
+  for (const rung of LADDER) {
+    const known = rung.reward in CATALOG || LATER.has(rung.reward);
+    if (!known) fail(`${rung.id} awards ${rung.reward}, which is neither built nor deferred`);
+  }
+  const presentable = LADDER.filter((r) => r.reward in CATALOG).length;
+  ok(`${presentable} of ${LADDER.length} rungs can present today; the rest wait their milestone`);
+}
+
+// ── the fact bank ────────────────────────────────────────────────────
+// The rules here are the fact bank's own: two labelled pools kept apart,
+// one sentence used for card, caption and voice alike, a mature entry that
+// nothing selects while there is no setting to allow it, and a draw that
+// is decided once and cannot be rerolled by closing the app.
+
+console.log(`\n── outie facts ${"─".repeat(46)}`);
+{
+  const bank = FACTS.filter((f) => f.id.startsWith("OF_"));
+  const doctrine = FACTS.filter((f) => f.id.startsWith("DOC_"));
+  const canon = bank.filter((f) => f.label === "CANON_WELLNESS_CLAIM");
+  const original = bank.filter((f) => f.label === "ORIGINAL_APOCRYPHA");
+  if (canon.length !== 25) fail(`${canon.length} show-derived facts, not 25`);
+  if (original.length !== 24) fail(`${original.length} original facts, not 24`);
+  if (new Set(FACTS.map((f) => f.id)).size !== FACTS.length) fail("duplicate fact ids");
+  if (new Set(FACTS.map((f) => f.text)).size !== FACTS.length) fail("duplicate fact text");
+  for (const f of FACTS) {
+    if (!f.text.trim().endsWith(".")) fail(`${f.id} is not a sentence`);
+  }
+  for (const f of bank) {
+    if (!/^Your outie/.test(f.text)) fail(`${f.id} does not read as a Wellness claim`);
+  }
+  // Doctrine is game-written by definition: a temper line presented as
+  // something the show said would be exactly the merge the audit forbids.
+  for (const f of doctrine) {
+    if (f.label !== "ORIGINAL_APOCRYPHA") fail(`${f.id} is doctrine but labelled canon`);
+  }
+  if (doctrine.length !== 4) fail(`${doctrine.length} doctrine cards, not one per temper`);
+  ok(`${canon.length} show-derived and ${original.length} original facts, plus ${doctrine.length} doctrine lines`);
+
+  // Every rung that awards a fact card or a session has a plan, and every
+  // plan belongs to such a rung.
+  for (const rung of LADDER) {
+    const wants = rung.reward === "R03" ? 1 : rung.reward === "R06" ? -1 : 0;
+    const planned = factCount(rung.id);
+    if (wants === 1 && planned !== 1) fail(`${rung.id} is a fact card but reads ${planned} facts`);
+    if (wants === -1 && planned < 3) fail(`${rung.id} is a session but reads only ${planned} facts`);
+    if (wants === 0 && planned !== 0) fail(`${rung.id} awards ${rung.reward} but has a fact plan`);
+  }
+  for (const id of Object.keys(FACT_PLAN)) {
+    if (!LADDER.some((r) => r.id === id)) fail(`${id} has a fact plan but is not a rung`);
+  }
+  ok("every fact card and session has a plan, and every plan has a rung");
+
+  // A draw is deterministic, respects the pools it asked for, never
+  // repeats a sentence the refiner has already heard, and never reaches
+  // for the mature entry while nothing can allow it.
+  {
+    const seen: string[] = [];
+    let mature = 0;
+    for (const rungId of Object.keys(FACT_PLAN)) {
+      const first = pickFacts(rungId, seen);
+      const again = pickFacts(rungId, seen);
+      eqIds(`${rungId} draws the same sentences twice running`, first, again);
+      const plan = FACT_PLAN[rungId];
+      const drawn = first.map((id) => factById(id)!);
+      if (drawn.some((f) => !f)) fail(`${rungId} drew an id that is not in the bank`);
+      if (plan.fixed) {
+        eqIds(`${rungId} reads its own doctrine line`, first, [...plan.fixed]);
+      } else {
+        const gotCanon = drawn.filter((f) => f.label === "CANON_WELLNESS_CLAIM").length;
+        const gotOriginal = drawn.filter((f) => f.label === "ORIGINAL_APOCRYPHA").length;
+        if (gotCanon !== plan.canon || gotOriginal !== plan.original) {
+          fail(`${rungId} wanted ${plan.canon}/${plan.original}, drew ${gotCanon}/${gotOriginal}`);
+        }
+      }
+      for (const id of first) {
+        if (seen.includes(id)) fail(`${rungId} repeated ${id}, already heard`);
+      }
+      mature += drawn.filter((f) => f.mature).length;
+      seen.push(...first);
+    }
+    if (mature > 0) fail(`${mature} mature facts were selected with no setting to allow them`);
+    ok(`${seen.length} sentences drawn across the ladder, none repeated, none mature`);
+  }
 }
 
 console.log(bad ? `\nFAILED — ${bad} problems` : "\nPASSED");

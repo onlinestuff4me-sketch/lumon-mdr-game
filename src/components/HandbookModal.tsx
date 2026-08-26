@@ -4,10 +4,17 @@ import { TemperSample } from "./TemperSample";
 import type { Pace } from "../game/constants";
 import { LEVELS, PACE } from "../game/constants";
 import { MIN_CAPTURE, PROBE_RADIUS, TEMPERS, TEMPER_DEFS } from "../game/constants";
+import type { Progress } from "../game/progress";
+import type { RewardId } from "../game/rewards";
+import { IncentiveForecast } from "./IncentiveForecast";
+import { IncentiveShelf, WellnessRecord } from "./IncentiveShelf";
 
 interface Props {
   onClose: () => void;
   assist: boolean;
+  /** The incentive ledger: the forecast, the shelf and the Wellness record. */
+  progress: Progress;
+  onInspect: (rewardId: RewardId) => void;
   onAssist: (on: boolean) => void;
   muted: boolean;
   onMuted: (on: boolean) => void;
@@ -68,6 +75,8 @@ function Toggle({
 export function HandbookModal({
   onClose,
   assist,
+  progress,
+  onInspect,
   onAssist,
   muted,
   onMuted,
@@ -196,6 +205,32 @@ export function HandbookModal({
             );
           })}
         </ul>
+
+        {/* The forecast is reachable mid-file from here — the clock is
+            paused while the drawer is open, so checking how far the next
+            incentive is costs nothing but the reading. */}
+        {progress.screensCompleted > 0 ? (
+          <>
+            <h3 className="crt-text-glow mb-1 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300">
+              INCENTIVE FORECAST
+            </h3>
+            <p className="mb-2 text-[9px] leading-snug text-phos-600">
+              Incentives are awarded on schedule. The schedule is not yours
+              to know beyond its next entry.
+            </p>
+            <IncentiveForecast progress={progress} variant="handbook" />
+            <p className="mt-2 text-[9px] leading-snug text-phos-600">
+              {progress.binsTotal} groups refined ·{" "}
+              {progress.perfectScreensTotal} screens without error
+              {progress.perfectScreenStreak > 1
+                ? ` · ${progress.perfectScreenStreak} in a row`
+                : ""}
+            </p>
+          </>
+        ) : null}
+
+        <IncentiveShelf progress={progress} onInspect={onInspect} />
+        <WellnessRecord progress={progress} />
 
         <h3 className="crt-text-glow mb-1 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300">
           PERPETUITY WING · ARCHIVE

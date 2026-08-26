@@ -695,6 +695,52 @@ export class AudioEngine {
     notes.forEach((n, i) => this.blip("triangle", n, n, 0.5, 0.16, i * 0.11));
   }
 
+  // ── the dance experience ────────────────────────────────────────────
+  //
+  // Synthesised like everything else here, and for the same reason: this
+  // repository ships no audio files, and a licensed recording is a rights
+  // question the canon audit has not answered. What it plays is an
+  // original, angular, upright-bass-and-brushes figure — defiant-jazz
+  // *inspired*, in the specification's words, never the show's recording.
+
+  /** Walking bass, in semitones over the root, one step per beat. */
+  private static readonly WALK = [0, 3, 5, 6, 7, 10, 7, 5];
+
+  /**
+   * One beat of the bed. The caller owns the clock — the beat map, the
+   * lit digits, the release window and this note all come off the same
+   * one, which is what makes the floor feel like it is on the music
+   * rather than beside it.
+   */
+  mdeBeat(step: number, bpm: number): void {
+    const beatS = 60 / bpm;
+    const semis = AudioEngine.WALK[((step % 8) + 8) % 8];
+    const root = 98; // G2, low enough to sit under the phosphor.
+    const f = root * Math.pow(2, semis / 12);
+    this.blip("triangle", f, f * 0.995, beatS * 0.9, 0.22);
+    // Brushes: a soft sweep every beat, an accent on two and four.
+    const off = step % 4;
+    this.noise(0.06, off === 1 || off === 3 ? 0.05 : 0.028, 7200);
+    // A quiet horn on the top of each bar keeps the phrase turning over.
+    if (off === 0) this.blip("sawtooth", f * 4, f * 4, 0.18, 0.05, 0.01);
+  }
+
+  /** A chain released on the beat. Longer chains climb. */
+  mdeMerge(chain: number): void {
+    const base = 392 * Math.pow(2, Math.min(4, chain - 3) / 12);
+    this.blip("sawtooth", base, base * 1.5, 0.22, 0.12);
+    this.blip("triangle", base * 2, base * 2, 0.3, 0.08, 0.05);
+    this.noise(0.12, 0.05, 5200);
+  }
+
+  /**
+   * A release that did not land. Deliberately soft and low: a miss costs
+   * a multiplier, and the sound should not cost more than the rule does.
+   */
+  mdeMiss(): void {
+    this.blip("sine", 140, 104, 0.2, 0.09);
+  }
+
   /** Shift expired. */
   alarm(): void {
     for (let i = 0; i < 3; i++) {

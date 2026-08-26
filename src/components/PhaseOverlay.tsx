@@ -1,11 +1,15 @@
 import { useState } from "react";
 import { CircleHelp, Play, RotateCcw, ChevronRight, FolderOpen } from "lucide-react";
-import { LEVELS, PRAISE } from "../game/constants";
+import { LEVELS } from "../game/constants";
 import type { HudSnapshot } from "../game/engine";
 import { activeRun, continueIndex, type RunStore } from "../game/runs";
+import type { Progress } from "../game/progress";
+import { IncentiveForecast } from "./IncentiveForecast";
 
 interface Props {
   hud: HudSnapshot;
+  /** The incentive ledger, for the forecast under the addendum. */
+  progress: Progress;
   onStart: () => void;
   onNext: () => void;
   onRestart: () => void;
@@ -45,6 +49,7 @@ const BTN =
 
 export function PhaseOverlay({
   hud,
+  progress,
   onStart,
   onNext,
   onRestart,
@@ -169,21 +174,22 @@ export function PhaseOverlay({
           every one of the twenty orientation screens for 900ms apiece. */}
       {hud.phase === "complete" && hud.ceremony !== "none" ? (
         <>
+          {/* Four separate ways of saying "you finished" is three too many.
+              The ticker behind this scrim already carries the praise line
+              and the HUD already reads 100%, so the panel says it once and
+              spends the rest of the screen on what was earned and what is
+              next. */}
           <p className="text-[9px] tracking-[0.3em] text-phos-600">
             FILE {hud.levelIndex + 1} OF {LEVELS.length} · {level.name}
           </p>
-          <h1 className="crt-text-glow mt-2 text-[20px] font-bold tracking-[0.2em] text-phos-200">
-            100%
-          </h1>
-          <p className="crt-text-glow mt-1 text-[11px] font-bold tracking-[0.18em] text-phos-300">
+          <h1 className="crt-text-glow mt-2 text-[13px] font-bold tracking-[0.22em] text-phos-200">
             FILE REFINED
-          </p>
-          <div className="mt-4 h-px w-24 bg-phos-600" />
-          <p className="mt-4 text-[10px] leading-relaxed text-phos-400">
-            {PRAISE[hud.levelIndex % PRAISE.length]}
-          </p>
+          </h1>
+          <div className="mt-3 h-px w-24 bg-phos-600" />
 
-          {/* One line of the story, released per completed file. */}
+          {/* One line of the story, released per completed file — and, for
+              now, the only thing this screen hands over. The reward reveal
+              lands in front of this panel rather than inside it. */}
           <div className="mt-4 w-full max-w-[280px] rounded-[3px] border border-phos-700 bg-phos-900/40 px-3 py-2.5">
             <div className="text-[8px] tracking-[0.24em] text-phos-600">
               PERPETUITY WING · ADDENDUM {hud.levelIndex + 1}
@@ -195,11 +201,14 @@ export function PhaseOverlay({
               FILED · HANDBOOK &gt; ARCHIVE
             </p>
           </div>
-          {hud.untimed ? null : (
-            <p className="mt-2 text-[9px] tracking-[0.14em] text-phos-600">
-              TIME REMAINING: {Math.ceil(hud.timeLeft)}s
-            </p>
-          )}
+          {/* What the next incentive costs. Under the addendum rather than
+              over it: the file just refined gets its own moment first, and
+              the forecast is the thing that sends the refiner back in. One
+              lane, no box — the addendum above is the object on this
+              screen, and a second bordered card would compete with it. */}
+          <div className="mt-4 flex justify-center">
+            <IncentiveForecast progress={progress} variant="panel" />
+          </div>
           {hud.isLastLevel ? (
             <>
               <p className="crt-text-glow mt-4 text-[11px] font-bold leading-relaxed tracking-[0.16em] text-phos-200">

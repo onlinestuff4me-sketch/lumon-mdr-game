@@ -133,11 +133,23 @@ src/
     render.ts      canvas draw passes (grid layer, packet overlay)
     glyphAtlas.ts  pre-baked phosphor glyph strips
     layout.ts      stage geometry shared by the DOM and the engine
+    rewards.ts     the incentive ladder: which counter, which threshold
+    progress.ts    the ledger — counters, earned/claimed, save migration
+    catalog.ts     what a reward is, kept away from anything that forecasts it
   audio/
     AudioEngine.ts four persistent synth voices + one-shot terminal SFX
     haptics.ts     navigator.vibrate patterns and cadence control
   components/      CRT shell, HUD, control deck, bins, handbook, overlays
+public/
+  rewards/         reward plates, derived from product-context/ by tools/
 ```
+
+Incentives are documented in [docs/REWARDS.md](docs/REWARDS.md): two visible
+ladders, a forecast that states the requirement and never the prize, and a
+reveal that stacks when one screen earns two. `rewards.ts` and `catalog.ts`
+are separate on purpose — the forecast imports the first and cannot reach
+the second, which is what keeps "the next reward's identity is secret" a
+property of the module graph rather than a promise in a comment.
 
 Three decisions carry most of the performance:
 
