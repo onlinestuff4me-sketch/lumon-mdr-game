@@ -48,11 +48,15 @@ export interface RewardDef {
    * never explaining the joke it is making.
    */
   readonly line: string;
+  /**
+   * The plate. One per reward, and for now the whole of it.
+   *
+   * The supplied celebration clips are held back by product decision, not
+   * lost: `tools/derive-reward-media.mjs --clips` re-encodes them whenever
+   * they are wanted, and `docs/REWARDS.md` Part 7 records what is wrong
+   * with the ones we have.
+   */
   readonly poster: string;
-  /** The celebration clip, where the object has one. */
-  readonly video?: string;
-  /** Reduced motion gets this instead of the clip. */
-  readonly still?: string;
 }
 
 export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
@@ -67,8 +71,6 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
     name: "FINGER TRAP",
     line: "A gift of woven paper. Insert one finger per end. Lumon accepts no responsibility for the consequence.",
     poster: asset("r02_finger_trap.webp"),
-    video: asset("r02_finger_trap.mp4"),
-    still: asset("r02_finger_trap_still.webp"),
   },
   R03: {
     kind: "fact",
@@ -81,64 +83,48 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
     name: "MELON BAR",
     line: "The melon has been cubed to a tolerance of two millimetres. Please enjoy each cube equally.",
     poster: asset("r05_melon_bar.webp"),
-    video: asset("r05_melon_bar.mp4"),
-    still: asset("r05_melon_bar_still.webp"),
   },
   R06: {
     kind: "session",
     name: "WELLNESS SESSION",
     line: "You are invited to sit while several facts about your outie are read to you. Please do not attempt to reciprocate.",
     poster: asset("r06_wellness_session.webp"),
-    video: asset("r06_wellness_session.mp4"),
-    still: asset("r06_wellness_session_still.webp"),
   },
   R07: {
     kind: "experience",
     name: "MUSIC DANCE EXPERIENCE",
     line: "One sanctioned minute of music. The floor is yours, and then it is not.",
     poster: asset("r07_mde_office_scene.webp"),
-    video: asset("r07_mde_office_scene.mp4"),
-    still: asset("r07_mde_office_scene_still.webp"),
   },
   R08: {
     kind: "object",
     name: "CRYSTAL PORTRAIT",
     line: "Your likeness has been approximated and sealed in glass. It is not a window.",
     poster: asset("r08_crystal_portrait_gift.webp"),
-    video: asset("r08_crystal_portrait_gift.mp4"),
-    still: asset("r08_crystal_portrait_gift_still.webp"),
   },
   R12: {
     kind: "object",
     name: "EGG BAR",
     line: "Eggs have been prepared in the manner the founder preferred. The manner is not recorded.",
     poster: asset("r12_egg_bar.webp"),
-    video: asset("r12_egg_bar.mp4"),
-    still: asset("r12_egg_bar_still.webp"),
   },
   R13: {
     kind: "object",
     name: "REMEMBRANCE MELON",
     line: "Carved in memory of a refiner from this branch. You have not met them, and the archive does not say when they left.",
     poster: asset("r13_watermelon_remembrance.webp"),
-    video: asset("r13_watermelon_remembrance.mp4"),
-    still: asset("r13_watermelon_remembrance_still.webp"),
   },
   R19: {
     kind: "object",
     name: "WAFFLE PARTY",
     line: "A meal has been laid in the founder's own room, for you alone. The room is not usually opened.",
     poster: asset("r19_waffle_party_i.webp"),
-    video: asset("r19_waffle_party_i.mp4"),
-    still: asset("r19_waffle_party_i_still.webp"),
   },
   R22: {
     kind: "object",
     name: "WAFFLE PARTY · SECOND TIER",
     line: "The table is set again, and a mask has been placed beside the plate. Lumon thanks you for your continued refinement.",
     poster: asset("r22_waffle_party_ii.webp"),
-    video: asset("r22_waffle_party_ii.mp4"),
-    still: asset("r22_waffle_party_ii_still.webp"),
   },
 };
 

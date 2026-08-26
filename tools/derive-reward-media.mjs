@@ -6,22 +6,31 @@
  * no longer a reference. This script reads from it and writes web-sized
  * copies into `public/rewards/`, which is what the game loads.
  *
+ *     node tools/derive-reward-media.mjs            # posters, what ships today
+ *     node tools/derive-reward-media.mjs --clips    # posters + encoded clips
+ *
+ * **The game ships posters only.** The celebration clips are held back by
+ * product decision, not by accident, and `--clips` exists so that turning
+ * them back on is one command rather than an afternoon. See
+ * `docs/REWARDS.md` Part 7 for why, and for what is wrong with the current
+ * clips.
+ *
  * The hero plates are 941x1672 PNGs of about 1.8 MB each. Shipping those to
- * a phone to fill a 280px card is absurd, so they come out as 720x1280
- * WebP — the same frame the videos already use.
+ * a phone to fill a 240px card is absurd, so they come out as 720x1280
+ * WebP, which is 20-45 kb apiece.
  *
- * The encoder is Chromium, through the Playwright the test suite already
- * depends on. It costs nothing to install, it is the same encoder that will
- * decode the result, and it keeps a build-time image library out of a
- * project that has managed without one.
+ * The image encoder is Chromium, through the Playwright the test suite
+ * already depends on: it costs nothing to install, it is the same encoder
+ * that will decode the result, and it keeps a build-time image library out
+ * of a project that has managed without one.
  *
- *     node tools/derive-reward-media.mjs
- *
- * Re-runnable: it overwrites what it wrote last time and touches nothing
- * else. Run it when the manifest gains an asset, not on every build — the
- * output is committed.
+ * The clip encoder is ffmpeg, which this project does *not* depend on.
+ * Point `MDR_FFMPEG` at a binary, or `npm i ffmpeg-static` somewhere and
+ * pass its path. Playwright bundles an ffmpeg of its own, but it is built
+ * `--disable-everything` and cannot decode H.264, so it is no use here.
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync, statSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
@@ -29,30 +38,48 @@ import { chromium } from "playwright";
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const SRC = join(ROOT, "product-context/outputs/reward_media");
 const OUT = join(ROOT, "public/rewards");
+const WITH_CLIPS = process.argv.includes("--clips");
 
 /** Long edge of a delivered plate. The videos are 720x1280; match them. */
 const WIDTH = 720;
 const HEIGHT = 1280;
 const QUALITY = 0.82;
 
-/** Everything the game presents: a poster each, motion where it exists. */
+/**
+ * Seconds trimmed off the head of every clip.
+ *
+ * Every supplied clip fades up from pure black over about half a second —
+ * frame zero is black in all nine. Played behind a poster that is already
+ * showing the scene, that reads as the picture blinking out and coming
+ * back. Starting a little way in is the fix.
+ */
+const FADE_IN = 0.55;
+
+/** Everything the game presents, and what exists for each. */
 const ASSETS = [
-  { id: "r01_eraser", still: false },
-  // The blank card plate. Its sentence is typeset at runtime — nothing
-  // legible is ever baked into a generated image.
-  { id: "r03_outie_fact_card", still: false },
-  { id: "r06_wellness_session", still: true },
-  { id: "r07_mde_office_scene", still: true },
-  { id: "r19_waffle_party_i", still: true },
-  { id: "r22_waffle_party_ii", still: true },
-  { id: "r02_finger_trap", still: true },
-  { id: "r05_melon_bar", still: true },
-  { id: "r08_crystal_portrait_gift", still: true },
-  { id: "r12_egg_bar", still: true },
-  { id: "r13_watermelon_remembrance", still: true },
+  { id: "r01_eraser", clip: false },
+  { id: "r03_outie_fact_card", clip: false },
+  { id: "r02_finger_trap", clip: true },
+  { id: "r05_melon_bar", clip: true },
+  { id: "r06_wellness_session", clip: true },
+  { id: "r07_mde_office_scene", clip: true },
+  { id: "r08_crystal_portrait_gift", clip: true },
+  { id: "r12_egg_bar", clip: true },
+  { id: "r13_watermelon_remembrance", clip: true },
+  { id: "r19_waffle_party_i", clip: true },
+  { id: "r22_waffle_party_ii", clip: true },
 ];
 
 const kb = (p) => `${Math.round(statSync(p).size / 1024)}kb`;
+
+function ffmpeg() {
+  const bin = process.env.MDR_FFMPEG;
+  if (bin && existsSync(bin)) return bin;
+  for (const guess of ["/usr/bin/ffmpeg", "/usr/local/bin/ffmpeg"]) {
+    if (existsSync(guess)) return guess;
+  }
+  return null;
+}
 
 async function main() {
   mkdirSync(OUT, { recursive: true });
@@ -95,29 +122,41 @@ async function main() {
       join(SRC, "images", `${a.id}.png`),
       join(OUT, `${a.id}.webp`),
     );
-    console.log(`  ${a.id}.webp        ${kb(poster)}`);
+    console.log(`  ${a.id}.webp  ${kb(poster)}`);
     bytes += statSync(poster).size;
+  }
+  await browser.close();
 
-    if (a.still) {
-      const still = await encode(
-        join(SRC, "reduced_motion", `${a.id}_still.png`),
-        join(OUT, `${a.id}_still.webp`),
+  if (WITH_CLIPS) {
+    const bin = ffmpeg();
+    if (!bin) {
+      console.log(
+        "\n--clips needs ffmpeg. Set MDR_FFMPEG, or `npm i ffmpeg-static`" +
+          " somewhere and point at node_modules/ffmpeg-static/ffmpeg.",
       );
-      console.log(`  ${a.id}_still.webp  ${kb(still)}`);
-      bytes += statSync(still).size;
-
-      // The MP4s are already H.264 720x1280 30fps with no audio track:
-      // exactly what ships. Re-encoding them would only lose quality.
-      const from = join(SRC, "videos", `${a.id}.mp4`);
-      const to = join(OUT, `${a.id}.mp4`);
-      writeFileSync(to, readFileSync(from));
-      console.log(`  ${a.id}.mp4         ${kb(to)}`);
-      bytes += statSync(to).size;
+    } else {
+      console.log("");
+      for (const a of ASSETS.filter((x) => x.clip)) {
+        const from = join(SRC, "videos", `${a.id}.mp4`);
+        // Two siblings, so the page can offer whichever the browser has.
+        // H.264 is what every shipping browser decodes; VP9 is what the
+        // codec-stripped Chromium the tests run in decodes, which is the
+        // only way an automated check can ever watch one play.
+        const mp4 = join(OUT, `${a.id}.mp4`);
+        const webm = join(OUT, `${a.id}.webm`);
+        const common = ["-y", "-loglevel", "error", "-ss", String(FADE_IN), "-i", from, "-an"];
+        execFileSync(bin, [...common, "-c:v", "libx264", "-crf", "32", "-preset", "slow",
+          "-pix_fmt", "yuv420p", "-movflags", "+faststart", mp4]);
+        execFileSync(bin, [...common, "-c:v", "libvpx-vp9", "-crf", "40", "-b:v", "0",
+          "-row-mt", "1", webm]);
+        const was = Math.round(statSync(from).size / 1024);
+        console.log(`  ${a.id}  ${was}kb -> ${kb(mp4)} h264 / ${kb(webm)} vp9`);
+        bytes += statSync(mp4).size + statSync(webm).size;
+      }
     }
   }
 
-  await browser.close();
-  console.log(`\n${Math.round(bytes / 1024)}kb of reward media in public/rewards/`);
+  console.log(`\n${Math.round(bytes / 1024)}kb in public/rewards/`);
 }
 
 await main();

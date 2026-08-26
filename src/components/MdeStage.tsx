@@ -61,10 +61,6 @@ export function MdeStage({ reward, seed, muted, onDone }: Props) {
   const sessionRef = useRef<MdeSession | null>(null);
   const atlasRef = useRef(new GlyphAtlas());
   const rafRef = useRef(0);
-  const [clipFailed, setClipFailed] = useState(false);
-  const [reduced] = useState(
-    () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
-  );
 
   // ── the floor ───────────────────────────────────────────────────────
 
@@ -311,24 +307,10 @@ export function MdeStage({ reward, seed, muted, onDone }: Props) {
   }
 
   if (stage === "film") {
-    const src = reduced && reward.still ? reward.still : reward.poster;
     return (
       <Frame title="THE FLOOR AT ITS PEAK" caption={`${genre.name} · ${accessory}`}>
         <div className="w-full max-w-[240px] overflow-hidden rounded-[3px] border border-phos-600 bg-black">
-          {!reduced && reward.video && !clipFailed ? (
-            <video
-              className="block h-auto w-full"
-              src={reward.video}
-              poster={reward.poster}
-              autoPlay
-              muted
-              playsInline
-              onEnded={() => setStage("score")}
-              onError={() => setClipFailed(true)}
-            />
-          ) : (
-            <img className="block h-auto w-full" src={src} alt="The MDR office" />
-          )}
+          <img className="block h-auto w-full" src={reward.poster} alt="The MDR office" />
         </div>
         <button type="button" className={`${BTN} mt-5`} onClick={() => setStage("score")}>
           CONTINUE

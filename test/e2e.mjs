@@ -1080,7 +1080,7 @@ section("incentives");
   await page.waitForFunction(() => !!document.body.innerText.match(/FINGER TRAP/), null, { timeout: 4000 });
   check("the seal opens itself, name and picture together", (await seen("FINGER TRAP")) === 1);
   check("with its plate on screen",
-    (await page.locator('img[alt="FINGER TRAP"], video').count()) >= 1);
+    (await page.locator('img[alt="FINGER TRAP"]').count()) === 1);
 
   await page.getByText("ACCEPT INCENTIVE").click();
   await page.waitForTimeout(400);

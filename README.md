@@ -141,7 +141,7 @@ src/
     haptics.ts     navigator.vibrate patterns and cadence control
   components/      CRT shell, HUD, control deck, bins, handbook, overlays
 public/
-  rewards/         reward plates and clips, derived from product-context/
+  rewards/         reward plates, derived from product-context/ by tools/
 ```
 
 Incentives are documented in [docs/REWARDS.md](docs/REWARDS.md): two visible

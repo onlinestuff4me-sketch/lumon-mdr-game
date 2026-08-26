@@ -54,16 +54,6 @@ export function RewardReveal({
   const [open, setOpen] = useState(false);
   /** Which sentence of a session is on the card. */
   const [step, setStep] = useState(0);
-  // Read once, at mount: this decides between a clip and a still, and a
-  // preference that changed mid-celebration would swap the media under the
-  // refiner's eyes.
-  const [reduced] = useState(
-    () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false,
-  );
-  // Media is never load-bearing: a clip that will not play falls back to
-  // the poster, and the reward is claimable either way.
-  const [clipFailed, setClipFailed] = useState(false);
-
   // Every card starts sealed and opens itself. The caller remounts this
   // component per incentive, so there is no stale state to reset here.
   useEffect(() => {
@@ -82,7 +72,6 @@ export function RewardReveal({
 
   useEffect(() => () => speech.stop(), []);
 
-  const showVideo = open && !reduced && !!reward.video && !clipFailed;
   const lastStep = step >= facts.length - 1;
   const advances = facts.length > 1 && !lastStep;
 
@@ -108,38 +97,17 @@ export function RewardReveal({
           </h1>
           <div className="mt-3 h-px w-24 bg-phos-600" />
 
-          {/* The clip plays once rather than looping: an object that turns
-              forever is scenery. It settles on its last frame and waits. */}
+          {/* A plate, and — for a fact card — the sentence typeset over
+              it at runtime rather than baked into the image: a generated
+              picture cannot be trusted to spell. Cream behind that one, so
+              the words still have something to be read against if the
+              plate never loads. */}
           <div
             className={`relative mt-4 w-full max-w-[240px] overflow-hidden rounded-[3px] border border-phos-600 ${
-              // Cream behind the fact card rather than black: the sentence
-              // is typeset over the plate, so if the plate never loads the
-              // words must still be on something they can be read against.
               reward.kind === "fact" ? "bg-[#e9e5d9]" : "bg-black"
             }`}
           >
-            {showVideo ? (
-              <video
-                className="block h-auto w-full"
-                src={reward.video}
-                poster={reward.poster}
-                autoPlay
-                muted
-                playsInline
-                onError={() => setClipFailed(true)}
-              />
-            ) : (
-              <img
-                className="block h-auto w-full"
-                src={reduced && reward.still ? reward.still : reward.poster}
-                alt={reward.name}
-              />
-            )}
-
-            {/* Typeset onto the blank plate at runtime, never baked into
-                the image: the card, the caption below and the voice are
-                one string, and a generated picture cannot be trusted to
-                spell. The box is placed over the card in the plate. */}
+            <img className="block h-auto w-full" src={reward.poster} alt={reward.name} />
             {reward.kind === "fact" && fact ? (
               <p
                 className="absolute flex items-center justify-center text-center text-[9px] leading-relaxed text-[#2b3a30]"

@@ -290,17 +290,76 @@ an error.
 
 ## Part 7 — Media
 
-The originals in `product-context/outputs/reward_media/` are reference material
-and are never modified, renamed or recompressed. The build gets derivatives:
+The originals in `product-context/outputs/reward_media/` are reference
+material and are never modified, renamed or recompressed. The build gets
+derivatives, written by `tools/derive-reward-media.mjs`.
 
-- hero plates re-encoded to WebP at two widths (the PNGs are 1.6–2 MB each; the
-  site currently ships no binary media at all);
-- the nine MP4s used as delivered — already H.264, 720×1280, 30 fps, no audio track;
-- each video's reduced-motion still as its poster;
-- **only the next classified reward preloaded**, and never in a way that exposes its
-  identity in markup, filenames or network timing.
+### What ships: plates only
 
----
+Eleven WebP plates at 720×1280, **444 kB in total** — the source PNGs are
+1.6–2 MB each and would be absurd behind a 240px card. Every reward, every
+fact card and the dance experience's office scene is a still.
+
+**The nine celebration clips are held back by product decision.** They are
+not lost and not rejected: `node tools/derive-reward-media.mjs --clips`
+re-encodes them from the originals whenever they are wanted, and the game
+takes about twenty lines to put them back. What is gone is only the 5.5 MB
+of video that was in the build.
+
+### What the clips actually are
+
+They can now be inspected: Playwright's bundled ffmpeg is built
+`--disable-everything` and cannot decode H.264, but a full static ffmpeg
+(`npm i ffmpeg-static`, then `MDR_FFMPEG=…`) decodes them to contact
+sheets. Three things that were invisible before:
+
+- **Every clip fades up from pure black.** Frame zero is black in all nine
+  and the picture arrives over about half a second. Played behind a poster
+  that is already showing the scene, that reads as the image blinking out
+  and coming back — so the encoder trims 0.55 s off the head.
+- **They are animated stills, not footage** — slow crossfades and drifts
+  assembled from generated keyframes, which the revised-prompts document
+  says outright for the office scene. Six seconds of a finger trap turning
+  is a still with a rotation on it. Worth knowing before treating them as
+  the celebration's main event.
+- **The office scene is right.** Empty MDR floor, four-workstation island,
+  beige CRTs, green carpet, chrome cart with a record player, rainbow bands
+  travelling across the ceiling. No people, no likenesses.
+
+One canon flag, raised rather than acted on: **the watermelon remembrance
+clip and plate show a specific human face** — carved with the rind as hair
+and deeply exposed red flesh, as the audit requires, but on a shirt-and-tie
+plinth beneath a framed portrait of the same face. The prompt asked for
+"anonymous features, not a real person" and no portrait reference. It reads
+as a portrait of someone. That is a rights-review question before public
+release, not a blocker for a private build.
+
+### The encoder, measured
+
+Re-encoding at CRF 32 (H.264) and CRF 40 (VP9), after the head trim:
+
+| | source | H.264 | VP9 |
+|---|---:|---:|---:|
+| Office scene | 2,125 kB | 305 kB | 301 kB |
+| Waffle Party II | 356 kB | 103 kB | 153 kB |
+| Finger trap | 466 kB | 91 kB | 51 kB |
+| **All nine** | **5,300 kB** | **920 kB** | **1,075 kB** |
+
+About 82% off, with no visible loss at the size these play. Two siblings
+rather than one, because they answer different problems: **H.264 is what
+every shipping browser decodes**, and **VP9 is what the codec-stripped
+Chromium the tests run in decodes** — which is the only way an automated
+check can ever watch one play rather than watch the fallback. Verified:
+the same clip reports `readyState 4, 720×1280` as WebM in that browser and
+`DEMUXER_ERROR_NO_SUPPORTED_STREAMS` as MP4.
+
+### Rules that still hold when clips come back
+
+- reduced motion gets a still rather than the clip;
+- a clip that will not decode falls back to the plate, and the claim never
+  waits on media;
+- only the next classified reward is preloaded, and never in a way that
+  exposes its identity in markup, filenames or network timing.
 
 ## Part 8 — The MDE, and the one open design call
 

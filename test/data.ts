@@ -407,12 +407,12 @@ console.log(`\n── reward media ${"─".repeat(45)}`);
       files++;
       if (!existsSync(path)) fail(`${id}: ${kind} is missing — ${path}`);
     }
-    if (!def.video !== !def.still) {
-      fail(`${id}: a clip needs a reduced-motion still, and a still needs a clip`);
-    }
     if (!def.name || !def.line) fail(`${id}: a reward needs a name and a line`);
   }
-  ok(`${files} media files, all present, every clip with a still`);
+  // Posters only, deliberately: the celebration clips are held back, and
+  // the encoder that brings them back lives in tools/. A stray .mp4 in the
+  // build directory means someone re-added one by hand.
+  ok(`${files} plates, all present`);
 
   // Rewards with no record here are later milestones and stay queued. The
   // list is explicit so that a typo in a rung's reward id fails loudly
