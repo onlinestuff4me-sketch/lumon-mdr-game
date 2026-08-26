@@ -100,7 +100,40 @@ const ORIGINAL: readonly Fact[] = [
   label: "ORIGINAL_APOCRYPHA" as const,
 }));
 
-export const FACTS: readonly Fact[] = [...CANON, ...ORIGINAL];
+/**
+ * Temper doctrine, one line each, for the mastery lane.
+ *
+ * Written for this branch in the handbook's register — Kier-adjacent
+ * grandiosity that explains nothing — and labelled as original apocrypha
+ * like everything else the show did not say. They ride the same blank
+ * card as an Outie fact because that is the plate the game has, and they
+ * are the same kind of object: a sentence Lumon has decided you should
+ * hear.
+ */
+const DOCTRINE: readonly Fact[] = [
+  {
+    id: "DOC_WO",
+    text: "Woe is the heaviest temper, and the first Kier carried. He set it down only once, and did not say where.",
+    label: "ORIGINAL_APOCRYPHA",
+  },
+  {
+    id: "DOC_FC",
+    text: "Frolic is permitted between the hours of nine and five, and is not to be carried outside the building.",
+    label: "ORIGINAL_APOCRYPHA",
+  },
+  {
+    id: "DOC_DR",
+    text: "Dread is the tremor of a number that knows something you do not. You are asked not to ask it what.",
+    label: "ORIGINAL_APOCRYPHA",
+  },
+  {
+    id: "DOC_MA",
+    text: "Malice was the last temper to be named and the first to be found. It has been waiting for the other three.",
+    label: "ORIGINAL_APOCRYPHA",
+  },
+];
+
+export const FACTS: readonly Fact[] = [...CANON, ...ORIGINAL, ...DOCTRINE];
 
 const BY_ID = new Map(FACTS.map((f) => [f.id, f]));
 
@@ -115,7 +148,18 @@ export function factById(id: string): Fact | undefined {
  * kinds early; sessions lead with show-derived claims and fill out with
  * original ones, which is the mix the fact bank specifies.
  */
-export const FACT_PLAN: Record<string, { canon: number; original: number }> = {
+export const FACT_PLAN: Record<
+  string,
+  { canon: number; original: number; fixed?: readonly string[] }
+> = {
+  // The temper lane reads doctrine rather than drawing from the bank: a
+  // milestone for refining Woe should say something about Woe.
+  TWO10: { canon: 0, original: 0, fixed: ["DOC_WO"] },
+  TFC10: { canon: 0, original: 0, fixed: ["DOC_FC"] },
+  TDR10: { canon: 0, original: 0, fixed: ["DOC_DR"] },
+  TMA10: { canon: 0, original: 0, fixed: ["DOC_MA"] },
+  TALL20: { canon: 2, original: 2 }, // the balanced session — four facts
+  P01: { canon: 0, original: 1 }, // the first clean screen reveals the lane
   S03: { canon: 1, original: 0 }, // screen 3 — the first fact card
   B010: { canon: 0, original: 1 },
   S09: { canon: 2, original: 1 }, // Wellness I — three facts
@@ -128,7 +172,8 @@ export const FACT_PLAN: Record<string, { canon: number; original: number }> = {
 /** How many sentences a rung presents, or 0 if it presents none. */
 export function factCount(rungId: string): number {
   const plan = FACT_PLAN[rungId];
-  return plan ? plan.canon + plan.original : 0;
+  if (!plan) return 0;
+  return plan.fixed ? plan.fixed.length : plan.canon + plan.original;
 }
 
 /**
@@ -150,6 +195,8 @@ export function pickFacts(
 ): string[] {
   const plan = FACT_PLAN[rungId];
   if (!plan) return [];
+  // A doctrine card is not a draw: this rung has always meant this line.
+  if (plan.fixed) return [...plan.fixed];
 
   // A tiny hash of the rung id: same rung, same seed, same draw.
   let h = 0x811c9dc5;

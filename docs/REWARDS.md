@@ -1,11 +1,10 @@
 # Incentives: the reward ladder, the forecast, and the reveal
 
-> Status: **M1–M4 shipped; the dance experience and the Waffle tiers are
-> plan.** The ledger, the ladder, the forecast, the reveal, the fact bank
-> and the shelf are in `src/game/`, `src/components/IncentiveForecast.tsx`,
-> `RewardReveal.tsx` and `IncentiveShelf.tsx`. Fifteen of the twenty rungs
-> present today; the five that award the dance experience or a Waffle tier
-> stay queued rather than being claimed unseen.
+> Status: **shipped, all six milestones.** Twenty-eight rungs across four
+> lanes, every one of them earnable in a full playthrough and every one of
+> them with something to present. The code is `src/game/rewards.ts`,
+> `progress.ts`, `catalog.ts`, `facts.ts`, `mde.ts` and the four components
+> `IncentiveForecast`, `RewardReveal`, `IncentiveShelf` and `MdeStage`.
 >
 > This document is the bridge between `product-context/` — the imported
 > product specification for MDR rewards, lore and media — and the game that
@@ -140,9 +139,13 @@ Per-temper ceilings are WO 27, FC 26, DR 27, MA 25, so the source document's
 
 | Threshold | Reward |
 |---|---|
-| 10 bins of one temper | Doctrine card — runtime text on the R03 card plate, no new media |
-| 20 bins of one temper | That temper's UI event (Woe's labels sag, Frolic's digits swap) |
+| 10 bins of one temper | Doctrine card — that temper's own line, typeset on the R03 plate, no new media |
 | 20 bins of all four | **R06** balanced Wellness session — 4 facts |
+
+The 20-per-temper rung in the source plan was a UI event (Woe's labels sag,
+Frolic's digits swap). That is engine work rather than reward work, and it
+belongs with the temper storms rather than with the incentives; it is not in
+this ladder and is not counted as shipped.
 
 These are minor and ambient by design, so they may share a boundary with a major
 from Lane A or B without breaking the one-major rule.
@@ -154,6 +157,12 @@ from Lane A or B without breaking the one-major rule.
 | First perfect screen | **R03 Outie Fact** — this is what reveals the lane |
 | 3 perfect in a row | **R02 Finger Trap** variant |
 | 5 perfect in a row | **R05 Melon Bar** encore |
+
+A screen counts toward the streak only if it had **more than one bin on the
+deck**. A one-bin orientation screen cannot be mis-binned, so finishing it
+cleanly is not precision — and counting it would have paid the first
+precision reward out on screen one, before the refiner had been shown a
+second bin to get wrong. Nineteen of the thirty screens qualify.
 
 ### Lane E — RETURN, phase 2
 
@@ -302,7 +311,7 @@ nine digits, selected with an 80 px probe and a marquee box. Connecting individu
 digits would mean a new input model and ~20 px touch targets, against the 44 pt
 minimum the same specification imposes.
 
-**Proposal:** keep the specification's sentence and change its granularity. During
+**Built as proposed:** keep the specification's sentence and change its granularity. During
 the MDE, whole clusters light on the beat; the player boxes three or more
 same-temper clusters and releases inside a generous window; a valid release
 collapses into a phosphor bloom and fills one of three Dance Meter segments. Same
@@ -336,6 +345,11 @@ The list is built in that order of preference:
 Repeat visits unlock another selection rather than a voucher prop, and picking
 the same genre three times earns the `PREFERENCE DETECTED` warning.
 
+The music is synthesised like every other sound in this game — an original
+angular walking-bass-and-brushes figure on the same beat clock that lights
+the groups and judges the release. No recording ships, which keeps the
+rights question the canon audit left open from ever arriving.
+
 ---
 
 ## Part 9 — Sequencing
@@ -348,8 +362,8 @@ Each milestone ends with something a player can see working.
 | M2 | Reveal sequence + the six image/video rewards of Lane A — **shipped** | The eraser, finger trap, melon bar, egg bar, watermelon and crystal all pop, stack when two land together, and hold the board while they do |
 | M3 | The incentive shelf — **shipped** | Claimed objects can be found and opened again in the handbook, and every fact heard is kept in a Wellness record |
 | M4 | Wellness — fact bank, cards, captions, speech — **shipped** | Fact cards typeset at runtime on the blank plate, sessions read three or four sentences, and the voice is the browser's own so no audio ships |
-| M5 | MDE I and the office-scene handoff | The number field becomes a dance floor and returns cleanly |
-| M6 | Lanes C and D; then Waffle tiers | Mastery counters appear as the game widens; the campaign ends on the ritual |
+| M5 | MDE I and the office-scene handoff — **shipped** | The number field becomes a dance floor and returns cleanly |
+| M6 | Lanes C and D; then Waffle tiers — **shipped** | Mastery counters appear as the game widens; the campaign ends on the ritual |
 
 Easter eggs — the department paintings, goats, Testing Floor flashes, Board
 presence, the wrong-bin track, Lexington — are a separate hidden scheduler and a

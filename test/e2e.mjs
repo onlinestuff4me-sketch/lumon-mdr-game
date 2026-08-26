@@ -1199,6 +1199,122 @@ section("wellness");
     `${chosen.join()} -> ${after.join()}`);
 }
 
+// ═══ 11c. the dance experience ═══════════════════════════════════════
+section("music dance experience");
+{
+  const seed = (p) =>
+    page.evaluate((v) => localStorage.setItem("lumon.mdr.progress.v1", v), JSON.stringify(p));
+  const finish = async (index) => {
+    await load(page, index);
+    let guard = 0;
+    while ((await state(page)).progress < 100 && guard++ < 12) {
+      const g = await findGroup(page);
+      if (!g) break;
+      await tap(page, origin, await touchFor(page, g.one, "marquee"));
+      if (!(await state(page)).carrying) break;
+      await carryToBin(page, origin, g);
+    }
+    await page.waitForTimeout(200);
+  };
+
+  // Twelve screens in, everything before claimed: the next completed
+  // screen is the one that turns the floor into a dance floor.
+  const done = {};
+  for (const id of ["S01", "S02", "S03", "S05", "S09", "B010", "P01", "P03", "P05"]) {
+    done[id] = "claimed";
+  }
+  await seed({
+    version: 1, screensCompleted: 12, binsTotal: 28,
+    binsByTemper: { WO: 8, FC: 8, DR: 6, MA: 6 },
+    creditedLevelIds: Array.from({ length: 12 }, (_, i) => `orientation-${String(i + 1).padStart(2, "0")}`),
+    perfectScreensTotal: 6, perfectScreenStreak: 6,
+    rewardState: done, rewardQueue: [], seenFactIds: [], factsByRung: {}, inspectCounts: {},
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  await finish(12);
+
+  check("the thirteenth screen offers the dance experience",
+    (await page.getByText("MUSIC DANCE EXPERIENCE").count()) >= 1);
+  check("with the show's own genre at the top of the menu",
+    (await page.getByText("DEFIANT JAZZ").count()) === 1);
+
+  await page.getByText("DEFIANT JAZZ").click();
+  await page.waitForTimeout(200);
+  check("then one accessory, which is the permitted number",
+    (await page.getByText("MARACA").count()) === 1);
+  await page.getByText("MARACA").click();
+  await page.waitForTimeout(200);
+
+  const instruction = await page.evaluate(() => document.body.innerText);
+  check("the instruction is the one the specification writes",
+    /CONNECT 3\+ GLOWING GROUPS OF ONE TEMPER\. RELEASE ON THE BEAT\. FILL THE\s+DANCE METER\./.test(instruction),
+    instruction.slice(0, 120));
+  check("and it promises there is no way to fail",
+    /no way to fail/.test(instruction));
+
+  await page.getByText("BEGIN").click();
+  await page.waitForFunction(() => !!window.__mde?.session, null, { timeout: 5000 });
+
+  // The floor is the same matrix: sixteen by twenty-eight, digits and all.
+  const floor = await page.evaluate(() => {
+    const s = window.__mde.session;
+    return {
+      nodes: s.nodes.length,
+      clusters: s.clusters.length,
+      lit: s.clusters.filter((c) => c.lit).length,
+      tempers: [...new Set(s.clusters.map((c) => c.temper))].sort(),
+    };
+  });
+  eq("the dance floor is the number field", floor.nodes, 16 * 28);
+  check("with every temper on it", floor.tempers.join() === "DR,FC,MA,WO", JSON.stringify(floor));
+  check("and a chain of three always available", floor.lit >= 3, `${floor.lit} lit`);
+
+  // Chain three lit groups of one temper and release on a beat.
+  const merged = await page.evaluate(async () => {
+    const s = window.__mde.session;
+    const canvas = document.querySelector('canvas[aria-label="Dance floor"]');
+    const r = canvas.getBoundingClientRect();
+    const byTemper = {};
+    for (const c of s.clusters) {
+      if (!c.lit || c.spent) continue;
+      (byTemper[c.temper] ??= []).push(c);
+    }
+    const group = Object.values(byTemper).find((g) => g.length >= 3);
+    if (!group) return { skipped: true };
+    for (const c of group.slice(0, 3)) s.touch(c.cx, c.cy);
+    const chain = s.snapshot().chain.length;
+    // Release on the beat: step the clock to the next one first.
+    const beatS = 60 / s.genre.bpm;
+    const into = s.snapshot().elapsed % beatS;
+    s.step(beatS - into + 0.001);
+    const result = s.release();
+    return { chain, result, meter: s.snapshot().meter, score: s.snapshot().score, r: r.width > 0 };
+  });
+  eq("three groups of one temper make a chain", merged.chain, 3);
+  eq("released on the beat, they merge", merged.result, "merge");
+  eq("and fill a segment of the dance meter", merged.meter, 1);
+  check("and score", merged.score > 0, String(merged.score));
+
+  // A miss costs a multiplier and nothing else — no lives, no progress.
+  const missed = await page.evaluate(() => {
+    const s = window.__mde.session;
+    const before = { meter: s.snapshot().meter, score: s.snapshot().score };
+    const c = s.clusters.find((k) => k.lit && !k.spent);
+    s.touch(c.cx, c.cy);
+    const beatS = 60 / s.genre.bpm;
+    const into = s.snapshot().elapsed % beatS;
+    s.step(beatS / 2 - into > 0 ? beatS / 2 - into : beatS / 2); // off the beat
+    const result = s.release();
+    const after = s.snapshot();
+    return { result, before, meter: after.meter, score: after.score, multiplier: after.multiplier };
+  });
+  eq("a short release off the beat is a miss", missed.result, "miss");
+  eq("it takes nothing off the meter", missed.meter, missed.before.meter);
+  eq("and nothing off the score", missed.score, missed.before.score);
+  eq("only the multiplier resets", missed.multiplier, 1);
+}
+
 // ═══ 11. nothing threw ═══════════════════════════════════════════════
 section("console");
 check("no page errors", errors.length === 0, errors.join(" | "));

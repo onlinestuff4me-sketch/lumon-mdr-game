@@ -96,7 +96,13 @@ export function emptyProgress(): Progress {
 }
 
 export function counters(p: Progress): Counters {
-  return { screens: p.screensCompleted, bins: p.binsTotal };
+  return {
+    screens: p.screensCompleted,
+    bins: p.binsTotal,
+    byTemper: p.binsByTemper,
+    perfectStreak: p.perfectScreenStreak,
+    perfectTotal: p.perfectScreensTotal,
+  };
 }
 
 export function claimedIds(p: Progress): Set<string> {
@@ -116,6 +122,16 @@ export interface Completion {
   readonly quota: number;
   /** True when the screen was finished without a rejected drop. */
   readonly perfect: boolean;
+  /**
+   * Whether a clean screen means anything here.
+   *
+   * A screen with one bin on the deck cannot be mis-binned, so finishing
+   * it without an error is not precision, it is arithmetic. The streak
+   * counts only screens where a wrong bin was possible — which is also
+   * what stops the precision lane paying out on screen one, before the
+   * refiner has been shown a second bin to get it wrong in.
+   */
+  readonly countsForPerfect: boolean;
 }
 
 /**
@@ -144,8 +160,13 @@ export function applyCompletion(
     binsTotal: p.binsTotal + done.quota * done.tempers.length,
     binsByTemper,
     creditedLevelIds: [...p.creditedLevelIds, done.levelId],
-    perfectScreensTotal: p.perfectScreensTotal + (done.perfect ? 1 : 0),
-    perfectScreenStreak: done.perfect ? p.perfectScreenStreak + 1 : 0,
+    perfectScreensTotal:
+      p.perfectScreensTotal + (done.countsForPerfect && done.perfect ? 1 : 0),
+    perfectScreenStreak: !done.countsForPerfect
+      ? p.perfectScreenStreak
+      : done.perfect
+        ? p.perfectScreenStreak + 1
+        : 0,
     rewardState: { ...p.rewardState },
     rewardQueue: [...p.rewardQueue],
     factsByRung: { ...p.factsByRung },

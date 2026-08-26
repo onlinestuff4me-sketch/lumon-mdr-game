@@ -14,6 +14,7 @@ import { presentable } from "../game/catalog";
 import { factById, type Fact } from "../game/facts";
 import { rungById } from "../game/rewards";
 import { RewardReveal } from "./RewardReveal";
+import { MdeStage } from "./MdeStage";
 import {
   loadRuns,
   recordRunProgress,
@@ -31,6 +32,15 @@ import { HandbookModal } from "./HandbookModal";
 import { HUD } from "./HUD";
 import { PhaseOverlay } from "./PhaseOverlay";
 import { Viewport } from "./Viewport";
+
+/** A stable seed per rung, so the same session rebuilds the same floor. */
+function hashRung(id: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < id.length; i++) {
+    h = Math.imul(h ^ id.charCodeAt(i), 0x01000193) >>> 0;
+  }
+  return h >>> 0;
+}
 
 export function GameStage() {
   const { engine, hud } = useEngine();
@@ -227,6 +237,7 @@ export function GameStage() {
           tempers: level.tempers,
           quota: level.quota,
           perfect: engine.perfect,
+          countsForPerfect: (level.showBins ?? level.tempers).length > 1,
         }),
       );
     }
@@ -484,7 +495,25 @@ export function GameStage() {
 
         {/* Above the phase overlay and the handbook alike: a celebration
             owns the screen while it runs. */}
-        {revealing ? (
+        {revealing && owed[0].reward.kind === "experience" ? (
+          // The dance experience is not a card: it takes the floor, and
+          // the floor is the number field the refiner has just cleared.
+          <MdeStage
+            key={owed[0].rungId}
+            reward={owed[0].reward}
+            seed={hashRung(owed[0].rungId)}
+            muted={hud.muted}
+            onDone={() => {
+              const id = owed[0].rungId;
+              setProgress((p) => claim(p, id));
+              setAccepted((a) =>
+                a.boundary === boundary
+                  ? { boundary, n: a.n + 1 }
+                  : { boundary, n: 1 },
+              );
+            }}
+          />
+        ) : revealing ? (
           <RewardReveal
             // Remount per card: a new incentive starts sealed, and a key is
             // how React is told these are different cards rather than the

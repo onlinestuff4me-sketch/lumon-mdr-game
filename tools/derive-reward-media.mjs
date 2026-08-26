@@ -42,6 +42,9 @@ const ASSETS = [
   // legible is ever baked into a generated image.
   { id: "r03_outie_fact_card", still: false },
   { id: "r06_wellness_session", still: true },
+  { id: "r07_mde_office_scene", still: true },
+  { id: "r19_waffle_party_i", still: true },
+  { id: "r22_waffle_party_ii", still: true },
   { id: "r02_finger_trap", still: true },
   { id: "r05_melon_bar", still: true },
   { id: "r08_crystal_portrait_gift", still: true },

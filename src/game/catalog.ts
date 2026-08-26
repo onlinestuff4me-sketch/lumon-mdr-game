@@ -40,7 +40,7 @@ export interface RewardDef {
    * — they are drawn from the bank when the reward is earned and stored
    * with it, so a force quit cannot reroll them.
    */
-  readonly kind: "object" | "fact" | "session";
+  readonly kind: "object" | "fact" | "session" | "experience";
   /** Shown for the first time at the reveal, and never before it. */
   readonly name: string;
   /**
@@ -92,6 +92,14 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
     video: asset("r06_wellness_session.mp4"),
     still: asset("r06_wellness_session_still.webp"),
   },
+  R07: {
+    kind: "experience",
+    name: "MUSIC DANCE EXPERIENCE",
+    line: "One sanctioned minute of music. The floor is yours, and then it is not.",
+    poster: asset("r07_mde_office_scene.webp"),
+    video: asset("r07_mde_office_scene.mp4"),
+    still: asset("r07_mde_office_scene_still.webp"),
+  },
   R08: {
     kind: "object",
     name: "CRYSTAL PORTRAIT",
@@ -115,6 +123,22 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
     poster: asset("r13_watermelon_remembrance.webp"),
     video: asset("r13_watermelon_remembrance.mp4"),
     still: asset("r13_watermelon_remembrance_still.webp"),
+  },
+  R19: {
+    kind: "object",
+    name: "WAFFLE PARTY",
+    line: "A meal has been laid in the founder's own room, for you alone. The room is not usually opened.",
+    poster: asset("r19_waffle_party_i.webp"),
+    video: asset("r19_waffle_party_i.mp4"),
+    still: asset("r19_waffle_party_i_still.webp"),
+  },
+  R22: {
+    kind: "object",
+    name: "WAFFLE PARTY · SECOND TIER",
+    line: "The table is set again, and a mask has been placed beside the plate. Lumon thanks you for your continued refinement.",
+    poster: asset("r22_waffle_party_ii.webp"),
+    video: asset("r22_waffle_party_ii.mp4"),
+    still: asset("r22_waffle_party_ii_still.webp"),
   },
 };
 

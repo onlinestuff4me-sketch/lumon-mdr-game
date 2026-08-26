@@ -1,4 +1,4 @@
-import { LANE_LABEL, forecast, type LaneForecast } from "../game/rewards";
+import { forecast, type LaneForecast } from "../game/rewards";
 import { counters, type Progress } from "../game/progress";
 
 /**
@@ -46,7 +46,7 @@ function FullLane({ lane }: { lane: LaneForecast }) {
   return (
     <div className="w-full">
       <div className="flex items-baseline justify-between gap-2 text-[8px] tracking-[0.2em] text-phos-600">
-        <span>{LANE_LABEL[lane.lane]}</span>
+        <span>{lane.label}</span>
         <span className="tabular-nums text-phos-400">
           {lane.current} / {lane.target}
         </span>
@@ -61,7 +61,7 @@ function FullLane({ lane }: { lane: LaneForecast }) {
       {lane.also ? (
         <>
           <div className="mt-1.5 flex items-baseline justify-between gap-2 text-[8px] tracking-[0.2em] text-phos-600">
-            <span>{LANE_LABEL[lane.also.lane]}</span>
+            <span>{lane.also.label}</span>
             <span className="tabular-nums text-phos-400">
               {lane.also.current} / {lane.also.target}
             </span>
@@ -112,7 +112,7 @@ export function IncentiveForecast({ progress, variant = "handbook" }: Props) {
         </div>
         {lane.also ? (
           <p className="mt-1.5 text-[8px] tracking-[0.16em] text-phos-600">
-            {`ALSO ${lane.also.current}/${lane.also.target} ${LANE_LABEL[lane.also.lane]} · BOTH REQUIRED`}
+            {`ALSO ${lane.also.current}/${lane.also.target} ${lane.also.label} · BOTH REQUIRED`}
           </p>
         ) : null}
       </div>

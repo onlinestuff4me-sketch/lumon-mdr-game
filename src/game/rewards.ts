@@ -14,7 +14,10 @@
  * every rescaling.
  */
 
-export type Lane = "screens" | "bins";
+import { TEMPERS } from "./constants";
+import type { Temper } from "./types";
+
+export type Lane = "screens" | "bins" | "temper" | "perfect";
 
 /** Reward identity. Never rendered before the reward is earned. */
 export type RewardId =
@@ -37,6 +40,14 @@ export interface Rung {
   /** The counter value that earns it. */
   readonly at: number;
   readonly reward: RewardId;
+  /** Which temper's bins this rung counts. Temper lane only. */
+  readonly temper?: Temper;
+  /**
+   * A temper rung that wants *every* temper past its threshold rather than
+   * any one of them — the balanced session, and the one place the four
+   * counters are read together.
+   */
+  readonly allTempers?: true;
   /**
    * A second counter that must also be satisfied. The Waffle tiers are the
    * only compound rewards, and the forecast shows both numbers for them —
@@ -117,7 +128,51 @@ const BIN_LADDER: readonly Rung[] = [
   { id: "B095", lane: "bins", at: 95, reward: "R07", size: "major" },
 ];
 
-export const LADDER: readonly Rung[] = [...SCREEN_LADDER, ...BIN_LADDER];
+/**
+ * Lane C — temper mastery, revealed once all four are in play.
+ *
+ * Per-temper ceilings in this campaign are WO 27, FC 26, DR 27 and MA 25,
+ * so the source document's "25 of each" is only reachable on the final
+ * screen. Ten and twenty, and a balanced session at twenty of all four.
+ */
+const TEMPER_LADDER: readonly Rung[] = TEMPERS.map((t) => ({
+  id: `T${t}10`,
+  lane: "temper" as const,
+  at: 10,
+  temper: t,
+  reward: "R03" as const,
+  size: "minor" as const,
+}));
+
+const BALANCED: Rung = {
+  id: "TALL20",
+  lane: "temper",
+  at: 20,
+  allTempers: true,
+  reward: "R06",
+  size: "major",
+};
+
+/**
+ * Lane D — perfect play, revealed by the first clean screen.
+ *
+ * A streak, not a total: the first rung is what tells the refiner the lane
+ * exists, and the rest reward keeping it up. Losing a streak loses nothing
+ * already claimed.
+ */
+const PERFECT_LADDER: readonly Rung[] = [
+  { id: "P01", lane: "perfect", at: 1, reward: "R03", size: "minor" },
+  { id: "P03", lane: "perfect", at: 3, reward: "R02", size: "minor" },
+  { id: "P05", lane: "perfect", at: 5, reward: "R05", size: "minor" },
+];
+
+export const LADDER: readonly Rung[] = [
+  ...SCREEN_LADDER,
+  ...BIN_LADDER,
+  ...TEMPER_LADDER,
+  BALANCED,
+  ...PERFECT_LADDER,
+];
 
 const BY_ID = new Map(LADDER.map((r) => [r.id, r]));
 
@@ -130,21 +185,55 @@ export function rungById(id: string): Rung | undefined {
 export const LANE_LABEL: Record<Lane, string> = {
   screens: "SCREENS COMPLETED",
   bins: "BINS REFINED",
+  temper: "TEMPER MASTERY",
+  perfect: "SCREENS WITHOUT ERROR",
 };
 
+/** The label a temper rung shows: the temper's own name, not the lane's. */
+export function laneLabel(rung: Rung): string {
+  if (rung.lane !== "temper") return LANE_LABEL[rung.lane];
+  return rung.allTempers ? "ALL FOUR TEMPERS" : `${rung.temper} BINS REFINED`;
+}
+
 /** "Complete 3 more screens." — the exact action, in the game's words. */
-export function actionFor(lane: Lane, remaining: number): string {
+export function actionFor(lane: Lane, remaining: number, temper?: string): string {
   const n = Math.max(1, remaining);
-  if (lane === "screens") {
-    return `Complete ${n} more screen${n === 1 ? "" : "s"}.`;
+  const s = n === 1 ? "" : "s";
+  if (lane === "screens") return `Complete ${n} more screen${s}.`;
+  if (lane === "perfect") return `Finish ${n} more screen${s} without error.`;
+  if (lane === "temper") {
+    return temper
+      ? `Refine ${n} more ${temper} bin${s}.`
+      : `Refine ${n} more of every temper.`;
   }
-  return `Refine ${n} more bin${n === 1 ? "" : "s"}.`;
+  return `Refine ${n} more bin${s}.`;
 }
 
 /** The counters the ladder reads. Everything else in the save is noise. */
 export interface Counters {
   readonly screens: number;
   readonly bins: number;
+  readonly byTemper: Readonly<Record<Temper, number>>;
+  /** Consecutive screens finished without a wrong bin. */
+  readonly perfectStreak: number;
+  /** Clean screens ever, which is what reveals the precision lane. */
+  readonly perfectTotal: number;
+}
+
+/**
+ * What a rung's counter reads right now.
+ *
+ * A temper rung reads its own temper; the balanced rung reads the lowest
+ * of the four, which is what "twenty of all four" means as a single
+ * number a forecast can draw a meter for.
+ */
+export function valueFor(c: Counters, rung: Rung): number {
+  if (rung.lane === "temper") {
+    if (rung.allTempers) return Math.min(...TEMPERS.map((t) => c.byTemper[t]));
+    return c.byTemper[rung.temper!];
+  }
+  if (rung.lane === "perfect") return c.perfectStreak;
+  return rung.lane === "screens" ? c.screens : c.bins;
 }
 
 /**
@@ -162,18 +251,18 @@ export function newlyEarned(
   after: Counters,
   claimed: ReadonlySet<string>,
 ): Rung[] {
-  const value = (c: Counters, lane: Lane) =>
+  const second = (c: Counters, lane: Lane) =>
     lane === "screens" ? c.screens : c.bins;
   return LADDER.filter((rung) => {
     if (claimed.has(rung.id)) return false;
     // Already satisfied before this boundary: it was earned then, not now.
     // (Nothing is lost — an earned rung stays in the queue until presented.)
     const wasMet =
-      value(before, rung.lane) >= rung.at &&
-      (!rung.also || value(before, rung.also.lane) >= rung.also.at);
+      valueFor(before, rung) >= rung.at &&
+      (!rung.also || second(before, rung.also.lane) >= rung.also.at);
     if (wasMet) return false;
-    if (value(after, rung.lane) < rung.at) return false;
-    if (rung.also && value(after, rung.also.lane) < rung.also.at) return false;
+    if (valueFor(after, rung) < rung.at) return false;
+    if (rung.also && second(after, rung.also.lane) < rung.also.at) return false;
     if (rung.after?.some((id) => !claimed.has(id))) return false;
     return true;
   });
@@ -181,6 +270,8 @@ export function newlyEarned(
 
 export interface LaneForecast {
   readonly lane: Lane;
+  /** What this row calls its counter. */
+  readonly label: string;
   readonly current: number;
   readonly target: number;
   readonly remaining: number;
@@ -188,6 +279,7 @@ export interface LaneForecast {
   /** The second counter of a compound reward, when there is one. */
   readonly also?: {
     readonly lane: Lane;
+    readonly label: string;
     readonly current: number;
     readonly target: number;
   };
@@ -203,28 +295,58 @@ export interface LaneForecast {
  * queue has already been earned, so the forecast moves on to the next
  * promise rather than stalling on a celebration that has not run yet.
  */
+/**
+ * Which lanes a refiner can see yet.
+ *
+ * Two at launch. Temper mastery appears once CALIBRATION has named all
+ * four and every bin is in play, and precision appears the moment a clean
+ * screen proves the lane exists — so the tutorial never shows four
+ * counters to someone still learning to read one.
+ */
+export function laneVisible(lane: Lane, c: Counters): boolean {
+  if (lane === "temper") return c.screens >= 15;
+  if (lane === "perfect") return c.perfectTotal >= 1;
+  return true;
+}
+
 export function forecast(counters: Counters): LaneForecast[] {
-  const value = (lane: Lane) =>
-    lane === "screens" ? counters.screens : counters.bins;
   const out: LaneForecast[] = [];
-  for (const lane of ["screens", "bins"] as const) {
+  for (const lane of ["screens", "bins", "temper", "perfect"] as const) {
+    if (!laneVisible(lane, counters)) continue;
+    // The nearest unmet rung in this lane. For tempers that means the
+    // temper closest to its next threshold, so the forecast shows one row
+    // rather than four counters at once.
     const rung = LADDER.filter((r) => r.lane === lane)
-      .filter((r) => value(r.lane) < r.at || (r.also && value(r.also.lane) < r.also.at))
-      .sort((a, b) => a.at - b.at)[0];
+      .filter((r) => {
+        const met =
+          valueFor(counters, r) >= r.at &&
+          (!r.also ||
+            (r.also.lane === "screens" ? counters.screens : counters.bins) >=
+              r.also.at);
+        return !met;
+      })
+      .sort((a, b) => {
+        const ra = a.at - valueFor(counters, a);
+        const rb = b.at - valueFor(counters, b);
+        return ra - rb || a.at - b.at;
+      })[0];
     if (!rung) continue;
-    const current = value(lane);
+    const current = valueFor(counters, rung);
     const remaining = Math.max(0, rung.at - current);
     out.push({
       lane,
+      label: laneLabel(rung),
       current,
       target: rung.at,
       remaining,
-      action: actionFor(lane, remaining),
+      action: actionFor(rung.lane, remaining, rung.temper),
       ...(rung.also
         ? {
             also: {
               lane: rung.also.lane,
-              current: value(rung.also.lane),
+              label: LANE_LABEL[rung.also.lane],
+              current:
+                rung.also.lane === "screens" ? counters.screens : counters.bins,
               target: rung.also.at,
             },
           }
