@@ -141,8 +141,35 @@ console.log(`\n── the shape of the queue ${"─".repeat(34)}`);
   if (orient.length !== total) {
     fail(`want ${total} orientation screens (per the ramp table), got ${orient.length}`);
   }
-  if (orient.slice(0, -1).some((l) => l.ceremony !== "none")) {
-    fail("every orientation screen but the last must advance itself");
+  // Mid-file stages advance themselves; the end of a file does not. That
+  // is what makes the header meter honest — it fills across a lesson and
+  // stops at 100% where an incentive may be owed, instead of being wiped
+  // through by a 900ms auto-advance.
+  for (const l of orient) {
+    const end = l.stage ? l.stage[0] === l.stage[1] : true;
+    if (end && l.ceremony !== "full") {
+      fail(`${l.id} ends a file and must keep its ceremony`);
+    }
+    if (!end && l.ceremony !== "none") {
+      fail(`${l.id} is mid-file and must advance itself`);
+    }
+  }
+  // Every orientation rung is exactly one file, and its stages are
+  // adjacent and numbered.
+  {
+    const keys = orient.map((l) => l.fileKey ?? l.id);
+    if (new Set(keys).size !== ORIENT_STAGES.length) {
+      fail(`want ${ORIENT_STAGES.length} orientation files, got ${new Set(keys).size}`);
+    }
+    let i = 0;
+    ORIENT_STAGES.forEach((st) => {
+      for (let k = 0; k < st.screens; k++, i++) {
+        const l = orient[i];
+        if (!l.stage || l.stage[0] !== k + 1 || l.stage[1] !== st.screens) {
+          fail(`${l.id} says stage ${JSON.stringify(l.stage)}, want [${k + 1}, ${st.screens}]`);
+        }
+      }
+    });
   }
   if (orient.filter((l) => l.archived !== false).length !== 1) {
     fail("orientation must hold exactly one archive row");
@@ -212,28 +239,50 @@ console.log(`\n── the shape of the queue ${"─".repeat(34)}`);
 
 console.log(`\n── incentive ladder ${"─".repeat(41)}`);
 {
-  /** Refine every screen in order, crediting the ledger as the game does. */
+  const fileKeyOf = (lv: (typeof LEVELS)[number]) => lv.fileKey ?? lv.id;
+  /** Every file, in order, as the list of levels that make it up. */
+  const FILES: (typeof LEVELS)[number][][] = [];
+  for (const lv of LEVELS) {
+    const last = FILES[FILES.length - 1];
+    if (last && fileKeyOf(last[0]) === fileKeyOf(lv)) last.push(lv);
+    else FILES.push([lv]);
+  }
+
+  /**
+   * Refine every level in order, crediting the ledger as the game does.
+   *
+   * `earnedAt` is keyed by *file* number, because that is the unit the
+   * ladder counts and the unit a refiner experiences: an orientation
+   * lesson is three stages and one file, and an incentive that arrives
+   * "two files in" is what the front-loading assertions below are about.
+   */
   const playthrough = (perfect = true) => {
     let p: Progress = emptyProgress();
     const earnedAt: Record<string, number> = {};
-    LEVELS.forEach((lv, i) => {
-      const step = applyCompletion(p, {
-        levelId: lv.id,
-        tempers: lv.tempers,
-        quota: lv.quota,
-        perfect,
-        countsForPerfect: (lv.showBins ?? lv.tempers).length > 1,
+    FILES.forEach((file, fileIndex) => {
+      // A file counts for precision if any of its stages offered a choice
+      // of bin, and it is clean only if every stage was.
+      const counts = file.some((lv) => (lv.showBins ?? lv.tempers).length > 1);
+      file.forEach((lv, stage) => {
+        const step = applyCompletion(p, {
+          levelId: lv.id,
+          tempers: lv.tempers,
+          quota: lv.quota,
+          perfect,
+          countsForPerfect: counts,
+          fileComplete: stage === file.length - 1,
+        });
+        p = step.progress;
+        for (const rung of step.earned) {
+          if (earnedAt[rung.id] !== undefined) fail(`${rung.id} earned twice`);
+          earnedAt[rung.id] = fileIndex + 1;
+          // Claiming is what the boundary does; the ledger only has to
+          // hold the promise until then. Claim here so prerequisites
+          // (Waffle II waits for Waffle I) are exercised as they ship.
+          p.rewardState[rung.id] = "claimed";
+        }
+        p.rewardQueue = [];
       });
-      p = step.progress;
-      for (const rung of step.earned) {
-        if (earnedAt[rung.id] !== undefined) fail(`${rung.id} earned twice`);
-        earnedAt[rung.id] = i + 1;
-        // Claiming is what M2 will do at the boundary; the ledger only has
-        // to hold the promise until then. Claim here so prerequisites
-        // (Waffle II waits for Waffle I) are exercised the way they ship.
-        p.rewardState[rung.id] = "claimed";
-      }
-      p.rewardQueue = [];
     });
     return { p, earnedAt };
   };
@@ -242,6 +291,9 @@ console.log(`\n── incentive ladder ${"─".repeat(41)}`);
 
   if (p.screensCompleted !== LEVELS.length) {
     fail(`credited ${p.screensCompleted} screens, not ${LEVELS.length}`);
+  }
+  if (p.filesCompleted !== FILES.length) {
+    fail(`credited ${p.filesCompleted} files, not ${FILES.length}`);
   }
   const handBins = LEVELS.reduce((n, l) => n + l.quota * l.tempers.length, 0);
   if (p.binsTotal !== handBins) fail(`credited ${p.binsTotal} bins, not ${handBins}`);
@@ -254,23 +306,26 @@ console.log(`\n── incentive ladder ${"─".repeat(41)}`);
       fail(`${rung.id} (${rung.reward}) is never earned in a full playthrough`);
     }
   }
-  ok(`all ${LADDER.length} rungs earned in ${LEVELS.length} screens / ${p.binsTotal} bins`);
+  ok(
+    `all ${LADDER.length} rungs earned in ${FILES.length} files ` +
+      `(${LEVELS.length} screens) / ${p.binsTotal} bins`,
+  );
 
   // Front-loading, measured rather than asserted in prose: the first three
-  // screens each pay, and no two consecutive screens after that go by
-  // without something.
+  // files each pay, and no two consecutive files after that go by without
+  // something.
   for (const at of [1, 2, 3]) {
-    if (!Object.values(earnedAt).includes(at)) fail(`screen ${at} pays nothing`);
+    if (!Object.values(earnedAt).includes(at)) fail(`file ${at} pays nothing`);
   }
   {
     let gap = 0;
     let worst = 0;
-    for (let i = 1; i <= LEVELS.length; i++) {
+    for (let i = 1; i <= FILES.length; i++) {
       gap = Object.values(earnedAt).includes(i) ? 0 : gap + 1;
       worst = Math.max(worst, gap);
     }
-    if (worst > 2) fail(`${worst} screens in a row with no incentive`);
-    ok(`longest gap between incentives is ${worst} screens`);
+    if (worst > 2) fail(`${worst} files in a row with no incentive`);
+    ok(`longest gap between incentives is ${worst} files`);
   }
 
   // Boundaries: one below earns nothing, exactly at earns it, and a rung
@@ -328,6 +383,7 @@ console.log(`\n── incentive ladder ${"─".repeat(41)}`);
       quota: LEVELS[0].quota,
       perfect: true,
       countsForPerfect: true,
+      fileComplete: true,
     };
     const first = applyCompletion(emptyProgress(), one);
     const again = applyCompletion(first.progress, one);
@@ -359,6 +415,7 @@ console.log(`\n── incentive ladder ${"─".repeat(41)}`);
         quota: lv.quota,
         perfect: true,
         countsForPerfect: (lv.showBins ?? lv.tempers).length > 1,
+        fileComplete: true,
       }).progress;
     }
     if (forecast(counters(p2)).length !== 0) fail("the forecast still promises something after the last file");
@@ -368,13 +425,18 @@ console.log(`\n── incentive ladder ${"─".repeat(41)}`);
   // Perfect play, and its opposite.
   {
     const mixed = playthrough(false).p;
-    const eligible = LEVELS.filter((l) => (l.showBins ?? l.tempers).length > 1).length;
-    if (mixed.perfectScreensTotal !== 0) fail("an imperfect run counted perfect screens");
-    if (mixed.perfectScreenStreak !== 0) fail("an imperfect run kept a streak");
+    // Files, not screens: precision counts a file refined without error,
+    // and a file counts at all only if some stage of it put more than one
+    // bin on the deck.
+    const eligible = FILES.filter((f) =>
+      f.some((l) => (l.showBins ?? l.tempers).length > 1),
+    ).length;
+    if (mixed.perfectScreensTotal !== 0) fail("an imperfect run counted perfect files");
+    if (mixed.perfectScreenStreak !== 0) fail("an imperfect run kept a record");
     if (p.perfectScreensTotal !== eligible) {
-      fail(`a clean run counted ${p.perfectScreensTotal} perfect screens, not ${eligible}`);
+      fail(`a clean run counted ${p.perfectScreensTotal} perfect files, not ${eligible}`);
     }
-    ok(`perfect screens track the drops, on the ${eligible} screens with a bin to get wrong`);
+    ok(`precision tracks the drops, on the ${eligible} files with a bin to get wrong`);
   }
 
   // Waffle II is compound and waits for Waffle I.

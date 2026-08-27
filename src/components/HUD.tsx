@@ -1,6 +1,5 @@
+import { CircleHelp } from "lucide-react";
 import type { HudSnapshot } from "../game/engine";
-import type { Progress } from "../game/progress";
-import { IncentiveRecordBox } from "./IncentiveRecordBox";
 
 function clock(seconds: number): string {
   const s = Math.max(0, Math.ceil(seconds));
@@ -9,78 +8,69 @@ function clock(seconds: number): string {
 }
 
 /**
- * The header: what file this is, how far through it the refiner is, and
- * what they are working toward.
+ * The header: which file this is, and how far through it the refiner is.
  *
- * The refinement meter is the loudest thing on the screen after the
- * numbers themselves. It was a 3px hairline with the percentage tucked
- * into a 10px line beside the file name, which is a poor deal for the
- * single number the whole file is about — so the percentage is now the
- * biggest type in the header and the bar is thick enough to read from
- * across a room.
+ * Two lines and nothing else. It used to carry four things — a version
+ * string, the clock, the file name, the meter, the percentage and the
+ * incentives record — stacked into a band deep enough to notice, above a
+ * coach line, above a control deck. Three bands of chrome before the
+ * numbers.
  *
- * Under it sits the incentives record, permanently. It is where the
- * summary screen shrinks to when a payout ends, and it is the way back
- * into the full record from anywhere in the game. It is furniture: it is
- * there before the first incentive exists, saying nothing, because
- * furniture that materializes halfway through a session reads as a
- * glitch rather than as a place.
+ * What is left is what a refiner reads mid-file: the file's name, the
+ * shift clock, and one meter. The meter is the *file's*, not this
+ * stage's: a header that names ORIENTATION #0001 and shows a bar that
+ * fills and resets three times inside it is measuring something nobody was
+ * told about.
+ *
+ * The handbook sits beside the meter rather than in a deck of its own,
+ * because it is a thing you leave the game to read, not a control you use
+ * while playing.
  */
 export function HUD({
   hud,
   height,
-  progress,
-  onOpenRecord,
-  recordLanding,
+  onHandbook,
 }: {
   hud: HudSnapshot;
   height: number;
-  progress: Progress;
-  onOpenRecord: () => void;
-  recordLanding: boolean;
+  onHandbook: () => void;
 }) {
   const urgent = !hud.untimed && hud.timeLeft <= 15 && hud.phase !== "complete";
-  const pct = Math.round(hud.progress * 100);
+  const pct = Math.round(hud.fileProgress * 100);
   const done = pct >= 100;
 
-  // The header sits above the input surface (z-35), like the control deck
-  // at z-40, because the record is a live control and at z-20 every tap on
-  // it was swallowed by the transparent grid overlay covering the stage.
-  //
-  // But only the record takes pointer events. A packet dragged to the very
-  // top of the board sits *under* this header, and a header that ate
-  // pointers there would leave the refiner holding something they could no
-  // longer grab. The text is not interactive; the box is.
+  // Above the input surface (z-35) so the handbook takes taps, but
+  // transparent to pointers everywhere else: a packet dragged to the very
+  // top of the board sits under this header, and a header that ate
+  // pointers there would leave the refiner holding something they could
+  // not put down.
   return (
     <header
-      className="pointer-events-none relative z-40 flex shrink-0 flex-col justify-center gap-1 border-b border-phos-700/70 bg-phos-950/90 px-3 py-1"
+      className="pointer-events-none relative z-40 flex shrink-0 flex-col justify-center gap-1 border-b border-phos-700/70 bg-phos-950/90 px-3"
       style={{ height }}
     >
-      <div className="flex items-baseline justify-between text-[9px] tracking-[0.18em] text-phos-600">
-        <span className="crt-text-glow truncate">
-          FILE: {hud.levelName} #{hud.fileCode}
-          {hud.stage ? ` ${hud.stage[0]}/${hud.stage[1]}` : ""}
+      <div className="flex items-baseline justify-between gap-2 text-[10px] tracking-[0.16em]">
+        <span className="crt-text-glow truncate text-phos-400">
+          {hud.levelName} #{hud.fileCode}
+          {hud.stage && hud.stage[1] > 1 ? (
+            <span className="text-phos-600">
+              {" "}
+              {hud.stage[0]}/{hud.stage[1]}
+            </span>
+          ) : null}
         </span>
         <span
           className={
             urgent
               ? "crt-text-glow shrink-0 font-bold text-alarm"
-              : "crt-text-glow shrink-0 text-phos-500"
+              : "crt-text-glow shrink-0 text-phos-600"
           }
         >
-          [SHIFT: {hud.untimed ? "--:--" : clock(hud.timeLeft)}]
+          {hud.untimed ? "--:--" : clock(hud.timeLeft)}
         </span>
       </div>
 
-      {/* The one number this file is about. */}
       <div className="flex items-center gap-2">
-        <span
-          className={`crt-text-glow shrink-0 text-[9px] tracking-[0.2em] ${
-            done ? "text-phos-200" : "text-phos-500"
-          }`}
-        >
-          {done ? "REFINED" : "REFINEMENT"}
-        </span>
         <div className="h-[6px] flex-1 overflow-hidden rounded-sm border border-phos-800 bg-phos-950">
           <div
             className="h-full bg-phos-400 transition-[width] duration-300 ease-out"
@@ -103,14 +93,16 @@ export function HUD({
         >
           {pct}%
         </span>
+        <button
+          type="button"
+          aria-label="Open the Lumon handbook"
+          onPointerDown={(ev) => ev.stopPropagation()}
+          onClick={onHandbook}
+          className="pointer-events-auto flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[3px] border border-phos-700 bg-phos-900/60 text-phos-500 active:bg-phos-600/40"
+        >
+          <CircleHelp size={13} strokeWidth={2.2} />
+        </button>
       </div>
-
-      <IncentiveRecordBox
-        progress={progress}
-        onOpen={onOpenRecord}
-        variant="hud"
-        landing={recordLanding}
-      />
     </header>
   );
 }

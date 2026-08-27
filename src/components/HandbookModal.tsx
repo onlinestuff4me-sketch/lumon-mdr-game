@@ -225,7 +225,7 @@ export function HandbookModal({
         {/* The forecast is reachable mid-file from here — the clock is
             paused while the drawer is open, so checking how far the next
             incentive is costs nothing but the reading. */}
-        {progress.screensCompleted > 0 ? (
+        {progress.filesCompleted > 0 ? (
           <>
             <h3 className="crt-text-glow mb-1 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300">
               INCENTIVE FORECAST

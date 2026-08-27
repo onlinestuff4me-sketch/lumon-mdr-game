@@ -316,6 +316,67 @@ export const byName = async (page, name) => {
   return i;
 };
 
+/**
+ * Refine a whole *file*, however many stages it has.
+ *
+ * A file is what the ladder counts, and the orientation files are two or
+ * three levels each — so a test that refines one level and expects an
+ * incentive is testing a model the game stopped using. The stages
+ * auto-advance, so this follows them.
+ */
+export async function refineFile(page, origin, index) {
+  await load(page, index);
+  for (let stage = 0; stage < 8; stage++) {
+    let guard = 0;
+    while ((await state(page)).progress < 100 && guard++ < 14) {
+      const g = await findGroup(page);
+      if (!g) break;
+      await tap(page, origin, await touchFor(page, g.one, "marquee"));
+      if (!(await state(page)).carrying) break;
+      await carryToBin(page, origin, g);
+    }
+    const s = await state(page);
+    if (!s.stage || s.stage[0] >= s.stage[1]) return;
+    // Mid-file: the board advances itself to the next stage. Wait for the
+    // stage to be *ready*, not merely loaded — an orientation group takes
+    // two and a half seconds to come up to full motion, and a tap on one
+    // that has not emerged is refused as "no temper detected". A human
+    // waiting to see something move does not hit that; a test that taps
+    // the frame the level changes hits it every time.
+    const next = s.level + 1;
+    await page
+      .waitForFunction((n) => window.__mdr.levelIndex === n, next, { timeout: 8000 })
+      .catch(() => {});
+    await page
+      .waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 })
+      .catch(() => {});
+    await page.waitForTimeout(120);
+  }
+}
+
+/**
+ * Every orientation level, in order.
+ *
+ * By name rather than by the `training` flag: BELLINGHAM and CALIBRATION
+ * are training files too, and they are probe files where tapping alone
+ * does nothing. Derived rather than written down, because the ramp is a
+ * table — the number of screens in it changes when that table is tuned,
+ * and a test that hardcodes 12 silently starts asserting about a
+ * different file.
+ */
+export const orientationIndices = (page) =>
+  page.evaluate(() =>
+    window.__mdr.levels
+      .map((l, i) => (l.name === "ORIENTATION" ? i : -1))
+      .filter((i) => i >= 0),
+  );
+
+/** The full-deck orientation screen everything else builds toward. */
+export const lastTrainingIndex = async (page) => {
+  const all = await orientationIndices(page);
+  return all[all.length - 1];
+};
+
 export const setMode = (page, mode) =>
   page.evaluate((m) => window.__mdr.setMode(m), mode);
 

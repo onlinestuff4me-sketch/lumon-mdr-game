@@ -28,10 +28,10 @@ import {
 import { computeLayout } from "../game/layout";
 import { useEngine } from "../hooks/useEngine";
 import { BinDeck } from "./BinDeck";
-import { ControlDeck } from "./ControlDeck";
 import { CRTOverlay } from "./CRTOverlay";
 import { HandbookModal } from "./HandbookModal";
 import { HUD } from "./HUD";
+import { IncentiveRecordBox } from "./IncentiveRecordBox";
 import { PhaseOverlay } from "./PhaseOverlay";
 import { Viewport } from "./Viewport";
 
@@ -198,7 +198,7 @@ export function GameStage() {
    * so it resets itself when the next one opens without an effect to clear
    * it.
    */
-  const boundary = `${hud.levelIndex}:${progress.screensCompleted}`;
+  const boundary = `${hud.levelIndex}:${progress.filesCompleted}`;
   const [accepted, setAccepted] = useState<{
     boundary: string;
     names: string[];
@@ -409,8 +409,12 @@ export function GameStage() {
     if (level) {
       // Read before crediting: the ledger is about to reset the run.
       const hadClean = progressRef.current.perfectScreenStreak;
-      const counts = (level.showBins ?? level.tempers).length > 1;
-      if (counts && !engine.perfect && hadClean > 0) {
+      // The last stage of a file is the one that credits it. Bins are
+      // still credited every stage — a group binned is a group binned —
+      // but a file is only refined once all of it is.
+      const fileComplete = level.stage ? level.stage[0] === level.stage[1] : true;
+      const counts = engine.fileCounts && fileComplete;
+      if (counts && !engine.filePerfect && hadClean > 0) {
         const needs = nextPerfectTarget(hadClean) ?? 3;
         setBroken({ levelId: level.id, at: hadClean, needs });
       }
@@ -419,8 +423,9 @@ export function GameStage() {
           levelId: level.id,
           tempers: level.tempers,
           quota: level.quota,
-          perfect: engine.perfect,
-          countsForPerfect: (level.showBins ?? level.tempers).length > 1,
+          perfect: engine.filePerfect,
+          countsForPerfect: engine.fileCounts,
+          fileComplete,
         }),
       );
     }
@@ -537,6 +542,9 @@ export function GameStage() {
 
   // Same call the engine makes, with the same active tempers, so the bins
   // the player sees are the rects the engine hit-tests.
+  // The band order is resolved once inside `layout.ts` and shared with the
+  // engine, so the chrome and the hit-testing can never disagree about
+  // where the bins are.
   const layout = computeLayout(size.w, size.h, hud.activeTempers);
   const live =
     hud.phase === "probe" || hud.phase === "select" || hud.phase === "carry";
@@ -577,30 +585,56 @@ export function GameStage() {
           <HUD
             hud={hud}
             height={layout.hudH}
-            progress={progress}
-            onOpenRecord={() => openHandbook("shelf")}
-            recordLanding={acceptedHere > 0}
-          />
-          {/* The coach line sits directly under the HUD, not above the
-              control deck. At the bottom of the screen it was underneath
-              the hand that was holding the phone — unreadable exactly while
-              the player was doing the thing it describes. */}
-          <StatusTicker hud={hud} height={layout.tickerH} />
-          {/* Above the board, not below it: down between the matrix and the
-              bins the deck sat across the path every packet is dragged
-              along. Nothing here is pressed during play. */}
-          <ControlDeck
-            hud={hud}
-            height={layout.deckH}
-            onMode={(m) => {
-              void getAudio().unlock();
-              engine.setMode(m);
-            }}
             onHandbook={() => openHandbook("top")}
           />
+          {/* Variant `b` puts the record directly under the header, where
+              it is read on the way in. Variants `a` and `c` put it under
+              the bins, where a thumb already is and where it sits beside
+              the things it counts rather than under a second meter. */}
+          {layout.recordAt === "top" ? (
+            <div className="relative z-40 shrink-0 px-3 py-1" style={{ height: layout.recordH }}>
+              <IncentiveRecordBox
+                progress={progress}
+                onOpen={() => openHandbook("shelf")}
+                variant="hud"
+                landing={acceptedHere > 0}
+              />
+            </div>
+          ) : null}
+          {/* The coach line sits directly under the header. At the bottom
+              of the screen it was underneath the hand holding the phone —
+              unreadable exactly while the player was doing the thing it
+              describes. In variant `c` it is drawn over the board's top
+              edge instead of taking a band of its own. */}
+          {layout.tickerOverGrid ? null : (
+            <StatusTicker hud={hud} height={layout.tickerH} />
+          )}
           <div className="flex-1" />
           <div className="shrink-0" style={{ height: layout.binsH }} />
+          {layout.recordAt === "bottom" ? (
+            <div className="relative z-40 flex shrink-0 items-center px-3 pb-1" style={{ height: layout.recordH }}>
+              <IncentiveRecordBox
+                progress={progress}
+                onOpen={() => openHandbook("shelf")}
+                variant="hud"
+                landing={acceptedHere > 0}
+              />
+            </div>
+          ) : null}
         </div>
+
+        {/* Variant `c`: the coach line floats on the board's top edge. The
+            band is still reserved, but inside the grid rather than out of
+            it — the matrix is drawn with that much clearance at the top,
+            so nothing reflows and the board keeps a whole band. */}
+        {layout.tickerOverGrid ? (
+          <div
+            className="pointer-events-none absolute inset-x-0 z-30"
+            style={{ top: layout.grid.y }}
+          >
+            <StatusTicker hud={hud} height={layout.tickerH} />
+          </div>
+        ) : null}
 
         <BinDeck bins={hud.bins} layout={layout} />
 

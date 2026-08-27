@@ -76,7 +76,7 @@ export function IncentiveForecast({ progress }: Props) {
   // and the eraser arrive unannounced, and the ladder introduces itself once
   // it has already paid out. A ladder with nothing left to give also says
   // nothing rather than showing an empty counter.
-  if (progress.screensCompleted < 1 || lanes.length === 0) return null;
+  if (progress.filesCompleted < 1 || lanes.length === 0) return null;
 
   const owed = progress.rewardQueue.length;
   return (

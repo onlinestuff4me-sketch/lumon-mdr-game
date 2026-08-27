@@ -19,9 +19,11 @@ export function BinDeck({
       className="pointer-events-none absolute inset-0 z-20"
       aria-label="Temper bins"
     >
+      {/* Pinned to where the bins actually are, not to the bottom of the
+          stage: the incentives record may have a band under them. */}
       <div
-        className="absolute inset-x-0 bottom-0 border-t border-phos-700/70 bg-phos-900/85"
-        style={{ height: layout.binsH }}
+        className="absolute inset-x-0 border-y border-phos-700/70 bg-phos-900/85"
+        style={{ top: layout.h - layout.binsH - (layout.recordAt === "bottom" ? layout.recordH : 0), height: layout.binsH }}
       />
       {bins.map((bin) => {
         const def = TEMPER_DEFS[bin.temper];

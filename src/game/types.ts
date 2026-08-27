@@ -177,7 +177,20 @@ export interface LevelDef {
   /** Whether this file gets its own row in the handbook archive and
    *  releases an addendum. The orientation screens share one row. */
   readonly archived?: boolean;
-  /** Position within a multi-screen sequence, for the HUD. */
+  /**
+   * Which *file* this level belongs to.
+   *
+   * A file is what a refiner is told they are refining, and what the
+   * incentive ladder counts. Most files are one level; the orientation
+   * files are several, so the refinement meter can fill across a lesson
+   * rather than resetting three times inside one. Levels sharing a
+   * `fileKey` are stages of one file and must be adjacent.
+   *
+   * Defaults to the level's own id, which makes every ordinary file a
+   * one-stage file with no data to write.
+   */
+  readonly fileKey?: string;
+  /** Position within a multi-stage file, for the HUD. */
   readonly stage?: readonly [number, number];
   /** The group surfaces and sinks on a cycle instead of staying visible.
    *  This is how the probe is introduced: motion that hides. */

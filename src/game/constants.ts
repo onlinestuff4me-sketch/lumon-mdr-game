@@ -170,8 +170,21 @@ export interface OrientStage {
   readonly bins: number;
 }
 
+/**
+ * Each rung is also a *file*.
+ *
+ * A rung is one coherent lesson, so it is the natural unit for the thing
+ * the refiner is told they are refining — and it is what makes the header
+ * meter honest: `FILE ORIENTATION #0001 2/3` fills a third at a time and
+ * pays an incentive when it reaches the end. Thirteen levels under one
+ * file code meant a bar that reset twelve times inside a single "file".
+ *
+ * The first rung is three screens rather than four so that the first
+ * incentive lands at the third, which is as early as a file-completion
+ * payout can be made to arrive.
+ */
 export const ORIENT_STAGES: readonly OrientStage[] = [
-  { screens: 4, tempers: 1, groupsPerTemper: 1, bins: 1 },
+  { screens: 3, tempers: 1, groupsPerTemper: 1, bins: 1 },
   { screens: 2, tempers: 1, groupsPerTemper: 2, bins: 1 },
   { screens: 2, tempers: 2, groupsPerTemper: 1, bins: 2 },
   { screens: 2, tempers: 2, groupsPerTemper: 2, bins: 2 },
@@ -223,10 +236,14 @@ function orientationScreens(): LevelDef[] {
       const groups = n * st.groupsPerTemper;
       const i = index++;
       const last = i === total - 1;
+      // The last stage of this rung, which is the last stage of this file:
+      // where the ceremony, the archive row and the file credit all land.
+      const endOfFile = sIdx === st.screens - 1;
       out.push({
         id: `orientation-${String(i + 1).padStart(2, "0")}`,
         name: "ORIENTATION",
-        fileCode: "0001",
+        fileCode: String(stage + 1).padStart(4, "0"),
+        fileKey: `orientation-file-${stage + 1}`,
         tempers: [...new Set(tempers)],
         ...(showBins ? { showBins } : {}),
         spacing: groups >= 4 ? 5 : 6,
@@ -240,13 +257,15 @@ function orientationScreens(): LevelDef[] {
         // One digit of overlap lifts the whole group. A new refiner is
         // never told that their correct instinct was a wrong box.
         minCapture: 1,
-        // No ceremony between screens: one continuous sequence, not a
-        // banner per screen. The last keeps the full one, so orientation
-        // ends properly and releases its single addendum.
-        ceremony: last ? "full" : "none",
+        // No ceremony between the stages of a file: one continuous
+        // sequence, not a banner per screen. The end of each orientation
+        // file keeps the full one — that is where the meter reaches 100%
+        // and an incentive may be owed, and neither should be wiped
+        // through by an auto-advance.
+        ceremony: endOfFile ? "full" : "none",
         autoAdvanceMs: 900,
         archived: last,
-        stage: [i + 1, total],
+        stage: [sIdx + 1, st.screens],
         focus: OR_FOCUS[stage],
         tapToSelect: true,
         // Only where a single bin is on the deck, so the arrows point at

@@ -143,8 +143,7 @@ screen that is waiting for a tap throbs** (`crt-throb`, 1.9s) — it is
 usually the only live thing on that screen, and a refiner who does not know
 that is looking at an interface that appears to have stopped.
 
-Minimum touch target is 44pt; `DECK_FRAC` in `src/game/layout.ts` is sized
-from that and nothing may be smaller.
+Minimum touch target is 44pt. Nothing tappable may be smaller.
 
 ### Screen
 
@@ -213,7 +212,8 @@ being confused, and the confusion cost real clarity:
 
 | Word | Means exactly | Never means |
 | --- | --- | --- |
-| **file** | One level: a screen of data the refiner refines | Putting something away |
+| **file** | What the refiner is told they are refining, and what the ladder counts. One or more *stages* | Putting something away |
+| **stage** | One screen of a multi-screen file. The orientation lessons are two or three | A phase, a level |
 | **refine** | Boxing digits and binning them by temper | Anything else |
 | **bin** | One of the four temper receptacles | A verb for discarding |
 | **incentive** | The thing Lumon gives you for hitting a milestone | — |
@@ -286,15 +286,51 @@ in `src/game/layout.ts` and shared by the DOM chrome and the engine's
 hit-testing — the two can never drift.
 
 ```
-HUD_FRAC       0.112, floored at HUD_MIN (92px)   file line, meter, record
+HUD_FRAC       0.072, floored at HUD_MIN (56px)   file name + clock, meter + handbook
 TICKER_FRAC    0.042                              the coach line, always reserved
-DECK_FRAC      0.086                              mode switches, ≥44pt
+RECORD_FRAC    0.05,  floored at RECORD_MIN (40)  the incentives record
 BINS_FRAC      0.175 / 0.08 one-row               the four bins
 grid                                              whatever is left
 ```
 
 The ticker band is reserved permanently, whether or not a message is
 showing, so the matrix never reflows underneath the text describing it.
+
+### The order of the bands
+
+```
+FILE NAME                                  --:--
+▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░  67%   [?]     ← header
+        coach line, when there is one      ← ticker
+┌───────────────────────────────────────┐
+│                                       │
+│            the numbers                │  ← grid
+│                                       │
+└───────────────────────────────────────┘
+│  01: WO  WOE  ▓▓▓▓▓░░░░  40%          │  ← bins
+INCENTIVES RECORD              4 KEPT ›
+REFINE 1 MORE FILE  ▓▓▓░░░░░      3/4     ← record
+```
+
+Two rules decided this arrangement, both learned by trying the
+alternatives (`?layout=b` and `?layout=c` still render them):
+
+1. **Two meters never stack.** The refinement meter belongs at the top
+   with the file's name, because it measures that file. The incentive
+   meter belongs at the bottom with the bins, because it measures the
+   things the bins fill. Putting the record directly under the header —
+   proposal `b` — reads as one confused instrument with two bars, and
+   costs the board 40px besides.
+2. **Nothing floats over the numbers.** Drawing the coach line on the
+   board's top edge — proposal `c` — buys a band of grid and spends it on
+   a line of text sitting on top of the digits, which is exactly what the
+   reserved band existed to prevent.
+
+**There is no mode switch.** Probe and select are decided by what the
+refiner does: study a cluster and the box arms itself, bin a packet and it
+disarms, draw a box that catches nothing and the board hands itself back
+to the probe. A double-tap still toggles for anyone who wants it. The deck
+that used to hold those two switches was 8.6% of the screen.
 
 ### Stacking
 
@@ -303,7 +339,7 @@ showing, so the matrix never reflows underneath the text describing it.
 | 10 | The canvas |
 | 20 | Ticker, bin deck |
 | 35 | The input surface — a transparent sheet over the whole stage |
-| 40 | Header and control deck. Both sit *above* the input surface, and both are `pointer-events-none` except for their actual controls, so a packet dragged under them stays grabbable |
+| 40 | Header and incentives record. Both sit *above* the input surface, and the header is `pointer-events-none` except for the handbook button, so a packet dragged to the top edge stays grabbable |
 | 45 | CRT overlay (scanlines, mask, vignette, bezel) |
 | 60 | Phase overlays — briefing, end of file, failure |
 | 70 | Incentive screens, the handbook, the dance floor |

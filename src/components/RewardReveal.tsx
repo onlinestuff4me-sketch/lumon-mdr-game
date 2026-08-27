@@ -147,12 +147,12 @@ export function RewardReveal({
           {open && facts.length > 1 ? ` · ${step + 1}/${facts.length}` : ""}
         </p>
 
-        <h1 className="crt-text-glow mt-2 flex h-[34px] items-center justify-center text-[13px] font-bold leading-tight tracking-[0.16em] text-phos-200">
+        <h1 className="crt-text-glow mt-2 flex h-[34px] items-center justify-center text-[12px] font-bold leading-tight tracking-[0.12em] text-phos-200">
           {open
             ? reward.earned
             : total > 1
-              ? `${total} INCENTIVES EARNED`
-              : "AN INCENTIVE HAS BEEN EARNED"}
+              ? `YOU'VE EARNED ${total} INCENTIVES`
+              : "YOU'VE EARNED AN INCENTIVE"}
         </h1>
         <div className="mt-2 h-px w-24 bg-phos-600" />
 

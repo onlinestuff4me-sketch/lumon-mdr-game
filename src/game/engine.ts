@@ -94,8 +94,18 @@ export interface HudSnapshot {
   settled: boolean;
   teaching: boolean;
   activeTempers: readonly Temper[];
-  /** [n, of] within a multi-screen sequence, or null. */
+  /** [n, of] within a multi-stage file, or null. */
   stage: readonly [number, number] | null;
+  /**
+   * How far through the *file* the refiner is, counting the stages
+   * already done plus this one's fill.
+   *
+   * `progress` is this level alone and is what decides completion.
+   * `fileProgress` is what the header meter shows, because the header
+   * names a file and a meter under a file's name that resets three times
+   * inside it is measuring something nobody was told about.
+   */
+  fileProgress: number;
   lore: string;
   isLastLevel: boolean;
 }
@@ -121,7 +131,8 @@ function sameSnapshot(a: HudSnapshot, b: HudSnapshot): boolean {
     a.settled !== b.settled ||
     a.activeTempers !== b.activeTempers ||
     Math.ceil(a.timeLeft) !== Math.ceil(b.timeLeft) ||
-    Math.round(a.progress * 100) !== Math.round(b.progress * 100)
+    Math.round(a.progress * 100) !== Math.round(b.progress * 100) ||
+    Math.round(a.fileProgress * 100) !== Math.round(b.fileProgress * 100)
   ) {
     return false;
   }
@@ -323,6 +334,19 @@ export class GameEngine {
    * board, or any other gesture that costs nothing is not a mistake.
    */
   private flawless = true;
+  /**
+   * The same question asked of the whole file rather than of one stage.
+   *
+   * The precision lane counts files refined without error, and a file is
+   * as many as three stages — so an error on the second stage has to
+   * still be an error when the third one finishes. Reset when the file
+   * changes, not when the level does.
+   */
+  private fileFlawless = true;
+  /** True once any stage of this file has shown more than one bin. */
+  private fileHadChoice = false;
+  /** Which file the counters above belong to. */
+  private fileKey = "";
   /** The player's own audio setting, held while a file redacts it. */
   private mutedBeforeRedaction: boolean | null = null;
   /** Elapsed time the current packet was lifted, so the bin hint can wait
@@ -581,6 +605,9 @@ export class GameEngine {
       teaching: level.teaches === true,
       activeTempers: shown,
       stage: level.stage ?? null,
+      fileProgress: level.stage
+        ? (level.stage[0] - 1 + progress) / level.stage[1]
+        : progress,
       lore: level.lore,
       isLastLevel: this.levelIndex >= LEVELS.length - 1,
     };
@@ -672,6 +699,15 @@ export class GameEngine {
     this.advanceAt = -1;
     this.settleAt = -1;
     this.flawless = true;
+    // The file's own counters survive a stage change and only a stage
+    // change: a fresh file, a retry, or a jump elsewhere all start clean.
+    const key = level.fileKey ?? level.id;
+    if (key !== this.fileKey) {
+      this.fileKey = key;
+      this.fileFlawless = true;
+      this.fileHadChoice = false;
+    }
+    if ((level.showBins ?? level.tempers).length > 1) this.fileHadChoice = true;
     this.lensHoldUntil = -1;
     this.reticle.scale = 1;
     this.lastTouchAt = -1e9;
@@ -733,6 +769,22 @@ export class GameEngine {
    */
   get perfect(): boolean {
     return this.flawless;
+  }
+
+  /** Whether this whole file has been refined without a rejected drop. */
+  get filePerfect(): boolean {
+    return this.fileFlawless;
+  }
+
+  /**
+   * Whether a clean run of this file means anything.
+   *
+   * A file that never put a second bin on the deck cannot be mis-binned,
+   * so finishing it without an error is arithmetic rather than precision.
+   * True if *any* stage offered a choice.
+   */
+  get fileCounts(): boolean {
+    return this.fileHadChoice;
   }
 
   nextLevel(): void {
@@ -1018,7 +1070,9 @@ export class GameEngine {
     // the hand.
     const base = kind === "probe" ? RETICLE_OFFSET_Y : MARQUEE_OFFSET_Y;
     const taperEnd = l.grid.y + l.grid.h;
-    const band = Math.max(l.deckH, Math.abs(base) + 16);
+    // The taper band was the control deck's height, which was a proxy for
+    // "about a thumb". The deck is gone; the number it stood for is not.
+    const band = Math.max(Math.round(l.h * 0.086), Math.abs(base) + 16);
     const taperStart = taperEnd - band;
     let offset = base;
     if (y >= taperEnd) {
@@ -1296,7 +1350,21 @@ export class GameEngine {
       // A tap is the mode-toggle gesture, not a zero-area selection: without
       // this, double-tapping back to PROBE resolves an empty marquee twice
       // and buzzes at you on the way out.
-      if (!isTap) this.resolveMarquee();
+      if (!isTap) {
+        this.resolveMarquee();
+        // A box that caught nothing hands the board back to the probe.
+        //
+        // There is no SELECT switch on screen any more: the mode is
+        // decided by what the refiner does — study a cluster and the box
+        // arms itself, bin a packet and it disarms. A failed box was the
+        // one path that left them stranded in a mode with no visible way
+        // out of it, drawing empty rectangles on a board that wanted to
+        // be probed.
+        if (!this.packet && this.mode === "select" && !this.tapToSelect) {
+          this.mode = "probe";
+          this.snapshotDirty = true;
+        }
+      }
     } else if (g.kind === "carry" && this.packet) {
       this.resolveDrop({ x: this.packet.x, y: this.packet.y });
     } else if (g.kind === "probe") {
@@ -1824,6 +1892,7 @@ export class GameEngine {
       bin.lastHitAt = this.elapsed;
       bin.lastHitOk = false;
       this.flawless = false;
+      this.fileFlawless = false;
       this.scatterBack(cluster, packet);
       getAudio().buzz();
       haptics.reject();
@@ -1880,6 +1949,7 @@ export class GameEngine {
       bin.lastHitAt = this.elapsed;
       bin.lastHitOk = false;
       this.flawless = false;
+      this.fileFlawless = false;
       this.scatterBack(cluster, packet);
       getAudio().buzz();
       haptics.reject();
