@@ -41,8 +41,27 @@ export interface RewardDef {
    * with it, so a force quit cannot reroll them.
    */
   readonly kind: "object" | "fact" | "session" | "experience";
+  /**
+   * A department event rather than a thing you take back to your desk.
+   *
+   * Separate from `kind` on purpose: `kind` says how the card is *drawn*
+   * (and `experience` in particular means "this one takes the floor"),
+   * while this says which section of the record it is shelved under. The
+   * waffle parties are events that present as a plate; the dance
+   * experience is an event that presents as a dance floor.
+   */
+  readonly event?: true;
   /** Shown for the first time at the reveal, and never before it. */
   readonly name: string;
+  /**
+   * The headline the card carries once the seal is open.
+   *
+   * Written out per reward rather than assembled from the name, because
+   * English articles do not survive being generated: "a eraser", "a facts
+   * about your outie". Second person, past tense, and it is the first
+   * moment the refiner is told what they have.
+   */
+  readonly earned: string;
   /**
    * One line of Lumon underneath. Deadpan, administratively calm, and
    * never explaining the joke it is making.
@@ -63,66 +82,80 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
   R01: {
     kind: "object",
     name: "STANDARD REFINER ERASER",
+    earned: "YOU HAVE BEEN ISSUED AN ERASER",
     line: "Issued at ten percent, as the handbook provides. There is nothing on this terminal for you to erase.",
     poster: asset("r01_eraser.webp"),
   },
   R02: {
     kind: "object",
     name: "FINGER TRAP",
+    earned: "YOU HAVE BEEN ISSUED A FINGER TRAP",
     line: "A gift of woven paper. Insert one finger per end. Lumon accepts no responsibility for the consequence.",
     poster: asset("r02_finger_trap.webp"),
   },
   R03: {
     kind: "fact",
     name: "A FACT ABOUT YOUR OUTIE",
+    earned: "WELLNESS HAS A FACT ABOUT YOUR OUTIE",
     line: "Wellness has prepared a statement concerning the person you are outside. It is not a matter for discussion.",
     poster: asset("r03_outie_fact_card.webp"),
   },
   R05: {
     kind: "object",
     name: "MELON BAR",
-    line: "The melon has been cubed to a tolerance of two millimetres. Please enjoy each cube equally.",
+    earned: "YOU HAVE BEEN AWARDED A MELON BAR",
+    line: "The melon has been cubed to a tolerance of two millimeters. Please enjoy each cube equally.",
     poster: asset("r05_melon_bar.webp"),
   },
   R06: {
     kind: "session",
     name: "WELLNESS SESSION",
+    earned: "YOU ARE OWED A WELLNESS SESSION",
     line: "You are invited to sit while several facts about your outie are read to you. Please do not attempt to reciprocate.",
     poster: asset("r06_wellness_session.webp"),
   },
   R07: {
     kind: "experience",
+    event: true,
     name: "MUSIC DANCE EXPERIENCE",
+    earned: "A MUSIC DANCE EXPERIENCE IS YOURS",
     line: "One sanctioned minute of music. The floor is yours, and then it is not.",
     poster: asset("r07_mde_office_scene.webp"),
   },
   R08: {
     kind: "object",
     name: "CRYSTAL PORTRAIT",
+    earned: "YOU HAVE BEEN AWARDED A CRYSTAL PORTRAIT",
     line: "Your likeness has been approximated and sealed in glass. It is not a window.",
     poster: asset("r08_crystal_portrait_gift.webp"),
   },
   R12: {
     kind: "object",
     name: "EGG BAR",
+    earned: "YOU HAVE BEEN AWARDED AN EGG BAR",
     line: "Eggs have been prepared in the manner the founder preferred. The manner is not recorded.",
     poster: asset("r12_egg_bar.webp"),
   },
   R13: {
     kind: "object",
     name: "REMEMBRANCE MELON",
+    earned: "YOU HAVE BEEN GIVEN A REMEMBRANCE MELON",
     line: "Carved in memory of a refiner from this branch. You have not met them, and the archive does not say when they left.",
     poster: asset("r13_watermelon_remembrance.webp"),
   },
   R19: {
     kind: "object",
+    event: true,
     name: "WAFFLE PARTY",
+    earned: "A WAFFLE PARTY HAS BEEN LAID FOR YOU",
     line: "A meal has been laid in the founder's own room, for you alone. The room is not usually opened.",
     poster: asset("r19_waffle_party_i.webp"),
   },
   R22: {
     kind: "object",
+    event: true,
     name: "WAFFLE PARTY · SECOND TIER",
+    earned: "YOUR WAFFLE PARTY HAS A SECOND TIER",
     line: "The table is set again, and a mask has been placed beside the plate. Lumon thanks you for your continued refinement.",
     poster: asset("r22_waffle_party_ii.webp"),
   },

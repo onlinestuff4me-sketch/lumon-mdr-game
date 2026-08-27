@@ -84,7 +84,7 @@ The full deck, one group per temper, still all visible, still no clock.
 
 | Lever | Default | What it does |
 |---|---|---|
-| `stage1.focus` | `centre` → `mid` → `edge` | Screens 1–4 put their group in the middle of the board, where it cannot be missed; 5–12 push it halfway out; 13–21 put it near the edges, so finding it becomes part of the task before the probe ever arrives. Implemented by ranking the board generator's *candidate cells*, not by moving a finished cluster, so spacing, size and no-shared-cells all still hold. Measured mean offset from centre: **0.08 → 0.47 → 0.84** on a 0–1 scale. |
+| `stage1.focus` | `center` → `mid` → `edge` | Screens 1–4 put their group in the middle of the board, where it cannot be missed; 5–12 push it halfway out; 13–21 put it near the edges, so finding it becomes part of the task before the probe ever arrives. Implemented by ranking the board generator's *candidate cells*, not by moving a finished cluster, so spacing, size and no-shared-cells all still hold. Measured mean offset from center: **0.08 → 0.47 → 0.84** on a 0–1 scale. |
 
 ### Rules that apply to all of Part 1
 
@@ -142,7 +142,7 @@ The next reveal fires at `max(lastRevealEnd + hiddenWaitS, lastTap + tapCooldown
 ### The handover
 
 The player's instinct after Part 1 is to tap the moving digits and box
-them. Here that instinct is honoured and then redirected:
+them. Here that instinct is honored and then redirected:
 
 | Lever | Default | What it does |
 |---|---|---|
@@ -174,7 +174,7 @@ world.**
 
 Each teaching file is untimed or generous, carries one or two tempers, and
 does nothing except demonstrate its rule. They carry ordinary place names
-rather than being labelled TEACH: Lumon does not annotate its own files.
+rather than being labeled TEACH: Lumon does not annotate its own files.
 
 | # | File | Clock | What it is |
 |---|---|---|---|
@@ -212,7 +212,7 @@ explains it. It has no coach line, no handbook entry, and no teaching file.
 It costs a scatter to try and nothing to leave alone, so a player who never
 works it out loses nothing but the secret.
 
-Its only acknowledgement is a fourteenth row in the handbook archive with
+Its only acknowledgment is a fourteenth row in the handbook archive with
 **no file code**, which stays SEALED forever. Probing it once changes its
 name from redacted blocks to `05 · ████████` and its status to
 **UNRESOLVED**.

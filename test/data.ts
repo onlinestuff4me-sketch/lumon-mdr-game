@@ -118,20 +118,20 @@ console.log(`\n── placement gradient ${"─".repeat(38)}`);
   }
   const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
   // Rung boundaries from the ramp table itself, grouped by focus band.
-  const bands: Record<string, number[]> = { centre: [], mid: [], edge: [] };
+  const bands: Record<string, number[]> = { center: [], mid: [], edge: [] };
   {
     let i = 0;
-    const FOCUS = ["centre", "centre", "mid", "mid", "edge", "edge"];
+    const FOCUS = ["center", "center", "mid", "mid", "edge", "edge"];
     ORIENT_STAGES.forEach((st, sIdx) => {
       for (let k = 0; k < st.screens; k++) bands[FOCUS[sIdx]].push(rs[i++]);
     });
   }
-  const centre = mean(bands.centre), mid = mean(bands.mid), edge = mean(bands.edge);
-  console.log(`  centre ${centre.toFixed(2)}   mid ${mid.toFixed(2)}   edge ${edge.toFixed(2)}`);
-  if (!(centre < mid && mid < edge)) fail("groups do not move outwards across orientation");
-  if (centre > 0.3) fail(`the first screens are not central enough (${centre.toFixed(2)})`);
+  const center = mean(bands.center), mid = mean(bands.mid), edge = mean(bands.edge);
+  console.log(`  center ${center.toFixed(2)}   mid ${mid.toFixed(2)}   edge ${edge.toFixed(2)}`);
+  if (!(center < mid && mid < edge)) fail("groups do not move outwards across orientation");
+  if (center > 0.3) fail(`the first screens are not central enough (${center.toFixed(2)})`);
   if (edge < 0.6) fail(`the last screens are not peripheral enough (${edge.toFixed(2)})`);
-  ok("groups start centred and work outwards");
+  ok("groups start centerd and work outwards");
 }
 
 console.log(`\n── the shape of the queue ${"─".repeat(34)}`);
@@ -401,13 +401,17 @@ console.log(`\n── reward media ${"─".repeat(45)}`);
 {
   let files = 0;
   for (const [id, def] of Object.entries(CATALOG)) {
-    for (const [kind, url] of Object.entries(def)) {
-      if (kind === "name" || kind === "line" || kind === "kind") continue;
+    // Named explicitly rather than "every field that is not one of these":
+    // the blocklist silently turned every new prose field into a filename
+    // the moment one was added, and reported the copy as a missing asset.
+    for (const [kind, url] of [["poster", def.poster] as const]) {
       const path = `public/${String(url).replace(/^\.?\//, "")}`;
       files++;
       if (!existsSync(path)) fail(`${id}: ${kind} is missing — ${path}`);
     }
-    if (!def.name || !def.line) fail(`${id}: a reward needs a name and a line`);
+    if (!def.name || !def.line || !def.earned) {
+      fail(`${id}: a reward needs a name, a line and an earned headline`);
+    }
   }
   // Posters only, deliberately: the celebration clips are held back, and
   // the encoder that brings them back lives in tools/. A stray .mp4 in the
@@ -427,7 +431,7 @@ console.log(`\n── reward media ${"─".repeat(45)}`);
 }
 
 // ── the fact bank ────────────────────────────────────────────────────
-// The rules here are the fact bank's own: two labelled pools kept apart,
+// The rules here are the fact bank's own: two labeled pools kept apart,
 // one sentence used for card, caption and voice alike, a mature entry that
 // nothing selects while there is no setting to allow it, and a draw that
 // is decided once and cannot be rerolled by closing the app.
@@ -451,7 +455,7 @@ console.log(`\n── outie facts ${"─".repeat(46)}`);
   // Doctrine is game-written by definition: a temper line presented as
   // something the show said would be exactly the merge the audit forbids.
   for (const f of doctrine) {
-    if (f.label !== "ORIGINAL_APOCRYPHA") fail(`${f.id} is doctrine but labelled canon`);
+    if (f.label !== "ORIGINAL_APOCRYPHA") fail(`${f.id} is doctrine but labeled canon`);
   }
   if (doctrine.length !== 4) fail(`${doctrine.length} doctrine cards, not one per temper`);
   ok(`${canon.length} show-derived and ${original.length} original facts, plus ${doctrine.length} doctrine lines`);

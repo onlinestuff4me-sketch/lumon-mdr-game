@@ -94,7 +94,7 @@ export const TEMPER_DEFS: Record<Temper, TemperDef> = {
   },
 };
 
-/** Idle phosphor colour for inert digits. */
+/** Idle phosphor color for inert digits. */
 export const IDLE_RGB: readonly [number, number, number] = [47, 214, 138];
 
 /**
@@ -179,9 +179,9 @@ export const ORIENT_STAGES: readonly OrientStage[] = [
   { screens: 1, tempers: 4, groupsPerTemper: 1, bins: 4 },
 ];
 
-/** Focus and subtlety per rung: groups start centred and loud, and edge
+/** Focus and subtlety per rung: groups start centerd and loud, and edge
  *  outwards and quieten as the ladder climbs. */
-const OR_FOCUS = ["centre", "centre", "mid", "mid", "edge", "edge"] as const;
+const OR_FOCUS = ["center", "center", "mid", "mid", "edge", "edge"] as const;
 
 function orientationScreens(): LevelDef[] {
   const out: LevelDef[] = [];
@@ -397,7 +397,7 @@ export const LEVELS: readonly LevelDef[] = [
     fileCode: "0901",
     tempers: ["WO", "FC"],
     spacing: 4,
-    lore: "Sorrow and delight are neighbours on the wheel. Refiners who confuse them are reassigned, kindly.",
+    lore: "Sorrow and delight are neighbors on the wheel. Refiners who confuse them are reassigned, kindly.",
     seconds: 150,
     seed: 0x6e33,
     quota: 2,
@@ -436,7 +436,7 @@ export const LEVELS: readonly LevelDef[] = [
     fileCode: "1203",
     tempers: ["FC", "MA"],
     spacing: 4,
-    lore: "The numbers were people once. That is a rumour, and rumours are a form of frolic.",
+    lore: "The numbers were people once. That is a rumor, and rumors are a form of frolic.",
     seconds: 140,
     seed: 0x9b64,
     quota: 2,

@@ -47,7 +47,7 @@ section("gesture lifecycle");
     ["zero-length drag", async () => drag(page, origin, { x: 40, y: 300 }, { x: 41, y: 301 })],
     ["box containing nothing", async () => drag(page, origin, { x: 20, y: 250 }, { x: 60, y: 290 })],
     ["drag off the top edge", async () => drag(page, origin, g.ctr, { x: g.ctr.x, y: -40 })],
-    ["cancelled pointer", async () => {
+    ["canceled pointer", async () => {
       await page.mouse.move(origin.x + g.ctr.x, origin.y + g.ctr.y);
       await page.mouse.down();
       await page.waitForTimeout(80);
@@ -447,7 +447,7 @@ section("reticle and hint");
       still: e.packet !== null,
     };
   });
-  check("touching the box recentres it under the thumb", grab.offBy <= 2,
+  check("touching the box recenters it under the thumb", grab.offBy <= 2,
     `${grab.offBy}px from the carry reticle`);
   check("and it does not slip again while dragging", grab.drift <= 2,
     `${grab.drift}px unexplained`);
@@ -591,7 +591,7 @@ section("taps land where the finger is");
     await load(page, level);
     if (!(await findGroup(page))) continue;
     // Nine points across the group's own footprint, corners included, plus
-    // the exact centre of its topmost digit — the point that was dead.
+    // the exact center of its topmost digit — the point that was dead.
     // Read off the LIVE footprint each time: these groups drift, and a
     // thumb aims at where the digits are now, which is the whole point.
     const frac = [];
@@ -945,8 +945,8 @@ section("ambient temper");
 // ═══ 9. the bin catches what is brought near it ══════════════════════
 section("bin catch");
 {
-  // The packet's centre is what is tested, and the box is a hundred pixels
-  // wide — demanding the centre fully inside the bin meant drops released
+  // The packet's center is what is tested, and the box is a hundred pixels
+  // wide — demanding the center fully inside the bin meant drops released
   // at its top edge fell back into the hand.
   const dropAt = async (dy) => {
     await load(page, 0);
@@ -961,7 +961,7 @@ section("bin catch");
       const b = e.packetBounds(e.packet);
       e.pointerDown(1, b.x + b.w / 2, b.y + b.h / 2);
       e.pointerMove(1, x, y + 40);
-      // Land the packet centre itself at the probe point: the drop tests
+      // Land the packet center itself at the probe point: the drop tests
       // where the box is, not where the finger is.
       const want = { x, y };
       const cur = { x: e.packet.x, y: e.packet.y };
@@ -1105,7 +1105,11 @@ section("incentives");
   await settled(page);
   await page.waitForTimeout(120);
 
-  check("finishing the first screen seals an incentive", (await seen("INCENTIVE EARNED")) === 1);
+  check("refining the first file seals an incentive",
+    (await seen("AN INCENTIVE HAS BEEN EARNED")) === 1);
+  // The cause may be stated; the effect may not.
+  check("and says why it was issued",
+    (await seen("REFINEMENT MILESTONE \u00b7 1 FILE REFINED")) === 1);
   check("and says nothing about what it is", (await seen("FINGER TRAP")) === 0);
   eq("nothing is owed unclaimed in storage yet", (await ledger()).rewardState.S01, "earned_pending");
 
@@ -1121,7 +1125,8 @@ section("incentives");
   check("tapping it reveals name and picture together", (await seen("FINGER TRAP")) === 1);
   check("with its plate on screen",
     (await page.locator('img[alt="FINGER TRAP"]').count()) === 1);
-  check("and the control now files it", (await action().innerText()).includes("FILE"));
+  check("and the control now keeps it",
+    (await action().innerText()).includes("KEEP INCENTIVE"));
 
   await action().click();
   await page.waitForTimeout(900);
@@ -1131,11 +1136,11 @@ section("incentives");
   // Where it went. The card flies into the incentive record and the
   // record stays on screen, holding the board, until it is dismissed —
   // this is the only moment a refiner is taught where their things live.
-  check("filing lands on the record, not back on the board",
+  check("keeping lands on the summary, not back on the board",
     (await landing().count()) === 1);
-  check("which names what was just filed", (await seen("FINGER TRAP")) === 1);
-  check("shows the record it went into",
-    (await page.locator("[data-incentive-record]").count()) === 1);
+  check("which names what was just kept", (await seen("FINGER TRAP")) === 1);
+  check("counts it against its category", (await seen("ISSUED ITEMS")) === 1);
+  check("with the category's real denominator", (await seen("1 OF 10")) === 1);
   check("says what the next incentive costs", (await seen("NEXT INCENTIVE")) === 1);
   check("without saying what it is", (await seen("CLASSIFIED")) === 1);
   await page.waitForTimeout(700);
@@ -1159,19 +1164,24 @@ section("incentives");
   await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
   await finish(1);
 
-  check("a screen that crosses two thresholds says so up front",
+  check("a file that crosses two thresholds says so up front",
     (await seen("2 INCENTIVES EARNED")) === 1);
-  check("and offers to accept them together",
-    (await action().innerText()).includes("ACCEPT ALL 2"));
+  check("behind one seal, opened once",
+    (await action().innerText()).includes("OPEN"));
   await action().click();
   await page.waitForTimeout(300);
-  check("the first is the screen-lane reward", (await seen("STANDARD REFINER ERASER")) === 1);
+  check("the first is the file-lane incentive",
+    (await seen("YOU HAVE BEEN ISSUED AN ERASER")) === 1);
   check("and the second is not on screen with it", (await seen("MELON BAR")) === 0);
+  check("whose control promises the next one",
+    (await action().innerText()).includes("SEE NEXT INCENTIVE"));
   check("numbered within the stack", (await seen("INCENTIVE 1 OF 2")) === 1);
 
   await action().click();
   await page.waitForTimeout(400);
   check("accepting the first brings up the second", (await seen("INCENTIVE 2 OF 2")) === 1);
+  check("and the last of a stack keeps them all",
+    (await action().innerText()).includes("KEEP INCENTIVES"));
   check("with no second seal to open", (await seen("INCENTIVES EARNED")) === 0);
   const mid = await ledger();
   eq("the first is claimed", mid.rewardState.S02, "claimed");
@@ -1184,7 +1194,7 @@ section("incentives");
   eq("with nothing left in the queue", done.rewardQueue.length, 0);
   check("a stack lands on one record screen, not two",
     (await landing().count()) === 1);
-  check("and it counts them as two filed", (await seen("2 INCENTIVES FILED")) === 1);
+  check("and it counts them as two kept", (await seen("2 INCENTIVES KEPT")) === 1);
   await resume();
 
   // ── an object already held is filed, not shown again ─────────────
@@ -1231,9 +1241,48 @@ section("incentives");
   check("a second issue of an object is never the card that was shown",
     refiled.lastShownRewardId !== "R02", String(refiled.lastShownRewardId));
   eq("but it is claimed all the same", refiled.rewardState.P03, "claimed");
-  check("and the record says it was filed", (await seen("ISSUED AGAIN")) >= 1);
-  check("and the record can be opened from the file screen",
-    (await page.locator("[data-incentive-record]").count()) === 1);
+  check("and the record says it was kept again", (await seen("ISSUED AGAIN")) >= 1);
+  check("and the record can be opened from the end-of-file panel",
+    (await page.locator('[data-record-box="panel"]').count()) === 1);
+  check("and from the header, at every moment of the game",
+    (await page.locator('[data-record-box="hud"]').count()) === 1);
+
+  // ── the full record: categories, counts, and concealed slots ─────
+  await seed({
+    version: 1, screensCompleted: 14, binsTotal: 42,
+    binsByTemper: { WO: 20, FC: 10, DR: 7, MA: 5 },
+    creditedLevelIds: [], perfectScreensTotal: 3, perfectScreenStreak: 1,
+    rewardState: {
+      S01: "claimed", S02: "claimed", S03: "claimed", S05: "claimed",
+      S09: "claimed", B010: "claimed", P01: "claimed",
+    },
+    rewardQueue: [], seenFactIds: ["OF_CANON_011"],
+    factsByRung: { S03: ["OF_CANON_011"] },
+    inspectCounts: {}, lastShownRewardId: null,
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  await load(page, 14);
+  await page.waitForTimeout(300);
+
+  // The strip is a live control over a live board — it sits above the
+  // input surface, and the header around it stays transparent to pointers
+  // so a packet dragged to the top edge can still be picked back up.
+  await page.locator('[data-record-box="hud"]').click({ timeout: 5000 });
+  await page.waitForTimeout(600);
+  check("the header strip opens the full record",
+    (await seen("INCENTIVES RECORD")) >= 1);
+  for (const label of ["ISSUED ITEMS", "OUTIE FACTS", "WELLNESS SESSIONS", "DEPARTMENT EVENTS"]) {
+    check(`  ${label} has a section of its own`, (await seen(label)) >= 1);
+  }
+  check("earned entries are named", (await seen("FINGER TRAP")) >= 1);
+  check("and the ones still to come are not",
+    (await seen("CLASSIFIED")) >= 1 && (await seen("NOT YET ISSUED")) >= 1);
+  // The record admits how many are left. It never admits what they are.
+  check("no unearned name leaks into the record",
+    (await seen("WAFFLE PARTY")) === 0 && (await seen("EGG BAR")) === 0);
+  await page.locator('[aria-label="Close handbook"]').click();
+  await page.waitForTimeout(400);
 
   // ── a reload during the ceremony keeps the reward ────────────────
   await seed({

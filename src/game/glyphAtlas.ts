@@ -6,7 +6,7 @@ export type PaletteKey = Temper | "idle" | "stir" | "hot";
 const PALETTES: Record<PaletteKey, readonly [number, number, number]> = {
   idle: IDLE_RGB,
   // Neutral "something is happening here" phosphor. Deliberately not any
-  // temper's hue: the refiner reads the *motion*, not a colour key.
+  // temper's hue: the refiner reads the *motion*, not a color key.
   stir: [214, 255, 236],
   WO: TEMPER_DEFS.WO.rgb,
   FC: TEMPER_DEFS.FC.rgb,
@@ -91,7 +91,7 @@ export class GlyphAtlas {
     return c;
   }
 
-  /** Blit one glyph centred on (x, y) in CSS px. */
+  /** Blit one glyph centerd on (x, y) in CSS px. */
   draw(
     ctx: CanvasRenderingContext2D,
     key: PaletteKey,

@@ -12,9 +12,9 @@
  * energy, and a miss costs a multiplier and nothing else. The reward has
  * already been earned; this is what earning it bought.
  *
- * Two channels carry temper, never one. Colour is on for everyone during
+ * Two channels carry temper, never one. Color is on for everyone during
  * the dance — including refiners who play with the assist off, for whom
- * the floor bursting into colour *is* the celebration — and every lit
+ * the floor bursting into color *is* the celebration — and every lit
  * cluster also moves in its own temper's language, the same displacement
  * functions the rest of the game teaches.
  *
@@ -65,7 +65,7 @@ export interface Genre {
  *
  * `DEFIANT JAZZ` is the one name the episode establishes beyond doubt —
  * it is what the episode is called. The rest are written for this branch
- * in the same register and labelled as such. Any further show name goes in
+ * in the same register and labeled as such. Any further show name goes in
  * here only with a frame check behind it: a misremembered reference is a
  * grin that curdles.
  */
@@ -163,14 +163,14 @@ export class MdeSession {
       n.hx = (n.col + 0.5) * cw;
       n.hy = (n.row + 0.5) * ch;
     }
-    for (const c of this.clusters) this.recentre(c);
+    for (const c of this.clusters) this.recenter(c);
   }
 
   private cell() {
     return { cw: this.width / MDE_COLS, ch: this.height / MDE_ROWS };
   }
 
-  private recentre(c: MdeCluster): void {
+  private recenter(c: MdeCluster): void {
     let x = 0;
     let y = 0;
     for (const i of c.members) {
@@ -284,7 +284,7 @@ export class MdeSession {
       };
       for (const i of members) this.nodes[i].cluster = cluster.id;
       this.clusters.push(cluster);
-      this.recentre(cluster);
+      this.recenter(cluster);
       return;
     }
   }
@@ -295,7 +295,7 @@ export class MdeSession {
    * Light a new set.
    *
    * One temper always gets at least three lit, chosen in rotation so the
-   * floor works through all four rather than favouring one. A couple of
+   * floor works through all four rather than favoring one. A couple of
    * others light as company — they are connectable too, and mixing them
    * into a chain is what the release window is for.
    */

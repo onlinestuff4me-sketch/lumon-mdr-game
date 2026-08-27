@@ -234,7 +234,7 @@ export function HandbookModal({
               Incentives are awarded on schedule. The schedule is not yours
               to know beyond its next entry.
             </p>
-            <IncentiveForecast progress={progress} variant="handbook" />
+            <IncentiveForecast progress={progress} />
             <p className="mt-2 text-[9px] leading-snug text-phos-600">
               {progress.binsTotal} groups refined ·{" "}
               {progress.perfectScreensTotal} screens without error
@@ -352,8 +352,8 @@ export function HandbookModal({
           <Toggle
             on={assist}
             onChange={onAssist}
-            label="COLOUR ASSIST"
-            hint="Tint agitated clusters with their temper's colour. Kier considers this a crutch."
+            label="COLOR ASSIST"
+            hint="Tint agitated clusters with their temper's color. Kier considers this a crutch."
           />
         </div>
 

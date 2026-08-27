@@ -33,7 +33,7 @@ export interface GridNode {
   readonly idx: number;
   readonly col: number;
   readonly row: number;
-  /** Home position in board space (px), centre of the glyph. */
+  /** Home position in board space (px), center of the glyph. */
   hx: number;
   hy: number;
   digit: number;
@@ -102,14 +102,14 @@ export interface Packet {
   temper: Temper;
   clusterId: number;
   digits: number[];
-  /** Screen-space centre of the packet while carried. */
+  /** Screen-space center of the packet while carried. */
   x: number;
   y: number;
   /** 0..1 lift-off bloom progress. */
   birth: number;
   /**
    * Where each digit was sitting when the group was lifted, as an offset
-   * from the packet centre. The gather animation flies the digits in from
+   * from the packet center. The gather animation flies the digits in from
    * these points, so the box is seen to be assembled out of the numbers
    * that were on the grid rather than to replace them. Stored as offsets,
    * not absolute points, so a press-and-drag lift keeps the digits with
@@ -212,13 +212,13 @@ export interface LevelDef {
   readonly training?: boolean;
   /** Where on the board groups prefer to sit. The first orientation screens
    *  put their group in the middle, where it cannot be missed; later ones
-   *  push it out towards the edges, where it has to be looked for. */
-  readonly focus?: "centre" | "mid" | "edge";
+   *  push it out toward the edges, where it has to be looked for. */
+  readonly focus?: "center" | "mid" | "edge";
   /** A tap anywhere on a group lifts the whole thing, no box required.
    *  Drag-to-box is not a discoverable gesture on its own, and the
    *  orientation screens exist to teach rather than to gate. */
   readonly tapToSelect?: boolean;
-  /** Show faint arrows from a held packet towards the bin, after a pause.
+  /** Show faint arrows from a held packet toward the bin, after a pause.
    *  Only ever set where a single bin is on the deck, so it gives nothing
    *  away — and only after the player has hesitated, so anyone who already
    *  knows the gesture never sees it. */

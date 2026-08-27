@@ -191,7 +191,7 @@ const STALE_GESTURE_MS = 4000;
 /**
  * The bin catch zone: how far outside a bin's drawn rectangle a dropped
  * packet still lands in it. Above is the generous side — every drop
- * arrives from above, and the packet frame is tall enough that its centre
+ * arrives from above, and the packet frame is tall enough that its center
  * sits well over the thumb — so a box brought down to touch a bin's top
  * edge should already count as delivered.
  */
@@ -386,7 +386,7 @@ export class GameEngine {
   private pausedSilenced = false;
   muted = false;
   hapticsOn = true;
-  /** Accessibility aid: paint agitated clusters in their temper colour. */
+  /** Accessibility aid: paint agitated clusters in their temper color. */
   assist = false;
   /** Shift length. See PACE — the brief's 90-120s is `standard`. */
   pace: Pace = "extended";
@@ -617,7 +617,7 @@ export class GameEngine {
     // quota to what actually exists so a file is always completable.
     const counts: Record<Temper, number> = { WO: 0, FC: 0, DR: 0, MA: 0 };
     // Decoys and the fifth temper occupy the board but fill no bin, so they
-    // must never count towards a temper having enough clusters.
+    // must never count toward a temper having enough clusters.
     const tally = () => {
       for (const t of TEMPERS) counts[t] = 0;
       for (const c of this.board.clusters) {
@@ -920,7 +920,7 @@ export class GameEngine {
     const nextDpr = Math.min(dpr || 1, 2.5);
     // iOS fires visualViewport scroll whenever the URL bar settles, which
     // is routinely just after a touch. Without this guard every such event
-    // ran a full relayout and cancelled any dissolve or scatter in flight,
+    // ran a full relayout and canceled any dissolve or scatter in flight,
     // for a viewport change that never happened.
     //
     // `sized` is what stops the constructor's placeholder layout from
@@ -1151,7 +1151,7 @@ export class GameEngine {
         : "probe";
 
     // ── a held packet decides what this touch is ──────────────────────
-    let recentre = false;
+    let recenter = false;
     if (this.packet) {
       const b = this.packetBounds(this.packet);
       const m = PACKET_TOUCH_PAD;
@@ -1160,7 +1160,7 @@ export class GameEngine {
       if (onBox) {
         // Touching the box does not put it down. It takes hold of it
         // again, squarely, and waits to be dragged.
-        recentre = true;
+        recenter = true;
       } else if (!this.binAt(x, y)) {
         // Touching anywhere else on the board lets the numbers go. They
         // fly back to the cells they came from and can be taken again.
@@ -1188,7 +1188,7 @@ export class GameEngine {
       latchedDuring: -1,
       startAgitation: start?.cluster.agitation ?? 0,
       startCluster: start && start.dist <= TAP_PAD ? start.cluster.id : -1,
-      ...(recentre ? { grabX: 0, grabY: 0 } : this.grabOffset(r)),
+      ...(recenter ? { grabX: 0, grabY: 0 } : this.grabOffset(r)),
     };
 
     this.reticle.x = r.x;
@@ -1206,7 +1206,7 @@ export class GameEngine {
       // Only when the box was actually grabbed, or when the touch is over a
       // bin and is therefore a drop. Snapping it unconditionally moved the
       // box before the finger did — the leap this offset exists to prevent.
-      if (recentre || this.binAt(x, y)) {
+      if (recenter || this.binAt(x, y)) {
         this.packet.x = r.x;
         this.packet.y = r.y;
       }
@@ -1306,7 +1306,7 @@ export class GameEngine {
     // A tap on a group takes the whole group. Drag-to-box is not a
     // discoverable gesture on its own — playtesting found people tapping
     // the digits and nothing happening — so on the teaching screens the
-    // instinct is simply honoured. Tried before registerTap, since a
+    // instinct is simply honored. Tried before registerTap, since a
     // successful lift is not a mode toggle.
     //
     // It must NOT return early: everything below releases the gesture, and
@@ -1364,11 +1364,11 @@ export class GameEngine {
   pointerCancel(id: number): void {
     const g = this.gesture;
     if (!g || (id !== -1 && g.id !== id)) return;
-    // A cancelled gesture is still a finger that was on the board. Without
+    // A canceled gesture is still a finger that was on the board. Without
     // this the pulse's tap cooldown stays un-rearmed and a reveal can fire
     // straight into the touch that was just interrupted.
     this.lastTouchAt = this.elapsed;
-    // Cancelled mid-drag (system gesture, call, notch swipe): abandon the
+    // Canceled mid-drag (system gesture, call, notch swipe): abandon the
     // selection but never lose the packet — it stays carried.
     this.gesture = null;
     this.lensHoldUntil = -1;
@@ -1438,13 +1438,13 @@ export class GameEngine {
   /**
    * Which bin a drop at this point lands in.
    *
-   * Not a strict rectangle test. The packet's *centre* is what is tested,
-   * and the box is a hundred pixels wide — demanding the centre inside the
+   * Not a strict rectangle test. The packet's *center* is what is tested,
+   * and the box is a hundred pixels wide — demanding the center inside the
    * bin meant dragging the whole box fully over it, and drops released
    * just shy of the top edge fell back into the hand. Each bin has a
    * catch zone: generous above, where every drop arrives from, and a
    * little either side. Zones from adjacent bins can overlap in the gap
-   * between them, so the nearest bin centre wins rather than whichever
+   * between them, so the nearest bin center wins rather than whichever
    * was checked first.
    */
   private binAt(x: number, y: number): Temper | null {
@@ -1509,7 +1509,7 @@ export class GameEngine {
     }
 
     // Clusters are seeded a cell apart, but selection tests *live*
-    // positions and an agitated cluster can drift over its neighbour. A
+    // positions and an agitated cluster can drift over its neighbor. A
     // raw plurality vote therefore let a calm bystander with one more node
     // in the box hijack — and, worse, silently lift the wrong temper.
     // Weight the vote by agitation, and let the latched cluster win ties.
@@ -1581,7 +1581,7 @@ export class GameEngine {
    * jumps away from the thumb that is about to drag it. Holding the offset
    * means the packet simply follows the finger from wherever it already is.
    *
-   * Clamped, so pressing far from the packet pulls it towards the finger
+   * Clamped, so pressing far from the packet pulls it toward the finger
    * instead of dragging it from across the board.
    */
   private grabOffset(r: { x: number; y: number }): { grabX: number; grabY: number } {
@@ -1636,7 +1636,7 @@ export class GameEngine {
     // A point inside a group's footprint is on that group, however far the
     // nearest digit happens to be. Padded footprints overlap on the tight
     // files, and returning whichever happened to be first in map order sent
-    // a tap dead-centre on one group to its neighbour — often a decoy. The
+    // a tap dead-center on one group to its neighbor — often a decoy. The
     // group with the nearer digit wins.
     let hit: Cluster | null = null;
     let hitD = Infinity;
@@ -1719,7 +1719,7 @@ export class GameEngine {
     // The group's own state before the finger landed — not the state of
     // whichever group happened to be nearest when it did. On a dense board
     // those are different clusters, and an agitated group was being
-    // refused on a calm neighbour's reading.
+    // refused on a calm neighbor's reading.
     const wasAgitated = this.agitationAtDown[best.id] ?? best.agitation;
     if (best.decoy) {
       this.say("NO TEMPER DETECTED", "error", "attempt");
@@ -1953,7 +1953,7 @@ export class GameEngine {
   // ── simulation ──────────────────────────────────────────────────────
 
   private frame = (now: number): void => {
-    // Clear first: `stop()` must never be left cancelling an id that has
+    // Clear first: `stop()` must never be left canceling an id that has
     // already fired, and a re-entrant start/stop must not be able to leave
     // two loops running at once (which would halve dt and drain the shift
     // clock at double speed while looking perfectly smooth).
@@ -2058,7 +2058,7 @@ export class GameEngine {
     if (this.message && this.messageIsStale()) this.clearMessage();
 
     // Orientation offers its hint a second time, once, for a player who
-    // read the first line, did nothing, and watched it disappear. Cancelled
+    // read the first line, did nothing, and watched it disappear. Canceled
     // the moment anything is lifted, so it can never talk over a refiner
     // who has already understood.
     if (this.orientHintAt >= 0 && live) {

@@ -26,7 +26,14 @@ export interface StageLayout {
 
 /** Chrome heights as a fraction of stage height — the single source of
  *  truth shared by the DOM chrome and the canvas hit-testing. */
-export const HUD_FRAC = 0.078;
+export const HUD_FRAC = 0.112;
+/**
+ * The header carries three bands now — the file line, the refinement
+ * meter, and the incentives record — and the last of those must not be
+ * squeezed to a sliver on a short phone. Below about 800px of stage the
+ * fraction stops being enough, so it is floored.
+ */
+export const HUD_MIN = 92;
 /** Band under the HUD reserved for the coach line. Reserved permanently
  *  rather than only while a message shows, so the matrix never reflows and
  *  never sits underneath the text describing it. */
@@ -57,7 +64,7 @@ export function computeLayout(
   const cols = activeTempers.length > 2 ? 2 : activeTempers.length || 1;
   const rows = Math.ceil((activeTempers.length || 1) / cols);
 
-  const hudH = Math.round(h * HUD_FRAC);
+  const hudH = Math.max(HUD_MIN, Math.round(h * HUD_FRAC));
   const tickerH = Math.round(h * TICKER_FRAC);
   const deckH = Math.round(h * DECK_FRAC);
   const binsH = Math.round(h * (rows > 1 ? BINS_FRAC : BINS_FRAC_ONE_ROW));

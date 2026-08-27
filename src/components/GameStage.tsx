@@ -15,7 +15,7 @@ import { factById, type Fact } from "../game/facts";
 import { LADDER, rungById } from "../game/rewards";
 import { RewardReveal } from "./RewardReveal";
 import { RecordNotice } from "./RecordNotice";
-import { RecordLanding } from "./RecordLanding";
+import { IncentiveSummary } from "./IncentiveSummary";
 import { MdeStage } from "./MdeStage";
 import {
   loadRuns,
@@ -105,6 +105,8 @@ export function GameStage() {
     const queue: {
       rungId: string;
       rewardId: string;
+      /** The rung itself, for the line on the sealed card saying why. */
+      rung: NonNullable<ReturnType<typeof rungById>>;
       reward: NonNullable<ReturnType<typeof presentable>>;
       major: boolean;
       facts: Fact[];
@@ -130,6 +132,7 @@ export function GameStage() {
       queue.push({
         rungId: id,
         rewardId: rung.reward,
+        rung,
         reward,
         major: rung.size !== "minor",
         // Chosen and stored when the reward was earned; looked up here,
@@ -571,7 +574,13 @@ export function GameStage() {
         />
 
         <div className="relative flex h-full w-full flex-col">
-          <HUD hud={hud} height={layout.hudH} />
+          <HUD
+            hud={hud}
+            height={layout.hudH}
+            progress={progress}
+            onOpenRecord={() => openHandbook("shelf")}
+            recordLanding={acceptedHere > 0}
+          />
           {/* The coach line sits directly under the HUD, not above the
               control deck. At the bottom of the screen it was underneath
               the hand that was holding the phone — unreadable exactly while
@@ -709,11 +718,11 @@ export function GameStage() {
             // same card with different contents.
             key={owed[0].rungId}
             reward={owed[0].reward}
+            rung={owed[0].rung}
             facts={owed[0].facts}
             index={stackIndex}
             total={stackTotal}
             sealed={stackIndex === 1}
-            progress={progress}
             onAccept={() => {
               const id = owed[0].rungId;
               const rewardId = owed[0].rewardId;
@@ -734,10 +743,11 @@ export function GameStage() {
           />
         ) : null}
 
-        {/* After the last card, before the board comes back: where it
-            went, what is held, and what the next one costs. */}
+        {/* After the last card, before the board comes back: what was
+            kept, what it counts toward, and what earns the next one. It
+            stows itself into the header strip on the way out. */}
         {landing && !revealing ? (
-          <RecordLanding
+          <IncentiveSummary
             from={before.boundary === boundary ? before.progress : progress}
             to={progress}
             names={landing.names}

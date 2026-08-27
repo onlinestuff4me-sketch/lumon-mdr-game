@@ -8,9 +8,10 @@ import { ChevronRight } from "lucide-react";
  * walking toward has just moved further away, and they are owed both that
  * fact and the number that would earn it back.
  *
- * Most of orientation advances itself, so this cannot live on the file
- * panel — a screen that wipes 900ms after clearing would carry the notice
- * off with it. It takes its own beat and waits to be acknowledged.
+ * Most of orientation advances itself, so this cannot live on the
+ * end-of-file panel — a board that wipes 900ms after clearing would carry
+ * the notice off with it. It takes its own beat and waits to be
+ * acknowledged.
  *
  * The copy stays inside Lumon's vocabulary. The refiner has a *record*,
  * it was *unblemished*, and what it earns is a *commendation*: nothing
@@ -49,7 +50,7 @@ export function RecordNotice({ at, needs, onAcknowledge }: Props) {
         the next commendation may be issued.
       </p>
       <p className="mt-3 max-w-[262px] text-[9px] leading-relaxed text-phos-600">
-        No incentive already held has been withdrawn. Lumon does not take
+        No incentive already kept has been withdrawn. Lumon does not take
         things back.
       </p>
 

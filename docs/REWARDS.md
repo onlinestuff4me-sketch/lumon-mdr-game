@@ -39,6 +39,24 @@ a menu, and should be unable to answer "what is it?" until it opens.
 
 ---
 
+## Part 0b — The vocabulary this document uses
+
+Since the flow rework, three words are load-bearing and are defined in
+`src/game/lexicon.ts` rather than remembered:
+
+- **Incentive**, never "reward". Nothing a refiner reads says *reward*.
+  Lumon issues incentives. The code keeps `RewardId` and `rewards.ts`
+  because code is not read by refiners.
+- **File** is a level — a screen of data being refined — and nothing else.
+  It is not a verb for putting something away.
+- **Keep** is what a refiner does with an incentive. `KEEP INCENTIVE`,
+  `4 KEPT`, `ISSUED AGAIN · KEPT`.
+
+`docs/DESIGN_SYSTEM.md` Part 6 is the full reserved-word list, and the rest
+of the system it belongs to.
+
+---
+
 ## Part 1 — Definitions
 
 Every counter below means exactly one thing. These definitions are load-bearing;
@@ -63,7 +81,7 @@ screen 7 ends at 10 bins, screen 13 at 32, screen 20 at 53, screen 30 at 105.
 Two lanes are visible at launch. Two more are held back (Part 3) so a player
 learning to read a temper is never shown four counters at once.
 
-### Lane A — SCREENS COMPLETED
+### Lane A — FILES REFINED
 
 | Screen | File | Reward | Size | Source threshold |
 |---:|---|---|---|---|
@@ -177,19 +195,21 @@ and 8 are fact cards. Deferred until the four lanes above are shipped.
 
 **Where it lives.** The file-completion panel already shows 100%, a praise line
 and the declassified addendum. The forecast is one block beneath that, plus a
-mirrored view in the handbook under the archive. No new HUD furniture: nothing
-new competes with the number field during play.
+mirrored view in the handbook under the archive, and — since the flow
+rework — a permanent two-line strip in the header. That strip is the one
+piece of furniture the incentive system adds to the playing screen; it is
+deliberately dense and dim, and it is the only thing in the header that
+takes a tap.
 
 **What it says**, computed at runtime, never authored per reward:
 
 ```text
-NEXT INCENTIVE
-17 / 20 SCREENS REFINED
-Complete 3 more screens.
-INCENTIVE DETAILS: CLASSIFIED
+NEXT INCENTIVE                 CLASSIFIED
+REFINE 3 MORE FILES
+▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░  17/20
 ```
 
-**What it must never say:** the reward's name, image, silhouette, category, colour
+**What it must never say:** the reward's name, image, silhouette, category, color
 theme, rarity, file name, or any threshold beyond the next one in each lane. A
 compound reward shows both counters and the line `BOTH CONDITIONS REQUIRED`.
 
@@ -243,7 +263,7 @@ ever loading behind a celebration.
    Nothing on the card may move when this happens. Every band — the label,
    the title, the plate, the caption — is a fixed height, and the plate
    frame is a fixed 9:16 in both states, which is the aspect every poster
-   is authored at. A card that re-centres itself on the frame the picture
+   is authored at. A card that re-centers itself on the frame the picture
    arrives is a card that jitters at exactly the moment the refiner is
    looking hardest.
 4. **Celebration, 5–8 s** for an object; longer for the dance experience and
@@ -312,52 +332,74 @@ a running order, so they hold however the ladder is rearranged later.
 4. **An object already on the shelf is not shown again.** A second finger
    trap is still owed, still counted, and still appears on the shelf as
    `×2` — but a repeat of the same photograph is the game repeating
-   itself. It is filed instead, and the record block names it: `FINGER
-   TRAP ISSUED AGAIN · FILED`.
+   itself. It is kept without a card, and the end-of-file panel names it:
+   `FINGER TRAP ISSUED AGAIN · KEPT`.
 
 Rewards whose content changes every time — fact cards, Wellness sessions,
 the dance experience — are never repeats in this sense, because the
 sentence or the session is new even when the plate is not.
 
-### Where it goes: the incentive record
+### Where it goes: the incentives record
 
-An accepted incentive does not vanish. The last card of a boundary **flies
-into the incentive record** — a real block, drawn at a fixed anchor
-(`RECORD_DOCK`) and *measured on screen*, so the card is aimed at where the
-block actually is rather than at a plausible-looking offset:
-`INCENTIVE RECORD · 7 ITEMS HELD ›`, the next threshold underneath. While
-the card is in flight the block still reads the old count; it is the
-landing that ticks it up.
+An accepted incentive does not vanish, and the record it goes into is not
+a thing the refiner has to be told about. It is in the header, on every
+screen, for the whole game:
 
-That block is the one piece of permanent furniture the reward system adds.
-It sits at the foot of every completed file, it is tappable, and it opens
-the handbook *at the shelf* rather than at Section IV.
+```text
+INCENTIVES RECORD                        4 KEPT ›
+REFINE 1 MORE FILE   ▓▓▓▓▓▓░░░░░░░░░░      1/2
+```
 
-### The landing, which is where the teaching happens
+It is furniture. It is there before the first incentive exists, reading
+`NONE KEPT`, because furniture that materializes halfway through a session
+reads as a glitch rather than as a place. It sits above the input surface
+so it can be tapped over a live board, and the header around it is
+`pointer-events-none` so a packet dragged to the top edge stays grabbable.
 
-Filing is not a transition back to the board. It is its own screen, and it
-exists because three questions arrive at that exact moment and at no other:
+The same component draws the card on the end-of-file panel, which covers
+the header — one object, two shapes, so a refiner who learns one has
+learned both (`IncentiveRecordBox`).
+
+### The summary, which is where the teaching happens
+
+Keeping is not a transition back to the board. It is its own screen, and it
+exists because four questions arrive at that moment and at no other:
 
 | Question | What answers it |
 | --- | --- |
-| Where did that go? | The block the card flew into is still there, in the same place, unmoved. |
-| What do I have now? | The count ticks up under the refiner's eye rather than arriving already changed — which is why both the before and after ledgers are passed in. |
-| What do I do next? | The record carries the forecast: the nearest lane, its meter, and the one action that advances it. |
+| What did I just get? | Named. "An incentive" is not a thing anyone remembers owning; a finger trap is. |
+| What does that make in total? | Progress per category — ten issued items, ten outie facts, three wellness sessions, five department events — counted in payouts, ticking up under the refiner's eye. Which is why the screen takes both the ledger before the payout and the ledger after it. |
+| What do I do next? | One instruction, from the nearest lane, with its meter and its raw numbers. |
+| Where does this live now? | It shrinks into the header strip on the way out, and the scrim lifts as it goes so the strip is lit before the page arrives. |
 
-And one it answers for later: the block is live here, and it is the same
-block that sits at the foot of every file screen. A refiner who taps it
-here has learned where their things live.
+Only categories the refiner has opened an account in are listed. A row
+reading `0 OF 5 DEPARTMENT EVENTS` on the first file is a promise this
+screen has no business making; the full record is where the scale of what
+is left is admitted.
 
-The header on this screen is anchored *off the dock*, not off the top of
-the viewport — the block's position is fixed, and a header measured from
-the top overlaps it on any screen height it was not tuned against.
+There is deliberately no paragraph explaining any of this. An earlier
+version had one — *"Your record is held at this terminal and appears at the
+foot of every file"* — and it was both true and unnecessary, because the
+screen demonstrates it.
 
-This matters most on the thirteen orientation screens, which carry no
-ceremony and wipe 900 ms after clearing. Before the landing existed, an
+This matters most on the thirteen orientation files, which carry no
+ceremony and wipe 900 ms after clearing. Before the summary existed, an
 early incentive shrank into a block that appeared for half a second and
 left with the screen, on precisely the files where the ladder pays out
-hardest. The landing holds the board until it is dismissed, so those
-screens teach the record rather than flashing it.
+hardest.
+
+### The full record
+
+One tap from the strip, from the summary, or from the handbook. Four
+sections, one per category, each with its own meter; every payout kept is a
+named row, and every payout still to come is a row reading
+`CLASSIFIED · NOT YET ISSUED`.
+
+This is the only screen in the game that admits there is more coming. It
+says how *many* and never what they are — a concealed slot carries no name,
+no silhouette, no plate, and no hint of category beyond the section it sits
+in. That is the whole of the compromise: a refiner may know how far through
+they are, and may never know what is next.
 
 ### When a record closes
 
@@ -447,7 +489,7 @@ sheets. Three things that were invisible before:
   the celebration's main event.
 - **The office scene is right.** Empty MDR floor, four-workstation island,
   beige CRTs, green carpet, chrome cart with a record player, rainbow bands
-  travelling across the ceiling. No people, no likenesses.
+  traveling across the ceiling. No people, no likenesses.
 
 One canon flag, raised rather than acted on: **the watermelon remembrance
 clip and plate show a specific human face** — carved with the rind as hair
@@ -500,10 +542,10 @@ collapses into a phosphor bloom and fills one of three Dance Meter segments. Sam
 instruction, same feel, zero new gestures, and every touch target stays the size
 it already is.
 
-Second constraint: temper colour is off by default in this game — clusters are
+Second constraint: temper color is off by default in this game — clusters are
 read by motion, sound and haptics. The MDE must light clusters by **motion and
-brightness first**, with colour as the redundant channel it already is. The
-supplied MDE reference images assume colour is always on; they are behaviour
+brightness first**, with color as the redundant channel it already is. The
+supplied MDE reference images assume color is always on; they are behavior
 references, not a palette instruction.
 
 ### The genre menu
@@ -563,7 +605,7 @@ one may occupy a locked slot.
 | B4 — twelve-screen tutorial is thirteen screens here | Lane A maps to screens, so the shape follows the build; the source's screen 9–12 payload lands on 9–15 |
 | B5 — no counters exist | New store and migration rules (Part 6) |
 | B6 — the specs have no fail state | Bins credit on completion only; a failed or abandoned file credits nothing (Part 0) |
-| B7, B8 — MDE assumes always-on colour and per-digit taps | Cluster granularity, motion-first lighting (Part 8) |
+| B7, B8 — MDE assumes always-on color and per-digit taps | Cluster granularity, motion-first lighting (Part 8) |
 | B10 — the game ships no media files | Derivative pipeline, originals untouched (Part 7) |
 | D1 — the 60-bin fact card exists in three documents and not the lore doc | Kept at 60; the lore doc's 64 is a separate hidden beat and stays hidden |
 | D2 — DESIGN's collision example merges two MDE rewards | Queue, never merge — the PRD, lore doc and manifest all agree against it (Part 4) |

@@ -377,8 +377,8 @@ function Frame({
  * One frame of the floor.
  *
  * Idle digits sit dim in the same grid the terminal uses. A lit cluster
- * takes its temper's colour *and* its temper's motion — two channels, so
- * a refiner who plays with the colour assist off is not suddenly reading
+ * takes its temper's color *and* its temper's motion — two channels, so
+ * a refiner who plays with the color assist off is not suddenly reading
  * hue alone. A chained cluster is ringed, which is a third.
  */
 function draw(
@@ -430,7 +430,7 @@ function draw(
     ctx.restore();
   }
 
-  // Rings on everything in hand, so the chain reads without colour.
+  // Rings on everything in hand, so the chain reads without color.
   ctx.save();
   ctx.lineWidth = 1.5;
   for (const id of s.chain) {

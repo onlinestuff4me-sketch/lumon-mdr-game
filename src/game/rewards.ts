@@ -67,9 +67,11 @@ export interface Rung {
 /**
  * Lane A — screens completed.
  *
- * Screens, not files: the thirteen orientation screens share one file name,
- * so a file-based counter cannot see the part of the game where the rewards
- * matter most. The first three land back to back to back, because a refiner
+ * One per level, which the interface calls a file — the header has always
+ * numbered them that way ("FILE 16 OF 30"), including the thirteen
+ * orientation levels that share a file *name*. The lane keeps the internal
+ * name `screens` because that is what the save has always called it; every
+ * string a refiner reads says "file". The first three land back to back to back, because a refiner
  * who has been paid twice before the third screen understands the system
  * without being told about it.
  */
@@ -182,12 +184,46 @@ export function rungById(id: string): Rung | undefined {
   return BY_ID.get(id);
 }
 
+/**
+ * What each lane is called in front of a refiner.
+ *
+ * "Files", not "screens". The counter really is one-per-level and the
+ * header has always numbered levels as files ("FILE 16 OF 30"), so
+ * "screens" was an internal word leaking into the interface. It is also
+ * the word `docs/DESIGN_SYSTEM.md` reserves for the data a refiner
+ * refines — nothing else in this game may be called a file.
+ *
+ * The stored counter keeps its old name (`screensCompleted`); renaming a
+ * key in a save that is already on people's phones buys nothing.
+ */
 export const LANE_LABEL: Record<Lane, string> = {
-  screens: "SCREENS COMPLETED",
+  screens: "FILES REFINED",
   bins: "BINS REFINED",
   temper: "TEMPER MASTERY",
-  perfect: "SCREENS WITHOUT ERROR",
+  perfect: "FILES WITHOUT ERROR",
 };
+
+/**
+ * Why this incentive was issued, for the sealed card to say before it is
+ * opened.
+ *
+ * The sealed card may explain the *cause* in as much detail as it likes —
+ * the refiner earned it and knows what they did. What it may never do is
+ * hint at the effect. Nothing here touches the catalog.
+ */
+export function reasonFor(rung: Rung): string {
+  const n = rung.at;
+  const files = `${n} ${n === 1 ? "FILE" : "FILES"}`;
+  const bins = `${n} ${n === 1 ? "BIN" : "BINS"}`;
+  if (rung.lane === "screens") return `REFINEMENT MILESTONE · ${files} REFINED`;
+  if (rung.lane === "bins") return `BIN QUOTA · ${bins} REFINED`;
+  if (rung.lane === "perfect") {
+    return `UNBLEMISHED RECORD · ${files} WITHOUT ERROR`;
+  }
+  return rung.allTempers
+    ? `TEMPER MASTERY · ${n} OF EVERY TEMPER`
+    : `TEMPER MASTERY · ${n} ${rung.temper} ${n === 1 ? "BIN" : "BINS"}`;
+}
 
 /** The label a temper rung shows: the temper's own name, not the lane's. */
 export function laneLabel(rung: Rung): string {
@@ -195,12 +231,12 @@ export function laneLabel(rung: Rung): string {
   return rung.allTempers ? "ALL FOUR TEMPERS" : `${rung.temper} BINS REFINED`;
 }
 
-/** "Complete 3 more screens." — the exact action, in the game's words. */
+/** "Refine 3 more files." — the exact action, in the game's words. */
 export function actionFor(lane: Lane, remaining: number, temper?: string): string {
   const n = Math.max(1, remaining);
   const s = n === 1 ? "" : "s";
-  if (lane === "screens") return `Complete ${n} more screen${s}.`;
-  if (lane === "perfect") return `Finish ${n} more screen${s} without error.`;
+  if (lane === "screens") return `Refine ${n} more file${s}.`;
+  if (lane === "perfect") return `Refine ${n} more file${s} without error.`;
   if (lane === "temper") {
     return temper
       ? `Refine ${n} more ${temper} bin${s}.`
