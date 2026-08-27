@@ -131,9 +131,18 @@ export function createBoard(
   const real = tempers.length * perTemper;
   for (let s = Math.max(1, spacing); s > 1; s--) {
     const attempt = seedBoard(seed, tempers, perTemper, s, extras, focus);
-    // Only the real clusters have to fit: a board that cannot hold every
-    // decoy is still winnable, and a board short a real cluster is not.
-    if (attempt.clusters.filter((c) => !c.decoy && !c.fifth).length >= real) {
+    // Decoys are the only clusters allowed to fall off a crowded board:
+    // one fewer bystander is a slightly easier file. A missing *real*
+    // cluster makes a bin unfillable, and a missing fifth temper silently
+    // removes the beat a file was built around — Cold Harbor is the whole
+    // point of the fifth, and it lost it the day the board went from 28
+    // rows to 26. Both are required; the spacing gives way instead.
+    const wantFifth = extras.filter((e) => e.fifth).length;
+    const gotFifth = attempt.clusters.filter((c) => c.fifth).length;
+    if (
+      attempt.clusters.filter((c) => !c.decoy && !c.fifth).length >= real &&
+      gotFifth >= wantFifth
+    ) {
       return attempt;
     }
   }

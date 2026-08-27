@@ -1,4 +1,4 @@
-import { CircleHelp } from "lucide-react";
+import { CircleHelp, Settings } from "lucide-react";
 import type { HudSnapshot } from "../game/engine";
 
 function clock(seconds: number): string {
@@ -8,38 +8,39 @@ function clock(seconds: number): string {
 }
 
 /**
- * The header: which file this is, and how far through it the refiner is.
+ * The header: which file this is, how far through it the refiner is, and
+ * the two doors out of the game.
  *
- * Two lines and nothing else. It used to carry four things — a version
- * string, the clock, the file name, the meter, the percentage and the
- * incentives record — stacked into a band deep enough to notice, above a
- * coach line, above a control deck. Three bands of chrome before the
- * numbers.
+ * Two lines and nothing else. It used to carry a version string, the
+ * clock, the file name, the meter, the percentage and the incentives
+ * record, stacked into a band deep enough to notice, above a coach line,
+ * above a control deck — three bands of chrome before the numbers.
  *
- * What is left is what a refiner reads mid-file: the file's name, the
- * shift clock, and one meter. The meter is the *file's*, not this
- * stage's: a header that names ORIENTATION #0001 and shows a bar that
- * fills and resets three times inside it is measuring something nobody was
- * told about.
+ * The meter is the *file's*, not this stage's: a header that names
+ * ORIENTATION #0001 and shows a bar that fills and resets three times
+ * inside it is measuring something nobody was told about.
  *
- * The handbook sits beside the meter rather than in a deck of its own,
- * because it is a thing you leave the game to read, not a control you use
- * while playing.
+ * The handbook and the settings sit on the meter's line rather than in a
+ * deck of their own. They are things you leave the game to read, not
+ * controls you use while playing, and the meter can spare the width more
+ * cheaply than the board can spare a band.
  */
 export function HUD({
   hud,
   height,
   onHandbook,
+  onSettings,
 }: {
   hud: HudSnapshot;
   height: number;
   onHandbook: () => void;
+  onSettings: () => void;
 }) {
   const urgent = !hud.untimed && hud.timeLeft <= 15 && hud.phase !== "complete";
   const pct = Math.round(hud.fileProgress * 100);
   const done = pct >= 100;
 
-  // Above the input surface (z-35) so the handbook takes taps, but
+  // Above the input surface (z-35) so the two buttons take taps, but
   // transparent to pointers everywhere else: a packet dragged to the very
   // top of the board sits under this header, and a header that ate
   // pointers there would leave the refiner holding something they could
@@ -51,6 +52,7 @@ export function HUD({
     >
       <div className="flex items-baseline justify-between gap-2 text-[10px] tracking-[0.16em]">
         <span className="crt-text-glow truncate text-phos-400">
+          <span className="text-phos-600">FILE: </span>
           {hud.levelName} #{hud.fileCode}
           {hud.stage && hud.stage[1] > 1 ? (
             <span className="text-phos-600">
@@ -70,7 +72,7 @@ export function HUD({
         </span>
       </div>
 
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1.5">
         <div className="h-[6px] flex-1 overflow-hidden rounded-sm border border-phos-800 bg-phos-950">
           <div
             className="h-full bg-phos-400 transition-[width] duration-300 ease-out"
@@ -87,20 +89,33 @@ export function HUD({
           />
         </div>
         <span
-          className={`crt-text-glow w-[38px] shrink-0 text-right text-[13px] font-bold tabular-nums ${
+          className={`crt-text-glow w-[32px] shrink-0 text-right text-[12px] font-bold tabular-nums ${
             done ? "text-phos-200" : "text-phos-300"
           }`}
         >
           {pct}%
         </span>
+
+        {/* Labelled, because a lone question mark is a guess. */}
         <button
           type="button"
-          aria-label="Open the Lumon handbook"
+          data-handbook
           onPointerDown={(ev) => ev.stopPropagation()}
           onClick={onHandbook}
-          className="pointer-events-auto flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-[3px] border border-phos-700 bg-phos-900/60 text-phos-500 active:bg-phos-600/40"
+          className="pointer-events-auto inline-flex h-[26px] shrink-0 items-center gap-1 rounded-[3px] border border-phos-700 bg-phos-900/60 px-1.5 text-[8px] tracking-[0.06em] text-phos-400 active:bg-phos-600/40"
         >
-          <CircleHelp size={13} strokeWidth={2.2} />
+          HANDBOOK
+          <CircleHelp size={10} strokeWidth={2.2} aria-hidden />
+        </button>
+        <button
+          type="button"
+          data-settings
+          aria-label="Terminal settings"
+          onPointerDown={(ev) => ev.stopPropagation()}
+          onClick={onSettings}
+          className="pointer-events-auto flex h-[26px] w-[24px] shrink-0 items-center justify-center rounded-[3px] border border-phos-700 bg-phos-900/60 text-phos-500 active:bg-phos-600/40"
+        >
+          <Settings size={12} strokeWidth={2.2} />
         </button>
       </div>
     </header>

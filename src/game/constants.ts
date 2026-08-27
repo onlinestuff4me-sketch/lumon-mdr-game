@@ -2,7 +2,16 @@ import type { LevelDef, Temper } from "./types";
 
 /** Matrix dimensions — the Lumon standard refinement window. */
 export const COLS = 16;
-export const ROWS = 28;
+/**
+ * Twenty-six, down from twenty-eight.
+ *
+ * The bins grew a line each and the bands between them were evened out,
+ * which cost the board about sixty pixels. Spent on smaller glyphs that
+ * would have been a 12.7px digit; spent on two fewer rows instead, and the
+ * digits stay the size they were. The board is a fixed grid scaled to fit
+ * its rect, so this is the only dial that trades rows for legibility.
+ */
+export const ROWS = 26;
 export const CELL_COUNT = COLS * ROWS;
 
 /** Radial threshold at which a cluster begins to agitate (CSS px). */

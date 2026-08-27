@@ -289,8 +289,11 @@ export function GameStage() {
   }, [hud.phase, fileKey, boundary]);
 
 
-  const [handbookAt, setHandbookAt] = useState<"top" | "shelf">("top");
-  const openHandbook = useCallback((at: "top" | "shelf" = "top") => {
+  const [handbookAt, setHandbookAt] = useState<"top" | "shelf" | "settings">(
+    "top",
+  );
+  const openHandbook = useCallback(
+    (at: "top" | "shelf" | "settings" = "top") => {
     setHandbookAt(at);
     // Read the archive here rather than tracking it in an effect: the
     // drawer is the only thing that renders it, and it is unmounted until
@@ -302,7 +305,9 @@ export function GameStage() {
     // fail screen underneath it.
     engine.setPaused(true);
     setHandbook(true);
-  }, [engine]);
+    },
+    [engine],
+  );
 
   // Closing is the mirror of opening: unpausing here would drain a frame of
   // clock under a drawer that is still on screen, so the resume is left to
@@ -546,8 +551,6 @@ export function GameStage() {
   // engine, so the chrome and the hit-testing can never disagree about
   // where the bins are.
   const layout = computeLayout(size.w, size.h, hud.activeTempers);
-  const live =
-    hud.phase === "probe" || hud.phase === "select" || hud.phase === "carry";
 
   const play = useCallback(
     (index: number) => {
@@ -581,25 +584,24 @@ export function GameStage() {
           aria-hidden
         />
 
+        {/* Only the header and the coach line are laid out by flow. The
+            bins and the incentives record are placed from the layout's own
+            coordinates, so the chrome sits exactly where the engine
+            hit-tests it and the gaps between the three bands are the one
+            number `layout.gap` says they are. */}
         <div className="relative flex h-full w-full flex-col">
           <HUD
             hud={hud}
             height={layout.hudH}
             onHandbook={() => openHandbook("top")}
+            onSettings={() => openHandbook("settings")}
           />
-          {/* Variant `b` puts the record directly under the header, where
-              it is read on the way in. Variants `a` and `c` put it under
-              the bins, where a thumb already is and where it sits beside
-              the things it counts rather than under a second meter. */}
+          {/* Variant `b` reserves a band for the record under the header. */}
           {layout.recordAt === "top" ? (
-            <div className="relative z-40 shrink-0 px-3 py-1" style={{ height: layout.recordH }}>
-              <IncentiveRecordBox
-                progress={progress}
-                onOpen={() => openHandbook("shelf")}
-                variant="hud"
-                landing={acceptedHere > 0}
-              />
-            </div>
+            <div
+              className="shrink-0"
+              style={{ height: layout.gap + layout.recordH }}
+            />
           ) : null}
           {/* The coach line sits directly under the header. At the bottom
               of the screen it was underneath the hand holding the phone —
@@ -609,18 +611,21 @@ export function GameStage() {
           {layout.tickerOverGrid ? null : (
             <StatusTicker hud={hud} height={layout.tickerH} />
           )}
-          <div className="flex-1" />
-          <div className="shrink-0" style={{ height: layout.binsH }} />
-          {layout.recordAt === "bottom" ? (
-            <div className="relative z-40 flex shrink-0 items-center px-3 pb-1" style={{ height: layout.recordH }}>
-              <IncentiveRecordBox
-                progress={progress}
-                onOpen={() => openHandbook("shelf")}
-                variant="hud"
-                landing={acceptedHere > 0}
-              />
-            </div>
-          ) : null}
+        </div>
+
+        {/* Under the bins in `a` and `c`, where a thumb already is and
+            where it sits beside the things it counts; under the header in
+            `b`, where it is read on the way in. */}
+        <div
+          className="absolute inset-x-0 z-40 flex items-center px-3"
+          style={{ top: layout.recordTop, height: layout.recordH }}
+        >
+          <IncentiveRecordBox
+            progress={progress}
+            onOpen={() => openHandbook("shelf")}
+            variant="hud"
+            landing={acceptedHere > 0}
+          />
         </div>
 
         {/* Variant `c`: the coach line floats on the board's top edge. The
@@ -798,19 +803,6 @@ export function GameStage() {
           />
         ) : null}
 
-        {/* Below the coach band, not inside it: at hudH + 6 this badge sat
-            on top of the ticker and clipped the line telling the player what
-            to do — which is exactly the line a first-time player needs. */}
-        {live && !hud.audioReady ? (
-          <div
-            className="pointer-events-none absolute inset-x-0 z-40 flex justify-center"
-            style={{ top: layout.grid.y + 4 }}
-          >
-            <span className="rounded-[2px] border border-phos-700 bg-phos-950/85 px-2 py-0.5 text-[8px] tracking-[0.16em] text-phos-600">
-              TAP TO ENABLE TERMINAL AUDIO
-            </span>
-          </div>
-        ) : null}
       </div>
     </Viewport>
   );

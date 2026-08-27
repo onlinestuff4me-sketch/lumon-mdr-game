@@ -286,12 +286,18 @@ in `src/game/layout.ts` and shared by the DOM chrome and the engine's
 hit-testing — the two can never drift.
 
 ```
-HUD_FRAC       0.072, floored at HUD_MIN (56px)   file name + clock, meter + handbook
+HUD_FRAC       0.072, floored at HUD_MIN (56)     file name + clock, meter + doors
 TICKER_FRAC    0.042                              the coach line, always reserved
-RECORD_FRAC    0.05,  floored at RECORD_MIN (40)  the incentives record
-BINS_FRAC      0.175 / 0.08 one-row               the four bins
+BINS_FRAC      0.1,   floored at BINS_MIN (66)    the bins, one row, always
+RECORD_FRAC    0.063, floored at RECORD_MIN (44)  the incentives record
+GAP_FRAC       0.014, floored at GAP_MIN (9)      between every band, and under the last
 grid                                              whatever is left
 ```
+
+**One gap, everywhere.** The board, the bins, the record and the bottom
+edge are separated by `layout.gap` and nothing else. Bands are placed from
+`layout.binsTop` and `layout.recordTop` rather than by flow, so the chrome
+sits exactly where the engine hit-tests it.
 
 The ticker band is reserved permanently, whether or not a message is
 showing, so the matrix never reflows underneath the text describing it.
@@ -299,18 +305,36 @@ showing, so the matrix never reflows underneath the text describing it.
 ### The order of the bands
 
 ```
-FILE NAME                                  --:--
-▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░  67%   [?]     ← header
-        coach line, when there is one      ← ticker
-┌───────────────────────────────────────┐
-│                                       │
-│            the numbers                │  ← grid
-│                                       │
-└───────────────────────────────────────┘
-│  01: WO  WOE  ▓▓▓▓▓░░░░  40%          │  ← bins
-INCENTIVES RECORD              4 KEPT ›
-REFINE 1 MORE FILE  ▓▓▓░░░░░      3/4     ← record
+FILE: SUNSET PARK #0308                    --:--
+▓▓▓▓▓▓▓▓▓░░░░░░  67%  [HANDBOOK ?] [⚙]    ← header
+        coach line, when there is one       ← ticker
+┌────────────────────────────────────────┐
+│             the numbers                │  ← grid
+└────────────────────────────────────────┘
+┌────────┐┌────────┐┌────────┐┌────────┐
+│ 01: WO ││ 02: FC ││ 03: DR ││ 04: MA │   ← bins, one row
+│ ▓▓░ 40%││ ▓░░  0%││ ▓░░  0%││ ▓░░  0%│
+└────────┘└────────┘└────────┘└────────┘
+┌────────────────────────────────────────┐
+│ INCENTIVES RECORD             4 KEPT › │  ← record
+│ REFINE 1 MORE FILE  ▓▓▓░░░░░      3/4  │
+└────────────────────────────────────────┘
 ```
+
+**The bins are one row, always.** One bin spans the deck, four split it;
+the deck is the same depth either way. Adding a bin used to add a *row* —
+three different shapes for one idea, and the board lost a fifth of its
+height the moment the fourth temper arrived.
+
+**Every meter box is two lines**: what it is, then the bar and its number.
+The file meter, each bin, and the incentives record are the same object at
+three sizes, which is what buys the horizontal room for four bins across.
+
+**The header carries the two doors out of the game** — the handbook,
+labelled, because a lone question mark is a guess; and the settings, where
+the audio toggle lives. Neither is a control used *during* play, so
+neither gets a band; the meter can spare the width more cheaply than the
+board can spare a row.
 
 Two rules decided this arrangement, both learned by trying the
 alternatives (`?layout=b` and `?layout=c` still render them):
@@ -325,6 +349,12 @@ alternatives (`?layout=b` and `?layout=c` still render them):
    board's top edge — proposal `c` — buys a band of grid and spends it on
    a line of text sitting on top of the digits, which is exactly what the
    reserved band existed to prevent.
+
+**The board is 16 x 26.** It is a fixed grid scaled to fit whatever rect
+is left over, so the row count is the one dial that trades board area for
+legible glyphs. It went from 28 to 26 when the bins grew a line each and
+the gaps were evened out: sixty pixels had to come from somewhere, and
+two rows cost less than a 12.7px digit.
 
 **There is no mode switch.** Probe and select are decided by what the
 refiner does: study a cluster and the box arms itself, bin a packet and it

@@ -21,7 +21,7 @@ interface Props {
    * *at the shelf* — a refiner who tapped the thing their incentive was
    * filed into should arrive at their incentives, not at Section IV.
    */
-  startAt?: "top" | "shelf";
+  startAt?: "top" | "shelf" | "settings";
   onAssist: (on: boolean) => void;
   muted: boolean;
   onMuted: (on: boolean) => void;
@@ -97,11 +97,19 @@ export function HandbookModal({
   levelIndex,
 }: Props) {
   const shelfRef = useRef<HTMLDivElement | null>(null);
+  const settingsRef = useRef<HTMLHeadingElement | null>(null);
   // One scroll, on open. The drawer is unmounted between openings, so
   // there is no stale position to correct later.
+  //
+  // The settings live at the foot of the handbook rather than in a sheet
+  // of their own, and the gear in the header scrolls to them. One place
+  // for the toggles beats two that can disagree, and a refiner who taps
+  // the gear lands on them either way.
   useEffect(() => {
-    if (startAt !== "shelf") return;
-    shelfRef.current?.scrollIntoView({ block: "start" });
+    if (startAt === "shelf") shelfRef.current?.scrollIntoView({ block: "start" });
+    if (startAt === "settings") {
+      settingsRef.current?.scrollIntoView({ block: "start" });
+    }
   }, [startAt]);
 
   // The orientation screens are one sequence, not 21 files: only the last
@@ -302,7 +310,10 @@ export function HandbookModal({
           })}
         </ol>
 
-        <h3 className="crt-text-glow mb-2 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300">
+        <h3
+          ref={settingsRef}
+          className="crt-text-glow mb-2 mt-4 scroll-mt-2 text-[10px] font-bold tracking-[0.2em] text-phos-300"
+        >
           TERMINAL SETTINGS
         </h3>
         <div className="mb-2 rounded-[3px] border border-phos-700 bg-phos-900/40 px-2.5 py-2">

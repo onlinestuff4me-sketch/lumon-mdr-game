@@ -123,25 +123,76 @@ section("reachability");
     const L = window.__mdr.layout;
     const modes = [...document.querySelectorAll("*")].some((n) =>
       n.textContent?.trim().startsWith("MODE:"));
-    const record = document
-      .querySelector('[data-record-box="hud"]')
-      ?.getBoundingClientRect();
-    const st = document.querySelector('[role="application"]').getBoundingClientRect();
+    const record = document.querySelector('[data-record-box="hud"]');
     return {
+      recordDrawn: !!record,
       modes,
       gridBottom: Math.round(L.grid.y + L.grid.h),
-      binsTop: Math.round(L.h - L.binsH - (L.recordAt === "bottom" ? L.recordH : 0)),
-      recordTop: record ? Math.round(record.top - st.top) : null,
+      binsTop: Math.round(L.binsTop),
+      gap: L.gap,
+      recordTop: Math.round(L.recordTop),
+      binsH: L.binsH,
       recordAt: L.recordAt,
     };
   });
   check("there is no mode switch to press", !bands.modes);
-  check("and nothing sits between the board and the bins",
-    bands.binsTop - bands.gridBottom < 4, JSON.stringify(bands));
-  check("the incentives record is clear of the board",
+  // The two doors out of the game, both in the header, both labelled.
+  {
+    const hb = page.locator("[data-handbook]");
+    check("the handbook is a labelled button, not a lone question mark",
+      (await hb.innerText()).includes("HANDBOOK"));
+    check("and the settings have a control of their own",
+      (await page.locator("[data-settings]").count()) === 1);
+    // Audio unlocks on the first touch anywhere; the nudge that used to
+    // say so was a line of text sitting on the board, and the toggle it
+    // was really about lives in settings.
+    check("nothing on the board asks to enable audio",
+      !/ENABLE TERMINAL AUDIO/.test(await page.evaluate(() => document.body.innerText)));
+    await page.locator("[data-settings]").click();
+    await page.waitForTimeout(500);
+    check("the gear opens the terminal settings",
+      (await page.getByText("TERMINAL SETTINGS").count()) >= 1);
+    check("where the audio toggle is",
+      (await page.getByText("TERMINAL AUDIO").count()) >= 1);
+    await page.locator('[aria-label="Close handbook"]').click();
+    await page.waitForTimeout(300);
+  }
+  // Exactly one gap, the same one that separates every other band. The
+  // complaint that produced this was bins sitting on top of the record.
+  check("the board and the bins are one gap apart",
+    bands.binsTop - bands.gridBottom === bands.gap, JSON.stringify(bands));
+  // One row, however many bins. Adding a bin narrows the row; it never
+  // deepens it, which is what used to cost the board a fifth of its height
+  // the moment the fourth temper arrived.
+  {
+    const decks = await page.evaluate(async () => {
+      const out = [];
+      for (const i of [0, window.__mdr.levels.findIndex((l) => l.name === "CALIBRATION")]) {
+        window.__mdr.startLevel(i);
+        const L = window.__mdr.layout;
+        const r = L.activeTempers.map((t) => L.binRects[t]);
+        out.push({
+          n: r.length,
+          tops: [...new Set(r.map((b) => Math.round(b.y)))].length,
+          h: Math.round(r[0].h),
+          deck: L.binsH,
+        });
+      }
+      return out;
+    });
+    check("every bin deck is a single row",
+      decks.every((d) => d.tops === 1), JSON.stringify(decks));
+    check("and one bin is exactly as tall as four",
+      new Set(decks.map((d) => d.h)).size === 1, JSON.stringify(decks));
+    check("so the deck is the same depth whatever the file shows",
+      new Set(decks.map((d) => d.deck)).size === 1, JSON.stringify(decks));
+    await load(page, 0);
+  }
+
+  check("and so are the bins and the incentives record",
     bands.recordAt === "top"
       ? bands.recordTop < bands.gridBottom
-      : bands.recordTop >= bands.binsTop,
+      : bands.recordTop - (bands.binsTop + bands.binsH) === bands.gap,
     JSON.stringify(bands));
 
   // A deck can show more bins than the file can fill (the orientation rung
@@ -513,26 +564,48 @@ section("reticle and hint");
   // A tap anywhere over the group counts, not just within a pad of a glyph.
   // A five-digit group spread over two rows has gaps wider than the pad in
   // the middle of it, and taps landing there were being dropped.
-  await load(page, 0);
-  const g = await findGroup(page);
-  const gaps = await page.evaluate(() => {
-    const e = window.__mdr, b = e.board, c = b.clusters[0];
-    const pts = c.members.map((m) => ({ x: b.nodes[m].hx + b.nodes[m].dx, y: b.nodes[m].hy + b.nodes[m].dy }));
-    const x0 = Math.min(...pts.map((p) => p.x)), x1 = Math.max(...pts.map((p) => p.x));
-    const y0 = Math.min(...pts.map((p) => p.y)), y1 = Math.max(...pts.map((p) => p.y));
-    // Sample the footprint and keep the points furthest from every glyph —
-    // the ones a pad-only hit test would miss.
-    let worst = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, d: 0 };
-    for (let i = 0; i <= 10; i++) {
-      for (let j = 0; j <= 10; j++) {
-        const x = x0 + ((x1 - x0) * i) / 10;
-        const y = y0 + ((y1 - y0) * j) / 10;
-        const d = Math.min(...pts.map((p) => Math.hypot(p.x - x, p.y - y)));
-        if (d > worst.d) worst = { x, y, d };
+  // Search for the shape this is about rather than assuming cluster zero on
+  // screen zero still has it. The board's row count is a tuning dial — it
+  // went from 28 to 26 when the bins grew a line — and a fixture pinned to
+  // one cluster stops testing the property the moment that dial moves.
+  const gaps = await (async () => {
+    let best = null;
+    // Across a spread of files, because the shape needs a group of five or
+    // more spread over two rows and the early screens only ever show one
+    // group of four.
+    for (const i of [0, 4, 8, await byName(page, "CALIBRATION"), await byName(page, "DRANESVILLE")]) {
+      await load(page, i);
+      const found = await page.evaluate(() => {
+    const e = window.__mdr, b = e.board;
+    const hole = (c) => {
+      const pts = c.members.map((m) => ({
+        x: b.nodes[m].hx + b.nodes[m].dx,
+        y: b.nodes[m].hy + b.nodes[m].dy,
+      }));
+      const x0 = Math.min(...pts.map((p) => p.x)), x1 = Math.max(...pts.map((p) => p.x));
+      const y0 = Math.min(...pts.map((p) => p.y)), y1 = Math.max(...pts.map((p) => p.y));
+      // Sample the footprint and keep the point furthest from every glyph —
+      // the one a pad-only hit test would miss.
+      let worst = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, d: 0 };
+      for (let i = 0; i <= 10; i++) {
+        for (let j = 0; j <= 10; j++) {
+          const x = x0 + ((x1 - x0) * i) / 10;
+          const y = y0 + ((y1 - y0) * j) / 10;
+          const d = Math.min(...pts.map((p) => Math.hypot(p.x - x, p.y - y)));
+          if (d > worst.d) worst = { x, y, d };
+        }
       }
+      return { worst, corners: [{ x: x0, y: y0 }, { x: x1, y: y1 }] };
+    };
+    const live = b.clusters.filter((c) => !c.refined && c.members.length >= 4);
+    return live.map(hole).sort((a, z) => z.worst.d - a.worst.d)[0] ?? hole(b.clusters[0]);
+      });
+      if (!best || found.worst.d > best.worst.d) best = found;
+      if (best.worst.d > 22) break;
     }
-    return { worst, corners: [{ x: x0, y: y0 }, { x: x1, y: y1 }] };
-  });
+    return best;
+  })();
+  const g = await findGroup(page);
   check("the group has a gap wider than the 22px pad", gaps.worst.d > 22,
     `${gaps.worst.d.toFixed(0)}px from the nearest digit`);
   await tap(page, origin, await touchFor(page, gaps.worst, "marquee"));
