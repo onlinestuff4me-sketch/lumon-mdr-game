@@ -4,12 +4,18 @@ import { LEVELS } from "../game/constants";
 import type { HudSnapshot } from "../game/engine";
 import { activeRun, continueIndex, type RunStore } from "../game/runs";
 import type { Progress } from "../game/progress";
-import { IncentiveForecast } from "./IncentiveForecast";
+import { IncentiveRecord } from "./IncentiveRecord";
 
 interface Props {
   hud: HudSnapshot;
-  /** The incentive ledger, for the forecast under the addendum. */
+  /** The incentive ledger, for the record block under the addendum. */
   progress: Progress;
+  /** Objects issued again this file and filed without a card. */
+  filed: readonly string[];
+  /** Opens the full record — shelf, facts and forecast. */
+  onOpenRecord: () => void;
+  /** True when an incentive has just been filed into the block. */
+  recordLanding: boolean;
   onStart: () => void;
   onNext: () => void;
   onRestart: () => void;
@@ -50,6 +56,9 @@ const BTN =
 export function PhaseOverlay({
   hud,
   progress,
+  filed,
+  onOpenRecord,
+  recordLanding,
   onStart,
   onNext,
   onRestart,
@@ -201,13 +210,17 @@ export function PhaseOverlay({
               FILED · HANDBOOK &gt; ARCHIVE
             </p>
           </div>
-          {/* What the next incentive costs. Under the addendum rather than
-              over it: the file just refined gets its own moment first, and
-              the forecast is the thing that sends the refiner back in. One
-              lane, no box — the addendum above is the object on this
-              screen, and a second bordered card would compete with it. */}
+          {/* The record. Under the addendum rather than over it: the file
+              just refined gets its own moment first, and this is the thing
+              that sends the refiner back in — it says what the next
+              incentive costs, and it is where the last one visibly went. */}
           <div className="mt-4 flex justify-center">
-            <IncentiveForecast progress={progress} variant="panel" />
+            <IncentiveRecord
+              progress={progress}
+              onOpen={onOpenRecord}
+              filed={filed}
+              landing={recordLanding}
+            />
           </div>
           {hud.isLastLevel ? (
             <>

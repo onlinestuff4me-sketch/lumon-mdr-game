@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { TemperSample } from "./TemperSample";
 import type { Pace } from "../game/constants";
 import { LEVELS, PACE } from "../game/constants";
+import { useEffect, useRef } from "react";
 import { MIN_CAPTURE, PROBE_RADIUS, TEMPERS, TEMPER_DEFS } from "../game/constants";
 import type { Progress } from "../game/progress";
 import type { RewardId } from "../game/rewards";
@@ -15,6 +16,12 @@ interface Props {
   /** The incentive ledger: the forecast, the shelf and the Wellness record. */
   progress: Progress;
   onInspect: (rewardId: RewardId) => void;
+  /**
+   * Where to land. The record block on the file screen opens this drawer
+   * *at the shelf* — a refiner who tapped the thing their incentive was
+   * filed into should arrive at their incentives, not at Section IV.
+   */
+  startAt?: "top" | "shelf";
   onAssist: (on: boolean) => void;
   muted: boolean;
   onMuted: (on: boolean) => void;
@@ -77,6 +84,7 @@ export function HandbookModal({
   assist,
   progress,
   onInspect,
+  startAt = "top",
   onAssist,
   muted,
   onMuted,
@@ -88,6 +96,14 @@ export function HandbookModal({
   archive,
   levelIndex,
 }: Props) {
+  const shelfRef = useRef<HTMLDivElement | null>(null);
+  // One scroll, on open. The drawer is unmounted between openings, so
+  // there is no stale position to correct later.
+  useEffect(() => {
+    if (startAt !== "shelf") return;
+    shelfRef.current?.scrollIntoView({ block: "start" });
+  }, [startAt]);
+
   // The orientation screens are one sequence, not 21 files: only the last
   // of them carries an archive row, so the list stays a set of secrets
   // rather than a progress bar.
@@ -229,7 +245,9 @@ export function HandbookModal({
           </>
         ) : null}
 
-        <IncentiveShelf progress={progress} onInspect={onInspect} />
+        <div ref={shelfRef}>
+          <IncentiveShelf progress={progress} onInspect={onInspect} />
+        </div>
         <WellnessRecord progress={progress} />
 
         <h3 className="crt-text-glow mb-1 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300">

@@ -55,8 +55,17 @@ export interface Progress {
   rewardState: Record<string, RewardState>;
   /** Rung ids earned and not yet presented, oldest first. */
   rewardQueue: string[];
-  /** Fact ids already spoken, so a Wellness card never repeats one. */
+  /** Fact ids already read out, so a card never repeats one. */
   seenFactIds: string[];
+  /**
+   * The last reward actually shown to the refiner.
+   *
+   * Two incentives of the same kind back to back read as one repeated
+   * event rather than two rewards, so the presenter uses this to space
+   * them out across boundaries. Only a reward that was *presented* counts
+   * — one filed quietly is not something the refiner just looked at.
+   */
+  lastShownRewardId: string | null;
   /**
    * The sentences each rung will read, chosen when it was earned.
    *
@@ -92,6 +101,7 @@ export function emptyProgress(): Progress {
     seenFactIds: [],
     factsByRung: {},
     inspectCounts: {},
+    lastShownRewardId: null,
   };
 }
 
@@ -194,7 +204,19 @@ export function applyCompletion(
  * Idempotent, because the accept control can be pressed twice before the
  * card has finished leaving. A claim never re-runs and never re-awards.
  */
-export function claimReward(p: Progress, id: string): Progress {
+/**
+ * Claim a rung.
+ *
+ * `shown` is false for a reward that was filed without a card — a second
+ * finger trap is still owed to the refiner and still goes on the shelf,
+ * but showing the same object twice reads as the game repeating itself
+ * rather than rewarding them again.
+ */
+export function claimReward(
+  p: Progress,
+  id: string,
+  opts: { shown: boolean; rewardId?: string } = { shown: true },
+): Progress {
   if (p.rewardState[id] === "claimed") return p;
   // Whatever was read out is now heard, and will not come round again.
   const heard = p.factsByRung[id] ?? [];
@@ -205,6 +227,9 @@ export function claimReward(p: Progress, id: string): Progress {
     rewardState: { ...p.rewardState, [id]: "claimed" },
     rewardQueue: p.rewardQueue.filter((q) => q !== id),
     seenFactIds,
+    lastShownRewardId: opts.shown
+      ? (opts.rewardId ?? p.lastShownRewardId)
+      : p.lastShownRewardId,
   };
 }
 
@@ -289,6 +314,8 @@ function coerce(raw: unknown): Progress {
     seenFactIds: ids(p.seenFactIds),
     factsByRung,
     inspectCounts,
+    lastShownRewardId:
+      typeof p.lastShownRewardId === "string" ? p.lastShownRewardId : null,
   };
 }
 
@@ -324,8 +351,12 @@ export function creditScreen(done: Completion): Progress {
 }
 
 /** Persisted `claimed`, the moment the refiner accepts. */
-export function claim(p: Progress, id: string): Progress {
-  const next = claimReward(p, id);
+export function claim(
+  p: Progress,
+  id: string,
+  opts: { shown: boolean; rewardId?: string } = { shown: true },
+): Progress {
+  const next = claimReward(p, id, opts);
   saveProgress(next);
   return next;
 }

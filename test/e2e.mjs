@@ -1057,13 +1057,15 @@ section("incentives");
     await page.waitForTimeout(150);
   };
   const seen = (text) => page.getByText(text, { exact: false }).count();
+  const action = () => page.locator("[data-reward-action]");
 
-  // ── one incentive: sealed, opened, accepted ──────────────────────
+  // ── one incentive: sealed until tapped, then filed ───────────────
   await seed({
     version: 1, screensCompleted: 0, binsTotal: 0,
     binsByTemper: { WO: 0, FC: 0, DR: 0, MA: 0 },
     creditedLevelIds: [], perfectScreensTotal: 0, perfectScreenStreak: 0,
-    rewardState: {}, rewardQueue: [], seenFactIds: [],
+    rewardState: {}, rewardQueue: [], seenFactIds: [], factsByRung: {},
+    inspectCounts: {}, lastShownRewardId: null,
   });
   await finish(0);
 
@@ -1071,68 +1073,124 @@ section("incentives");
   check("and says nothing about what it is", (await seen("FINGER TRAP")) === 0);
   eq("nothing is owed unclaimed in storage yet", (await ledger()).rewardState.S01, "earned_pending");
 
-  // The board must not run on underneath it: an orientation screen would
-  // otherwise auto-advance 900ms after clearing.
-  await page.waitForTimeout(1400);
+  // The board must not run on underneath it, and the seal must not open
+  // itself: a card that opens on a timer is a card someone can miss.
+  await page.waitForTimeout(2000);
   eq("the next screen does not load behind the card",
     await page.evaluate(() => window.__mdr.levelIndex), 0);
+  check("and the seal is still sealed two seconds later", (await seen("FINGER TRAP")) === 0);
 
-  await page.waitForFunction(() => !!document.body.innerText.match(/FINGER TRAP/), null, { timeout: 4000 });
-  check("the seal opens itself, name and picture together", (await seen("FINGER TRAP")) === 1);
+  await action().click();
+  await page.waitForTimeout(300);
+  check("tapping it reveals name and picture together", (await seen("FINGER TRAP")) === 1);
   check("with its plate on screen",
     (await page.locator('img[alt="FINGER TRAP"]').count()) === 1);
+  check("and the control now files it", (await action().innerText()).includes("FILE"));
 
-  await page.getByText("ACCEPT INCENTIVE").click();
-  await page.waitForTimeout(400);
-  eq("accepting claims it", (await ledger()).rewardState.S01, "claimed");
+  await action().click();
+  await page.waitForTimeout(900);
+  eq("filing claims it", (await ledger()).rewardState.S01, "claimed");
   eq("and empties the queue", (await ledger()).rewardQueue.length, 0);
   await page.waitForFunction(() => window.__mdr.levelIndex === 1, null, { timeout: 6000 });
   check("and the held screen advances once the card is gone", true);
 
-  // ── two at once: they stack, they do not merge ───────────────────
+  // ── two at once: announced as two, then shown one at a time ──────
   await seed({
     version: 1, screensCompleted: 1, binsTotal: 39,
     binsByTemper: { WO: 39, FC: 0, DR: 0, MA: 0 },
     creditedLevelIds: ["orientation-01"],
     perfectScreensTotal: 1, perfectScreenStreak: 1,
     rewardState: { S01: "claimed" }, rewardQueue: [], seenFactIds: [],
+    factsByRung: {}, inspectCounts: {}, lastShownRewardId: null,
   });
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
   await finish(1);
 
-  check("a screen that crosses two thresholds stacks them",
-    (await seen("INCENTIVE 1 OF 2")) === 1);
-  await page.getByText("OPEN").click();
-  await page.waitForTimeout(250);
+  check("a screen that crosses two thresholds says so up front",
+    (await seen("2 INCENTIVES EARNED")) === 1);
+  check("and offers to accept them together",
+    (await action().innerText()).includes("ACCEPT ALL 2"));
+  await action().click();
+  await page.waitForTimeout(300);
   check("the first is the screen-lane reward", (await seen("STANDARD REFINER ERASER")) === 1);
   check("and the second is not on screen with it", (await seen("MELON BAR")) === 0);
+  check("numbered within the stack", (await seen("INCENTIVE 1 OF 2")) === 1);
 
-  await page.getByText("ACCEPT · NEXT").click();
-  await page.waitForTimeout(300);
+  await action().click();
+  await page.waitForTimeout(400);
   check("accepting the first brings up the second", (await seen("INCENTIVE 2 OF 2")) === 1);
-  await page.waitForFunction(() => !!document.body.innerText.match(/MELON BAR/), null, { timeout: 4000 });
+  check("with no second seal to open", (await seen("INCENTIVES EARNED")) === 0);
   const mid = await ledger();
   eq("the first is claimed", mid.rewardState.S02, "claimed");
   eq("the second is still owed", mid.rewardState.B040, "earned_pending");
 
-  await page.getByText("ACCEPT INCENTIVE").click();
-  await page.waitForTimeout(400);
+  await action().click();
+  await page.waitForTimeout(900);
   const done = await ledger();
   eq("both end up claimed", [done.rewardState.S02, done.rewardState.B040], ["claimed", "claimed"]);
   eq("with nothing left in the queue", done.rewardQueue.length, 0);
 
-  // ── a force quit mid-ceremony keeps the reward ───────────────────
+  // ── an object already held is filed, not shown again ─────────────
   await seed({
     version: 1, screensCompleted: 2, binsTotal: 2,
     binsByTemper: { WO: 2, FC: 0, DR: 0, MA: 0 },
     creditedLevelIds: ["orientation-01", "orientation-02"],
-    perfectScreensTotal: 2, perfectScreenStreak: 2,
-    rewardState: {}, rewardQueue: [], seenFactIds: [],
+    perfectScreensTotal: 0, perfectScreenStreak: 0,
+    // The finger trap is already on the shelf, and the queue owes it again.
+    rewardState: { S01: "claimed", S02: "claimed", P03: "earned_pending" },
+    rewardQueue: ["P03"], seenFactIds: [], factsByRung: {},
+    inspectCounts: {}, lastShownRewardId: null,
   });
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
-  await finish(2);
+  // A named file, because the note lands in the record block and only a
+  // file with a ceremony draws one.
+  {
+    const i = await byName(page, "DRANESVILLE");
+    await load(page, i);
+    let guard = 0;
+    while ((await state(page)).progress < 100 && guard++ < 12) {
+      await setMode(page, "probe");
+      let g = await findGroup(page);
+      if (!g) break;
+      const at = await touchFor(page, g.ctr, "probe");
+      await page.mouse.move(origin.x + at.x, origin.y + at.y);
+      await page.mouse.down();
+      await page.waitForTimeout(700);
+      await page.mouse.up();
+      await page.waitForTimeout(150);
+      g = (await findGroup(page)) ?? g;
+      await setMode(page, "select");
+      await boxAndBin(page, origin, g);
+      await page.waitForTimeout(150);
+    }
+    await page.waitForTimeout(800);
+  }
+  // Screen three also earns a fact card, so a card is expected here — what
+  // must never happen is the finger trap being *presented* a second time.
+  await settleIncentives(page);
+  await page.waitForTimeout(400);
+  const refiled = await ledger();
+  check("a second issue of an object is never the card that was shown",
+    refiled.lastShownRewardId !== "R02", String(refiled.lastShownRewardId));
+  eq("but it is claimed all the same", refiled.rewardState.P03, "claimed");
+  check("and the record says it was filed", (await seen("ISSUED AGAIN")) >= 1);
+  check("and the record can be opened from the file screen",
+    (await page.locator("[data-incentive-record]").count()) === 1);
+
+  // ── a reload during the ceremony keeps the reward ────────────────
+  await seed({
+    version: 1, screensCompleted: 4, binsTotal: 6,
+    binsByTemper: { WO: 6, FC: 0, DR: 0, MA: 0 },
+    creditedLevelIds: ["orientation-01", "orientation-02", "orientation-03", "orientation-04"],
+    perfectScreensTotal: 0, perfectScreenStreak: 0,
+    rewardState: {}, rewardQueue: [], seenFactIds: [], factsByRung: {},
+    inspectCounts: {}, lastShownRewardId: null,
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  await finish(4);
   await page.waitForTimeout(300);
   const owedBefore = (await ledger()).rewardQueue.length;
   await page.reload({ waitUntil: "networkidle" });
@@ -1142,7 +1200,7 @@ section("incentives");
     owedBefore === 1 && owedAfter === 1, `${owedBefore} -> ${owedAfter}`);
 }
 
-// ═══ 11b. facts are typeset, spoken, and kept ════════════════════════
+// ═══ 11b. facts are typeset and kept ═════════════════════════════════
 section("wellness");
 {
   const ledger = () =>
@@ -1179,6 +1237,8 @@ section("wellness");
   check("the sentence is chosen and stored when the card is earned", chosen.length === 1,
     JSON.stringify(chosen));
 
+  // The seal waits for a hand now, so open it.
+  await page.locator("[data-reward-action]").click();
   await page.waitForFunction(() => /A FACT ABOUT YOUR OUTIE/.test(document.body.innerText),
     null, { timeout: 5000 });
   // The sentence is typeset on the plate itself — real text over the

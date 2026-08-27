@@ -95,8 +95,7 @@ export function IncentiveForecast({ progress, variant = "handbook" }: Props) {
     // shortest thing they could do next.
     const lane = [...lanes].sort((a, b) => a.remaining - b.remaining)[0];
     return (
-      <div className="w-full max-w-[280px] text-left">
-        <div className="mb-2 h-px w-full bg-phos-800" />
+      <div className="w-full text-left">
         <div className="flex items-baseline justify-between gap-2 text-[8px] tracking-[0.22em] text-phos-600">
           <span>NEXT INCENTIVE</span>
           <span>CLASSIFIED</span>
