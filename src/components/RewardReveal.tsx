@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { speech } from "../audio/speech";
 import type { RewardDef } from "../game/catalog";
 import type { Fact } from "../game/facts";
+import type { Progress } from "../game/progress";
+import { IncentiveRecord } from "./IncentiveRecord";
 
 /**
  * The incentive pop: sealed, then opened.
@@ -20,12 +21,16 @@ import type { Fact } from "../game/facts";
  * 3. **One card at a time.** Two rewards never share a frame. The stack is
  *    the caller's business; this draws whichever one it is handed, and
  *    says how many are behind it.
- * 4. **Written, captioned and spoken are the same sentence.** There is one
- *    string per fact and all three read it, so they cannot drift.
+ * 4. **The seal waits for a hand.** It opened itself after 900ms once, and
+ *    a refiner who looked away missed the only moment the card existed.
+ *    Nothing here moves until it is tapped.
+ * 5. **What is filed is seen to be filed.** The last card of a boundary
+ *    shrinks into the incentive record rather than vanishing, so the
+ *    refiner learns where their things go and where to tap to find them.
  */
 
-/** How long the sealed card holds before it opens itself. */
-const SEAL_MS = 900;
+/** How long the card takes to shrink into the record. */
+const FILE_MS = 480;
 
 interface Props {
   reward: RewardDef;
@@ -38,8 +43,15 @@ interface Props {
   /** 1-based position in this boundary's stack, and its length. */
   index: number;
   total: number;
-  /** The terminal's mute switch. Silence is a supported way to play. */
-  muted: boolean;
+  /**
+   * Whether this card opens with the seal on. Only the first of a
+   * boundary does: the seal announces the whole payout, and re-sealing
+   * between cards of one stack makes three rewards feel like three
+   * interruptions.
+   */
+  sealed: boolean;
+  /** The ledger, for the record the card is filed into. */
+  progress: Progress;
   onAccept: () => void;
 }
 
@@ -48,45 +60,47 @@ export function RewardReveal({
   facts,
   index,
   total,
-  muted,
+  sealed,
+  progress,
   onAccept,
 }: Props) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!sealed);
+  /** True while the card is shrinking into the record block. */
+  const [filing, setFiling] = useState(false);
   /** Which sentence of a session is on the card. */
   const [step, setStep] = useState(0);
-  // Every card starts sealed and opens itself. The caller remounts this
-  // component per incentive, so there is no stale state to reset here.
-  useEffect(() => {
-    const t = setTimeout(() => setOpen(true), SEAL_MS);
-    return () => clearTimeout(t);
-  }, []);
+  const reduced =
+    typeof window !== "undefined" &&
+    (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
 
   const fact = facts[step] ?? null;
-
-  // The voice follows the sentence on screen, and leaves with the card.
-  useEffect(() => {
-    if (!open || !fact || muted) return;
-    speech.say(fact.text);
-    return () => speech.stop();
-  }, [open, fact, muted]);
-
-  useEffect(() => () => speech.stop(), []);
-
   const lastStep = step >= facts.length - 1;
   const advances = facts.length > 1 && !lastStep;
 
   const label = !open
-    ? "OPEN"
-    : advances
+    ? total > 1
+      ? `ACCEPT ALL ${total}`
+      : "OPEN"
+    : advances || index < total
       ? "CONTINUE"
-      : index < total
-        ? "ACCEPT · NEXT"
-        : "ACCEPT INCENTIVE";
+      : "FILE";
 
   return (
     <div className="absolute inset-0 z-70 flex flex-col items-center justify-center bg-phos-950/97 px-7 text-center">
+      {/* Everything above the control moves as one thing when it is filed,
+          so what shrinks into the record is the reward the refiner was
+          just looking at rather than an abstract shape. */}
+      <div
+        className="flex w-full flex-col items-center"
+        style={{
+          transition: `transform ${FILE_MS}ms cubic-bezier(.4,0,.2,1), opacity ${FILE_MS}ms ease-in`,
+          transform: filing ? "translateY(38vh) scale(0.08)" : "none",
+          opacity: filing ? 0 : 1,
+          transformOrigin: "center bottom",
+        }}
+      >
       <p className="text-[9px] tracking-[0.3em] text-phos-600">
-        {total > 1 ? `INCENTIVE ${index} OF ${total}` : "INCENTIVE"}
+        {!open ? "INCENTIVE" : total > 1 ? `INCENTIVE ${index} OF ${total}` : "INCENTIVE"}
         {open && facts.length > 1 ? ` · ${step + 1}/${facts.length}` : ""}
       </p>
 
@@ -133,7 +147,7 @@ export function RewardReveal({
           {/* The sealed card. Nothing here is derived from the reward: same
               box, same words, whatever is inside. */}
           <h1 className="crt-text-glow mt-2 text-[13px] font-bold tracking-[0.22em] text-phos-200">
-            INCENTIVE EARNED
+            {total > 1 ? `${total} INCENTIVES EARNED` : "INCENTIVE EARNED"}
           </h1>
           <div className="mt-3 h-px w-24 bg-phos-600" />
           <div
@@ -145,27 +159,50 @@ export function RewardReveal({
             </span>
           </div>
           <p className="mt-3 max-w-[260px] text-[10px] leading-relaxed text-phos-600">
-            Your refinement has been recognised.
+            {total > 1
+              ? "Your refinement has been recognised. They will be presented in turn."
+              : "Your refinement has been recognised."}
           </p>
         </>
       )}
 
+      </div>
+
       {/* Live from the first frame, which is what keeps every part of this
           skippable: while the card is sealed it opens it, then it steps
-          through the sentences, then it takes the reward. */}
+          through the sentences, then it files the reward away. */}
       <button
         type="button"
+        data-reward-action
         onClick={() => {
+          // A second tap while the card is on its way into the record is
+          // an impatient refiner, not a second reward: ignore it rather
+          // than disabling the control and making it look broken.
+          if (filing) return;
           if (!open) return setOpen(true);
           if (advances) return setStep((n) => n + 1);
-          speech.stop();
-          onAccept();
+          // The last card of a boundary is seen to be filed; the ones
+          // before it simply hand over to the next.
+          if (index < total || reduced) return onAccept();
+          setFiling(true);
+          setTimeout(onAccept, FILE_MS);
         }}
         className="mt-5 inline-flex items-center gap-2 rounded-[3px] border border-phos-400 bg-phos-600/25 px-5 py-2.5 text-[11px] font-bold tracking-[0.22em] text-phos-200 crt-text-glow active:bg-phos-600/50"
       >
         {label}
         <ChevronRight size={12} strokeWidth={2.6} />
       </button>
+
+      {/* Where it goes — the real block, not a caption of one. It fades in
+          under the shrinking card so that filing has a place on the screen,
+          and so that the block is something the refiner has watched
+          receive an incentive before they are ever asked to tap it. This
+          is the only time it appears on a screen that advances itself. */}
+      {filing ? (
+        <div className="pointer-events-none absolute inset-x-7 bottom-[10vh] flex justify-center">
+          <IncentiveRecord progress={progress} onOpen={() => {}} landing />
+        </div>
+      ) : null}
     </div>
   );
 }

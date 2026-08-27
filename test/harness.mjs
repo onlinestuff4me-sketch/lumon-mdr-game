@@ -232,13 +232,16 @@ export async function tap(page, origin, at) {
  * pretending the cards are not there.
  */
 export async function settleIncentives(page) {
-  const card = page.locator("button", { hasText: /^(OPEN|ACCEPT)/ });
+  const card = page.locator("[data-reward-action]");
   let cleared = 0;
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 14; i++) {
     if ((await card.count()) === 0) break;
-    await card.first().click();
+    // The last card of a boundary takes about half a second to shrink into
+    // the record; clicking through that is how a test ends up racing an
+    // element that is on its way out of the DOM.
+    await card.first().click({ timeout: 4000 }).catch(() => {});
     cleared++;
-    await page.waitForTimeout(220);
+    await page.waitForTimeout(340);
   }
   return cleared;
 }

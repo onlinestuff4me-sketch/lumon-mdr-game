@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { CATALOG, type RewardDef } from "../game/catalog";
 import { factById } from "../game/facts";
-import { rungById, type RewardId } from "../game/rewards";
+import { heldObjects } from "../game/held";
+import type { RewardId } from "../game/rewards";
 import type { Progress } from "../game/progress";
 
 /**
@@ -17,30 +17,6 @@ import type { Progress } from "../game/progress";
  * person you cannot remember.
  */
 
-interface Held {
-  readonly rewardId: RewardId;
-  readonly def: RewardDef;
-  /** How many times this object has been awarded. */
-  readonly times: number;
-}
-
-function held(progress: Progress): Held[] {
-  const counts = new Map<RewardId, number>();
-  for (const [rungId, state] of Object.entries(progress.rewardState)) {
-    if (state !== "claimed") continue;
-    const rung = rungById(rungId);
-    if (!rung) continue;
-    const def = CATALOG[rung.reward];
-    if (!def || def.kind !== "object") continue;
-    counts.set(rung.reward, (counts.get(rung.reward) ?? 0) + 1);
-  }
-  // Catalog order, which is ladder order: the shelf reads as the sequence
-  // the refiner lived through rather than as a leaderboard.
-  return (Object.keys(CATALOG) as RewardId[])
-    .filter((id) => counts.has(id))
-    .map((id) => ({ rewardId: id, def: CATALOG[id]!, times: counts.get(id)! }));
-}
-
 export function IncentiveShelf({
   progress,
   onInspect,
@@ -49,7 +25,7 @@ export function IncentiveShelf({
   onInspect: (rewardId: RewardId) => void;
 }) {
   const [open, setOpen] = useState<RewardId | null>(null);
-  const items = held(progress);
+  const items = heldObjects(progress);
   if (items.length === 0) return null;
 
   return (

@@ -34,7 +34,7 @@ a menu, and should be unable to answer "what is it?" until it opens.
 | Forecast reveal | **After the first reward pops** | Screens 1–2 stay clean. The finger trap arrives with no warning, and the forecast appears immediately behind it carrying the next sealed goal. The system explains itself by having already paid out once. |
 | Pacing unit | **Screens**, with named files as landmarks | Files are too coarse here: 18 names, and the first 13 screens share one. Screens give 30 rungs, which is where the density has to live. |
 | Canon posture | **Reach for the show's own names first** | Recognition is the point: a refiner who spots something they know grins, and a grin is worth more than an original joke of equal quality. Where the show establishes a name, use it. Where it does not, write in the same register and record it as original. The one line that does not move is the audit's: an item the show only ever *mentions* can be named in text, never given an invented face. |
-| Wellness voice | **The browser's speech synthesis, not shipped clips** | The fact bank assumes cached voice recordings. Forty-nine of them would be the first audio files in a repository that synthesises every other sound at runtime, and megabytes of download for a phone. The system voice is neutral, imitates no one, needs no network, and is never required: the sentence is on screen either way, and the mute switch turns it off. |
+| Wellness voice | **Nothing is spoken** | The fact bank assumes cached voice recordings; the browser's own speech synthesis stood in for them, and in play it sounded like a robot reading a card rather than a wellness counsellor reading a file. A wrong voice is worse than no voice. The sentence is typeset on the card and captioned, which is what the specification actually requires of it; a recorded performance can be added later without changing anything else. |
 | Bin credit | **On file completion, once per file** | A file abandoned or failed credits nothing; replaying a file credits nothing a second time. Counters stay monotonic and cannot be farmed. |
 
 ---
@@ -239,25 +239,82 @@ A screen that also crosses a bin threshold earns two rewards on the same
 boundary. This is designed for, not avoided — but it is never allowed to
 read as one confused event.
 
-- **They stack; they never merge and never drop.** Each keeps its own full
-  reveal. The source specification is explicit about this, and DESIGN's
-  worked example that merges two dance-experience rewards is the one place
-  it contradicts itself; the queue wins.
-- **The count is on the card.** From the first frame the header reads
-  `INCENTIVE 1 OF 2`, so a dismissal never reads as the end of the payout.
-- **One clears before the next enters.** The first card exits, a beat of
-  cleared board, then the second enters — never a crossfade, never two
-  rewards sharing a frame.
-- **Order is fixed and published:** the screens lane before the bins lane,
-  and within a lane, the lower threshold first. Deterministic, so two
-  players who earn the same pair see the same order.
-- **At most one major per boundary.** If the queue holds two major events,
-  the second stays queued for the next completion boundary rather than
-  running back to back. It is not lost and not re-rolled: the forecast shows
-  `EARNED · PENDING` until it presents.
+- **The seal announces the whole payout.** One sealed card per boundary,
+  reading `3 INCENTIVES EARNED`, and its control reads `ACCEPT ALL 3`.
+  Re-sealing between cards made three rewards feel like three
+  interruptions.
+- **Nothing opens itself.** The seal waited 900 ms and then opened on a
+  timer once; a refiner who looked away missed the only moment the card
+  existed. It waits to be tapped, however long that takes.
+- **They stack; they never merge and never drop.** Each keeps its own
+  reveal, numbered `INCENTIVE 2 OF 3`, and one clears before the next
+  arrives — never a crossfade, never two rewards sharing a frame.
+- **At most one major per boundary.** A second waits for the next screen
+  rather than running back to back, and shows `EARNED · PENDING` until it
+  does.
 - **A reload mid-queue re-presents from the front.** `presenting` is not a
-  resting state — the ledger reads it back as owed. This is already true in
-  the code as of M1.
+  resting state — the ledger reads it back as owed.
+
+### What is never shown twice in a row
+
+Watching someone reach screen 9 and be handed the same photograph three
+times settled these. All four are enforced where the queue is turned into
+a running order, so they hold however the ladder is rearranged later.
+
+1. **One card per reward, per boundary.** Two rungs that both award a fact
+   card are two facts, not two ceremonies — the second waits.
+2. **Never the same picture twice in a row.** Every fact card and every
+   Wellness session is the same plate, so those count as one look and
+   cannot follow each other. Two different objects are two different
+   photographs and sit together fine.
+3. **Never the reward that ended the last boundary**, so the spacing
+   survives across screens rather than only within one.
+4. **An object already on the shelf is not shown again.** A second finger
+   trap is still owed, still counted, and still appears on the shelf as
+   `×2` — but a repeat of the same photograph is the game repeating
+   itself. It is filed instead, and the record block names it: `FINGER
+   TRAP ISSUED AGAIN · FILED`.
+
+Rewards whose content changes every time — fact cards, Wellness sessions,
+the dance experience — are never repeats in this sense, because the
+sentence or the session is new even when the plate is not.
+
+### Where it goes: the incentive record
+
+An accepted incentive does not vanish. The last card of a boundary shrinks
+into the **incentive record**, a block that fades in beneath it as it goes:
+`INCENTIVE RECORD · 7 ITEMS HELD ›`, the next threshold underneath.
+
+That block is the one piece of permanent furniture the reward system adds.
+It sits at the foot of every completed file, it is tappable, and it opens
+the handbook *at the shelf* rather than at Section IV. The teaching is in
+the animation: a refiner who has watched an incentive be filed into a
+thing knows what that thing is, and never has to be told to go looking for
+it. It appears during the filing even on the orientation screens that
+advance themselves, which is the only furniture those screens carry.
+
+### When a record closes
+
+A wrong bin that ends a run of clean files takes its own beat — the same
+hold an incentive takes, because it is the same news pointing the other
+way. It cannot live on the file panel: most of orientation advances itself
+900 ms after clearing, and a notice that wipes with the screen is a notice
+nobody read.
+
+The copy stays inside Lumon's vocabulary. The refiner has a **record**, it
+was **unblemished**, and what it earns is a **commendation** — nothing here
+is a streak and nothing here is a scoreboard:
+
+> **YOUR UNBLEMISHED RECORD HAS BEEN CLOSED**
+> A temper was consigned to a bin that did not want it. The record stood at
+> 2 files refined without error. It now stands at none.
+> 3 consecutive files refined without error are required before the next
+> commendation may be issued.
+> No incentive already held has been withdrawn. Lumon does not take things
+> back.
+
+The number it asks for is read from the precision lane, so it is always the
+real next threshold rather than a figure in a string.
 
 ### What the player is never made to wait for
 

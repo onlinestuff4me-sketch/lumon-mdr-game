@@ -12,8 +12,9 @@ import {
 } from "../game/progress";
 import { presentable } from "../game/catalog";
 import { factById, type Fact } from "../game/facts";
-import { rungById } from "../game/rewards";
+import { LADDER, rungById } from "../game/rewards";
 import { RewardReveal } from "./RewardReveal";
+import { RecordNotice } from "./RecordNotice";
 import { MdeStage } from "./MdeStage";
 import {
   loadRuns,
@@ -32,6 +33,19 @@ import { HandbookModal } from "./HandbookModal";
 import { HUD } from "./HUD";
 import { PhaseOverlay } from "./PhaseOverlay";
 import { Viewport } from "./Viewport";
+
+/**
+ * The next rung of the precision lane above a given run of clean files.
+ *
+ * Used only to tell a refiner who has just broken one what the next
+ * commendation costs, in files rather than in jargon.
+ */
+function nextPerfectTarget(from: number): number | null {
+  const targets = LADDER.filter((r) => r.lane === "perfect")
+    .map((r) => r.at)
+    .sort((a, b) => a - b);
+  return targets.find((n) => n > from) ?? targets[0] ?? null;
+}
 
 /** A stable seed per rung, so the same session rebuilds the same floor. */
 function hashRung(id: string): number {
@@ -53,44 +67,108 @@ export function GameStage() {
   const [archive, setArchive] = useState<ReadonlySet<string>>(loadArchive);
   const [runStore, setRunStore] = useState<RunStore>(loadRuns);
   const [progress, setProgress] = useState<Progress>(loadProgress);
+  // The completion effect reads the ledger but must not re-run when the
+  // ledger changes — it *is* what changes it.
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
 
   /**
-   * What this boundary owes the refiner, in the order it will be shown.
+   * What this boundary owes the refiner, in the order it will be shown —
+   * and what it quietly files instead.
    *
    * Derived from the ledger rather than stored: the queue in the save is
    * the truth, and a second copy in React state is a second thing that can
    * be wrong after a reload.
    *
-   * Two rules shape it. A reward whose presentation is a later milestone —
-   * the fact cards, the Wellness sessions, the dance experience, the Waffle
-   * tiers — stays in the queue untouched rather than being claimed unseen.
-   * And at most one major event presents per boundary: a second one waits
-   * for the next completed screen instead of running back to back.
+   * Five rules, four of them learned from watching someone play screen 9
+   * and be handed the same picture three times:
+   *
+   * 1. A reward whose presentation is a later milestone stays queued
+   *    rather than being claimed unseen.
+   * 2. At most one major event per boundary. A second waits for the next
+   *    completed screen instead of running back to back.
+   * 3. One card per reward *id* per boundary. Two rungs that both award a
+   *    fact card are two facts, not two ceremonies.
+   * 4. Never two rewards showing the *same picture* in a row, nor the same
+   *    reward that ended the last boundary. Every fact card and every
+   *    Wellness session is the same plate, so those count as one look —
+   *    two of them back to back read as the game stuttering rather than as
+   *    two rewards. Two different objects are two different photographs
+   *    and sit together fine.
+   * 5. An **object** already on the shelf is not shown again. A second
+   *    finger trap is still owed and still counted, but a repeat of the
+   *    same photograph is the game repeating itself. It is filed instead,
+   *    and the record says so.
    */
-  const owed = (() => {
-    const out: {
+  const { owed, toFile } = (() => {
+    const queue: {
       rungId: string;
+      rewardId: string;
       reward: NonNullable<ReturnType<typeof presentable>>;
+      major: boolean;
       facts: Fact[];
     }[] = [];
-    let majorShown = false;
+    const toFile: { rungId: string; rewardId: string; name: string }[] = [];
+    const held = new Set<string>();
+    for (const [rungId, state] of Object.entries(progress.rewardState)) {
+      if (state !== "claimed") continue;
+      const r = rungById(rungId);
+      if (r) held.add(r.reward);
+    }
+
     for (const id of progress.rewardQueue) {
       const rung = rungById(id);
       if (!rung) continue;
       const reward = presentable(rung.reward);
       if (!reward) continue;
-      if (rung.size !== "minor") {
-        if (majorShown) continue;
-        majorShown = true;
+      // Rule 5: an object the refiner already owns.
+      if (reward.kind === "object" && held.has(rung.reward)) {
+        toFile.push({ rungId: id, rewardId: rung.reward, name: reward.name });
+        continue;
       }
-      // Chosen and stored when the reward was earned; looked up here, never
-      // drawn here.
-      const facts = (progress.factsByRung[id] ?? [])
-        .map(factById)
-        .filter((f): f is Fact => !!f);
-      out.push({ rungId: id, reward, facts });
+      queue.push({
+        rungId: id,
+        rewardId: rung.reward,
+        reward,
+        major: rung.size !== "minor",
+        // Chosen and stored when the reward was earned; looked up here,
+        // never drawn here.
+        facts: (progress.factsByRung[id] ?? [])
+          .map(factById)
+          .filter((f): f is Fact => !!f),
+      });
     }
-    return out;
+
+    // Greedy pass: take the first candidate that does not repeat the last
+    // one's kind or id. Anything that cannot be spaced out stays queued for
+    // a later boundary rather than being dropped.
+    /** What a refiner would say they had just looked at. */
+    const look = (r: NonNullable<ReturnType<typeof presentable>>) =>
+      r.kind === "fact" || r.kind === "session" ? "WELLNESS" : r.poster;
+
+    const out: typeof queue = [];
+    const usedIds = new Set<string>();
+    let majorShown = false;
+    let lastLook: string | null = null;
+    let lastId: string | null = progress.lastShownRewardId;
+    const rest = [...queue];
+    for (;;) {
+      const i = rest.findIndex(
+        (c) =>
+          !usedIds.has(c.rewardId) &&
+          !(c.major && majorShown) &&
+          look(c.reward) !== lastLook &&
+          c.rewardId !== lastId,
+      );
+      if (i < 0) break;
+      const [pick] = rest.splice(i, 1);
+      out.push(pick);
+      usedIds.add(pick.rewardId);
+      if (pick.major) majorShown = true;
+      lastLook = look(pick.reward);
+      lastId = pick.rewardId;
+    }
+    return { owed: out, toFile };
   })();
 
   // Only between files, never over a live board.
@@ -115,7 +193,60 @@ export function GameStage() {
   const stackTotal = owed.length + acceptedHere;
   const stackIndex = acceptedHere + 1;
 
-  const openHandbook = useCallback(() => {
+  /**
+   * A second issue of something already on the shelf goes straight into
+   * the record — no card, but never silently: the block names it, so the
+   * refiner sees that the terminal noticed.
+   */
+  const [filedNote, setFiledNote] = useState<{ boundary: string; names: string[] }>({
+    boundary: "",
+    names: [],
+  });
+  /**
+   * A run of clean files that a wrong bin has just closed.
+   *
+   * Told plainly, because the alternative is a counter that silently went
+   * back to nothing: the refiner is owed the fact that a commendation just
+   * moved further away, and what it now takes to reach it.
+   */
+  const [broken, setBroken] = useState<{
+    levelId: string;
+    at: number;
+    needs: number;
+  } | null>(null);
+  // Keyed by the file it happened on, not by a screen count: the count is
+  // what the completion is about to change, so a note keyed to it would
+  // never match the panel it was written for.
+  const brokenHere =
+    broken?.levelId === LEVELS[hud.levelIndex]?.id ? broken : null;
+  /**
+   * The notice waits its turn behind any incentives: good news first, and
+   * one thing on the screen at a time. Like a reward, it holds the board —
+   * most of orientation advances itself, and a notice that wipes with the
+   * screen is a notice nobody read.
+   */
+  const noticing = hud.phase === "complete" && !revealing && brokenHere !== null;
+  const filedHere = filedNote.boundary === boundary ? filedNote.names : [];
+  const toFileNames = useRef<string[]>([]);
+  toFileNames.current = toFile.map((f) => f.name);
+  const fileKey = toFile.map((f) => f.rungId).join(",");
+  useEffect(() => {
+    if (hud.phase !== "complete" || !fileKey) return;
+    const pending = fileKey.split(",");
+    setFiledNote({ boundary, names: toFileNames.current });
+    for (const rungId of pending) {
+      setProgress((p) => claim(p, rungId, { shown: false }));
+    }
+    // `toFile` is derived from the queue this effect drains, so it is read
+    // through a ref rather than depended on: naming it as a dependency
+    // would re-run the effect against a list it had just emptied.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hud.phase, fileKey, boundary]);
+
+
+  const [handbookAt, setHandbookAt] = useState<"top" | "shelf">("top");
+  const openHandbook = useCallback((at: "top" | "shelf" = "top") => {
+    setHandbookAt(at);
     // Read the archive here rather than tracking it in an effect: the
     // drawer is the only thing that renders it, and it is unmounted until
     // this runs, so opening it is the one moment the value is needed.
@@ -141,8 +272,8 @@ export function GameStage() {
   // stays put and the next file does not begin loading behind a
   // celebration.
   useEffect(() => {
-    engine.setPaused(handbook || revealing);
-  }, [engine, handbook, revealing]);
+    engine.setPaused(handbook || revealing || noticing);
+  }, [engine, handbook, revealing, noticing]);
 
   // ── canvas attach + sizing ──────────────────────────────────────────
   useLayoutEffect(() => {
@@ -231,6 +362,13 @@ export function GameStage() {
     // reward. The ledger credits a level id once, which is what makes this
     // safe to run on a re-render and safe on a replayed file.
     if (level) {
+      // Read before crediting: the ledger is about to reset the run.
+      const hadClean = progressRef.current.perfectScreenStreak;
+      const counts = (level.showBins ?? level.tempers).length > 1;
+      if (counts && !engine.perfect && hadClean > 0) {
+        const needs = nextPerfectTarget(hadClean) ?? 3;
+        setBroken({ levelId: level.id, at: hadClean, needs });
+      }
       setProgress(
         creditScreen({
           levelId: level.id,
@@ -407,7 +545,7 @@ export function GameStage() {
               void getAudio().unlock();
               engine.setMode(m);
             }}
-            onHandbook={openHandbook}
+            onHandbook={() => openHandbook("top")}
           />
           <div className="flex-1" />
           <div className="shrink-0" style={{ height: layout.binsH }} />
@@ -457,6 +595,7 @@ export function GameStage() {
             levelIndex={hud.levelIndex}
             progress={progress}
             onInspect={(rewardId) => setProgress((p) => inspect(p, rewardId))}
+            startAt={handbookAt}
           />
         ) : null}
 
@@ -468,6 +607,9 @@ export function GameStage() {
         <PhaseOverlay
           hud={hud}
           progress={progress}
+          filed={filedHere}
+          onOpenRecord={() => openHandbook("shelf")}
+          recordLanding={acceptedHere > 0}
           onStart={() => play(0)}
           onNext={() => engine.nextLevel()}
           onRestart={() => engine.restart()}
@@ -478,7 +620,7 @@ export function GameStage() {
             setRunStore(loadRuns());
             engine.restartQuarter();
           }}
-          onHandbook={openHandbook}
+          onHandbook={() => openHandbook("top")}
           runStore={runStore}
           onPlay={play}
           onNewSave={() => {
@@ -505,7 +647,8 @@ export function GameStage() {
             muted={hud.muted}
             onDone={() => {
               const id = owed[0].rungId;
-              setProgress((p) => claim(p, id));
+              const rewardId = owed[0].rewardId;
+              setProgress((p) => claim(p, id, { shown: true, rewardId }));
               setAccepted((a) =>
                 a.boundary === boundary
                   ? { boundary, n: a.n + 1 }
@@ -523,16 +666,26 @@ export function GameStage() {
             facts={owed[0].facts}
             index={stackIndex}
             total={stackTotal}
-            muted={hud.muted}
+            sealed={stackIndex === 1}
+            progress={progress}
             onAccept={() => {
               const id = owed[0].rungId;
-              setProgress((p) => claim(p, id));
+              const rewardId = owed[0].rewardId;
+              setProgress((p) => claim(p, id, { shown: true, rewardId }));
               setAccepted((a) =>
                 a.boundary === boundary
                   ? { boundary, n: a.n + 1 }
                   : { boundary, n: 1 },
               );
             }}
+          />
+        ) : null}
+
+        {noticing && brokenHere ? (
+          <RecordNotice
+            at={brokenHere.at}
+            needs={brokenHere.needs}
+            onAcknowledge={() => setBroken(null)}
           />
         ) : null}
 
