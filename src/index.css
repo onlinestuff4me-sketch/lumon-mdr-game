@@ -53,6 +53,94 @@
   }
 }
 
+/* ── the CRT's own vocabulary for a panel arriving ───────────────────
+   A cathode-ray tube does not fade things in. It strikes a line across
+   the middle of the screen and lets it bloom outwards, and it does the
+   same thing in reverse when it loses signal. Every overlay in the
+   incentive sequence enters and leaves that way, so a reward that
+   appears reads as this terminal drawing it rather than as a web page
+   swapping a div. */
+
+@keyframes crt-open {
+  0%   { transform: scaleY(0.004); filter: brightness(3.2) saturate(0.2); }
+  30%  { transform: scaleY(0.02);  filter: brightness(2.6) saturate(0.4); }
+  60%  { transform: scaleY(0.72);  filter: brightness(1.5) saturate(0.9); }
+  100% { transform: scaleY(1);     filter: brightness(1)   saturate(1); }
+}
+
+/* The content inside an unfurled panel resolves a beat behind the sweep,
+   the way a phosphor takes a moment to settle after the beam passes. */
+@keyframes crt-resolve {
+  0%   { opacity: 0; transform: translateY(-3px); }
+  45%  { opacity: 0; transform: translateY(-3px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+/* The bright band that runs down a tube when it redraws. Used once, on
+   the frame an incentive arrives, so the wipe has a leading edge. */
+@keyframes crt-band {
+  0%   { transform: translateY(-12%); opacity: 0; }
+  12%  { opacity: 0.85; }
+  100% { transform: translateY(112%); opacity: 0; }
+}
+
+/* The seal parting. The lid does not cross-fade into the picture: it
+   splits on a bright horizontal line and retracts, and the picture was
+   already loaded and sitting behind it. */
+@keyframes seal-part-top {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(-101%); }
+}
+
+@keyframes seal-part-bottom {
+  0%   { transform: translateY(0); }
+  100% { transform: translateY(101%); }
+}
+
+/* The line the seal parts along, blooming out of nothing and gone by the
+   time the lid has cleared the frame. */
+@keyframes seal-seam {
+  0%   { transform: scaleX(0.1); opacity: 0; }
+  22%  { transform: scaleX(1);   opacity: 1; }
+  100% { transform: scaleX(1);   opacity: 0; }
+}
+
+/* The control that is waiting to be pressed. A slow breath on the glow
+   rather than a blink: it has to read as live without reading as an
+   alarm, and it sits under a finger for as long as the refiner wants. */
+@keyframes crt-throb {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(47, 214, 138, 0);
+    border-color: var(--color-phos-400);
+  }
+  50% {
+    box-shadow: 0 0 14px 2px rgba(47, 214, 138, 0.45);
+    border-color: var(--color-phos-200);
+  }
+}
+
+/* A meter reaching its end. One pulse, not a loop — the point is the
+   arrival, and the file is over by the time it finishes. */
+@keyframes meter-full {
+  0%   { filter: brightness(1); }
+  35%  { filter: brightness(2.1); }
+  100% { filter: brightness(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @keyframes crt-open   { 0%, 100% { transform: none; filter: none; } }
+  @keyframes crt-resolve { 0% { opacity: 0; } 100% { opacity: 1; } }
+  @keyframes crt-band   { 0%, 100% { opacity: 0; } }
+  @keyframes seal-seam  { 0%, 100% { opacity: 0; } }
+  @keyframes meter-full { 0%, 100% { filter: brightness(1); } }
+  @keyframes crt-throb {
+    0%, 100% {
+      box-shadow: 0 0 8px 1px rgba(47, 214, 138, 0.35);
+      border-color: var(--color-phos-200);
+    }
+  }
+}
+
 @keyframes glitch-shift {
   0%, 100% { transform: translate3d(0, 0, 0); }
   20% { transform: translate3d(-4px, 1px, 0); }

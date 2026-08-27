@@ -27,7 +27,10 @@ interface Props {
 
 export function RecordNotice({ at, needs, onAcknowledge }: Props) {
   return (
-    <div className="absolute inset-0 z-70 flex flex-col items-center justify-center bg-phos-950/97 px-7 text-center">
+    <div
+      className="absolute inset-0 z-70 flex flex-col items-center justify-center overflow-hidden bg-phos-950/97 px-7 text-center"
+      style={{ animation: "crt-open 300ms cubic-bezier(.2,.7,.3,1) 1" }}
+    >
       <p className="text-[9px] tracking-[0.3em] text-phos-600">NOTICE</p>
       <h1 className="mt-2 max-w-[280px] text-[13px] font-bold leading-tight tracking-[0.18em] text-alarm">
         YOUR UNBLEMISHED RECORD
@@ -55,6 +58,7 @@ export function RecordNotice({ at, needs, onAcknowledge }: Props) {
         data-record-notice
         onClick={onAcknowledge}
         className="mt-5 inline-flex items-center gap-2 rounded-[3px] border border-phos-400 bg-phos-600/25 px-5 py-2.5 text-[11px] font-bold tracking-[0.22em] text-phos-200 crt-text-glow active:bg-phos-600/50"
+        style={{ animation: "crt-throb 1.9s ease-in-out infinite" }}
       >
         ACKNOWLEDGE
         <ChevronRight size={12} strokeWidth={2.6} />

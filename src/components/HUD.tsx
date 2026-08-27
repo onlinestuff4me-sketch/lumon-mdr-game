@@ -10,6 +10,7 @@ export function HUD({ hud, height }: { hud: HudSnapshot; height: number }) {
   const urgent =
     !hud.untimed && hud.timeLeft <= 15 && hud.phase !== "complete";
   const pct = Math.round(hud.progress * 100);
+  const done = pct >= 100;
 
   return (
     <header
@@ -39,13 +40,18 @@ export function HUD({ hud, height }: { hud: HudSnapshot; height: number }) {
             : `PROGRESS: ${pct}%`}
         </span>
       </div>
-      {/* Overall refinement meter. */}
+      {/* Overall refinement meter. It pulses once on arrival at 100%, and
+          the engine holds the finished board for 600ms before drawing an
+          overlay, so that arrival is always watched rather than covered. */}
       <div className="mt-1 h-[3px] w-full overflow-hidden rounded-sm bg-phos-800">
         <div
           className="h-full bg-phos-400 transition-[width] duration-300 ease-out"
           style={{
             width: `${pct}%`,
-            boxShadow: "0 0 6px var(--color-phos-400)",
+            boxShadow: done
+              ? "0 0 10px 1px var(--color-phos-200)"
+              : "0 0 6px var(--color-phos-400)",
+            animation: done ? "meter-full 520ms ease-out 260ms 1" : undefined,
           }}
         />
       </div>

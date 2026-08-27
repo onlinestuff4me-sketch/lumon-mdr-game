@@ -90,6 +90,8 @@ export interface HudSnapshot {
   pace: Pace;
   untimed: boolean;
   ceremony: "none" | "full";
+  /** False while a just-completed file's meters are still filling. */
+  settled: boolean;
   teaching: boolean;
   activeTempers: readonly Temper[];
   /** [n, of] within a multi-screen sequence, or null. */
@@ -116,6 +118,7 @@ function sameSnapshot(a: HudSnapshot, b: HudSnapshot): boolean {
     a.muted !== b.muted ||
     a.hapticsOn !== b.hapticsOn ||
     a.assist !== b.assist ||
+    a.settled !== b.settled ||
     a.activeTempers !== b.activeTempers ||
     Math.ceil(a.timeLeft) !== Math.ceil(b.timeLeft) ||
     Math.round(a.progress * 100) !== Math.round(b.progress * 100)
@@ -157,6 +160,16 @@ const FALL = 4.2;
 const RADIUS_SQ = PROBE_RADIUS * PROBE_RADIUS;
 /** Seconds a refined packet takes to dissolve into its bin. */
 const ABSORB_SECONDS = 0.45;
+
+/**
+ * How long a completed file is left alone before an overlay may cover it.
+ *
+ * The last packet lands, the bin meter and the header meter both animate
+ * 300ms to their ends, and the absorb flight itself is 450ms. Six hundred
+ * milliseconds is the first moment at which all three are done and the
+ * board is showing a finished file rather than a finishing one.
+ */
+const SETTLE_S = 0.6;
 /** How long the digits take to fly from the grid into the box. Long
  *  enough to be watched, short enough that a refiner who already knows
  *  where the bin is never has to wait for it. */
@@ -288,6 +301,19 @@ export class GameEngine {
   private lastRefined: Temper = "WO";
   /** Elapsed time at which a finished no-ceremony screen advances. */
   private advanceAt = -1;
+  /**
+   * Elapsed time at which a finished file has *settled* — the moment the
+   * meters have visibly reached their ends and an overlay may be drawn
+   * over them.
+   *
+   * The last packet credits its bin and completes the file on the same
+   * frame, so an overlay keyed to phase "complete" alone lands on top of
+   * four meters still animating the 300ms to 100%. The refiner did the
+   * work and never saw it finish. Nothing about the file changes during
+   * this window; input is already stopped. It exists purely so the thing
+   * that was being filled is seen to fill.
+   */
+  private settleAt = -1;
   /**
    * No rejected drop on this screen yet.
    *
@@ -549,6 +575,9 @@ export class GameEngine {
       // each flash a 100% banner, an addendum and a NEXT FILE button for
       // 900ms — the twenty-one interruptions the sequence exists to avoid.
       ceremony: level.ceremony ?? "full",
+      // False for the first half-second of a completed file, while the
+      // meters run out. Every end-of-file overlay waits on it.
+      settled: this.phase !== "complete" || this.elapsed >= this.settleAt,
       teaching: level.teaches === true,
       activeTempers: shown,
       stage: level.stage ?? null,
@@ -641,6 +670,7 @@ export class GameEngine {
     this.refreshLayout();
     this.orientHintAt = level.selfAgitate === true ? 13 : -1;
     this.advanceAt = -1;
+    this.settleAt = -1;
     this.flawless = true;
     this.lensHoldUntil = -1;
     this.reticle.scale = 1;
@@ -1892,6 +1922,9 @@ export class GameEngine {
     }
     const level = LEVELS[this.levelIndex];
     this.phase = "complete";
+    // The meters have this long to reach their ends before anything is
+    // allowed to cover them.
+    this.settleAt = this.elapsed + SETTLE_S;
     this.releaseGesture();
     getAudio().silenceAll();
     haptics.releaseProximity();
@@ -1902,7 +1935,13 @@ export class GameEngine {
       // on the cleared board, then the next screen. No banner, no addendum,
       // no button. The phase still goes to "complete" so input stops.
       getAudio().chime();
-      this.advanceAt = this.elapsed + (level.autoAdvanceMs ?? 900) / 1000;
+      // Whichever is longer. A screen that advances itself must not wipe
+      // while its own bins are still filling, and the existing 900ms is
+      // already comfortably past the settle — so on every level shipped
+      // today this changes nothing, and it cannot regress if either
+      // number is retuned later.
+      this.advanceAt =
+        this.elapsed + Math.max(SETTLE_S, (level.autoAdvanceMs ?? 900) / 1000);
       this.say("REFINED", "praise");
     } else {
       getAudio().fanfare();

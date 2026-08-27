@@ -13,6 +13,7 @@
 import {
   open, state, findGroup, touchFor, drag, tap, touchTap, load, setMode,
   boxAndBin, carryToBin, byName, section, check, eq, summary, settleIncentives,
+  settled,
 } from "./harness.mjs";
 
 const { browser, page, origin, errors, cdp } = await open();
@@ -1054,10 +1055,32 @@ section("incentives");
       if (!(await state(page)).carrying) break;
       await carryToBin(page, origin, g);
     }
-    await page.waitForTimeout(150);
+    await settled(page);
   };
   const seen = (text) => page.getByText(text, { exact: false }).count();
   const action = () => page.locator("[data-reward-action]");
+  const landing = () => page.locator("[data-record-landing]");
+  /** Clear the landing screen that follows the last card of a stack. */
+  const resume = async () => {
+    await landing().click({ timeout: 4000 });
+    await page.waitForTimeout(200);
+  };
+  /**
+   * Refine a screen and stop the instant the meters read 100%, before the
+   * engine has released the board — the window the settle exists to
+   * protect.
+   */
+  const finishUnsettled = async (index) => {
+    await load(page, index);
+    let guard = 0;
+    while ((await state(page)).progress < 100 && guard++ < 10) {
+      const g = await findGroup(page);
+      if (!g) break;
+      await tap(page, origin, await touchFor(page, g.one, "marquee"));
+      if (!(await state(page)).carrying) break;
+      await carryToBin(page, origin, g);
+    }
+  };
 
   // ── one incentive: sealed until tapped, then filed ───────────────
   await seed({
@@ -1067,7 +1090,20 @@ section("incentives");
     rewardState: {}, rewardQueue: [], seenFactIds: [], factsByRung: {},
     inspectCounts: {}, lastShownRewardId: null,
   });
-  await finish(0);
+  await finishUnsettled(0);
+
+  // The last packet completes the file on the frame it lands, and the bin
+  // meters take 300ms to reach their ends. Covering them with a card on
+  // that frame means the refiner does the work and never sees it finish.
+  {
+    const st = await state(page);
+    check("a finished file is not settled the instant it completes",
+      st.progress === 100 && st.settled === false, JSON.stringify(st.settled));
+    check("and nothing is drawn over the meters while they fill",
+      (await action().count()) === 0);
+  }
+  await settled(page);
+  await page.waitForTimeout(120);
 
   check("finishing the first screen seals an incentive", (await seen("INCENTIVE EARNED")) === 1);
   check("and says nothing about what it is", (await seen("FINGER TRAP")) === 0);
@@ -1091,8 +1127,24 @@ section("incentives");
   await page.waitForTimeout(900);
   eq("filing claims it", (await ledger()).rewardState.S01, "claimed");
   eq("and empties the queue", (await ledger()).rewardQueue.length, 0);
+
+  // Where it went. The card flies into the incentive record and the
+  // record stays on screen, holding the board, until it is dismissed —
+  // this is the only moment a refiner is taught where their things live.
+  check("filing lands on the record, not back on the board",
+    (await landing().count()) === 1);
+  check("which names what was just filed", (await seen("FINGER TRAP")) === 1);
+  check("shows the record it went into",
+    (await page.locator("[data-incentive-record]").count()) === 1);
+  check("says what the next incentive costs", (await seen("NEXT INCENTIVE")) === 1);
+  check("without saying what it is", (await seen("CLASSIFIED")) === 1);
+  await page.waitForTimeout(700);
+  eq("and the screen does not advance underneath it",
+    await page.evaluate(() => window.__mdr.levelIndex), 0);
+
+  await resume();
   await page.waitForFunction(() => window.__mdr.levelIndex === 1, null, { timeout: 6000 });
-  check("and the held screen advances once the card is gone", true);
+  check("and the held screen advances once the record is dismissed", true);
 
   // ── two at once: announced as two, then shown one at a time ──────
   await seed({
@@ -1130,6 +1182,10 @@ section("incentives");
   const done = await ledger();
   eq("both end up claimed", [done.rewardState.S02, done.rewardState.B040], ["claimed", "claimed"]);
   eq("with nothing left in the queue", done.rewardQueue.length, 0);
+  check("a stack lands on one record screen, not two",
+    (await landing().count()) === 1);
+  check("and it counts them as two filed", (await seen("2 INCENTIVES FILED")) === 1);
+  await resume();
 
   // ── an object already held is filed, not shown again ─────────────
   await seed({
@@ -1217,7 +1273,7 @@ section("wellness");
       if (!(await state(page)).carrying) break;
       await carryToBin(page, origin, g);
     }
-    await page.waitForTimeout(150);
+    await settled(page);
   };
 
   // Two screens short of the first fact card.
@@ -1274,7 +1330,7 @@ section("music dance experience");
       if (!(await state(page)).carrying) break;
       await carryToBin(page, origin, g);
     }
-    await page.waitForTimeout(200);
+    await settled(page);
   };
 
   // Twelve screens in, everything before claimed: the next completed

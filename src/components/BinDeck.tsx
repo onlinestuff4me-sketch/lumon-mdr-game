@@ -81,7 +81,7 @@ export function BinDeck({
                 <span className="shrink-0 text-[8px] tracking-[0.1em] text-phos-600">
                   {def.name}
                 </span>
-                <Meter pct={pct} colour={def.css} className="h-[6px] flex-1" />
+                <Meter pct={pct} colour={def.css} full={full} className="h-[6px] flex-1" />
                 <span className="shrink-0 text-[9px] tabular-nums text-phos-400">
                   {pct}%
                 </span>
@@ -102,7 +102,7 @@ export function BinDeck({
                 <div className="text-[7px] leading-tight tracking-[0.1em] text-phos-600">
                   {def.name}
                 </div>
-                <Meter pct={pct} colour={def.css} className="h-[5px] w-full" />
+                <Meter pct={pct} colour={def.css} full={full} className="h-[5px] w-full" />
               </>
             )}
           </div>
@@ -112,13 +112,23 @@ export function BinDeck({
   );
 }
 
+/**
+ * A bin's fill.
+ *
+ * The pulse on `full` is the file's only acknowledgement that this
+ * particular bin is done, and the engine holds the finished board for
+ * 600ms before anything is drawn over it — so the meter is guaranteed to
+ * be seen reaching its end rather than being covered on the way there.
+ */
 function Meter({
   pct,
   colour,
+  full,
   className,
 }: {
   pct: number;
   colour: string;
+  full: boolean;
   className: string;
 }) {
   return (
@@ -128,7 +138,11 @@ function Meter({
         style={{
           width: `${pct}%`,
           background: colour,
-          boxShadow: `0 0 6px ${colour}`,
+          boxShadow: full ? `0 0 10px 1px ${colour}` : `0 0 6px ${colour}`,
+          // Fires on the transition from not-full to full, and again the
+          // next time a fresh bin fills, because the property is removed
+          // in between.
+          animation: full ? "meter-full 520ms ease-out 260ms 1" : undefined,
         }}
       />
     </div>

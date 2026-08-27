@@ -15,6 +15,7 @@ import { factById, type Fact } from "../game/facts";
 import { LADDER, rungById } from "../game/rewards";
 import { RewardReveal } from "./RewardReveal";
 import { RecordNotice } from "./RecordNotice";
+import { RecordLanding } from "./RecordLanding";
 import { MdeStage } from "./MdeStage";
 import {
   loadRuns,
@@ -171,8 +172,15 @@ export function GameStage() {
     return { owed: out, toFile };
   })();
 
-  // Only between files, never over a live board.
-  const revealing = hud.phase === "complete" && owed.length > 0;
+  /**
+   * Only between files, never over a live board — and never over a board
+   * whose meters are still filling. The last packet completes the file on
+   * the frame it lands, so a card keyed to the phase alone covered four
+   * bins and a header still animating to 100%: the refiner did the work
+   * and never saw it finish. `hud.settled` is the engine's word for "the
+   * meters are done, cover me".
+   */
+  const revealing = hud.phase === "complete" && hud.settled && owed.length > 0;
 
   /**
    * Which card of this boundary's stack is on screen — `INCENTIVE 1 OF 2`,
@@ -188,8 +196,41 @@ export function GameStage() {
    * it.
    */
   const boundary = `${hud.levelIndex}:${progress.screensCompleted}`;
-  const [accepted, setAccepted] = useState({ boundary: "", n: 0 });
-  const acceptedHere = accepted.boundary === boundary ? accepted.n : 0;
+  const [accepted, setAccepted] = useState<{
+    boundary: string;
+    names: string[];
+  }>({ boundary: "", names: [] });
+
+  /**
+   * The ledger as it stood when this boundary opened, so the landing
+   * screen can animate the count and the meter from what the refiner had
+   * to what they now have. Captured on the first render of the boundary
+   * and never again — `progress` is deliberately not a dependency, since
+   * the whole value of this is that it does *not* follow the claims.
+   */
+  const [before, setBefore] = useState<{ boundary: string; progress: Progress }>({
+    boundary: "",
+    progress,
+  });
+  useEffect(() => {
+    if (hud.phase !== "complete") return;
+    setBefore((b) => (b.boundary === boundary ? b : { boundary, progress }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hud.phase, boundary]);
+
+  /**
+   * The beat after the last card of a boundary has been filed: what was
+   * filed, where it went, and what the next incentive costs. It holds the
+   * board the way a card does — most of orientation advances itself, and
+   * a landing that wipes with the screen teaches nobody where anything
+   * is.
+   */
+  const [landed, setLanded] = useState<{ boundary: string; names: string[] } | null>(
+    null,
+  );
+  const landing = landed?.boundary === boundary ? landed : null;
+  const acceptedNames = accepted.boundary === boundary ? accepted.names : [];
+  const acceptedHere = acceptedNames.length;
   const stackTotal = owed.length + acceptedHere;
   const stackIndex = acceptedHere + 1;
 
@@ -225,7 +266,8 @@ export function GameStage() {
    * most of orientation advances itself, and a notice that wipes with the
    * screen is a notice nobody read.
    */
-  const noticing = hud.phase === "complete" && !revealing && brokenHere !== null;
+  const noticing =
+    hud.phase === "complete" && hud.settled && !revealing && brokenHere !== null;
   const filedHere = filedNote.boundary === boundary ? filedNote.names : [];
   const toFileNames = useRef<string[]>([]);
   toFileNames.current = toFile.map((f) => f.name);
@@ -272,8 +314,8 @@ export function GameStage() {
   // stays put and the next file does not begin loading behind a
   // celebration.
   useEffect(() => {
-    engine.setPaused(handbook || revealing || noticing);
-  }, [engine, handbook, revealing, noticing]);
+    engine.setPaused(handbook || revealing || noticing || landing !== null);
+  }, [engine, handbook, revealing, noticing, landing]);
 
   // ── canvas attach + sizing ──────────────────────────────────────────
   useLayoutEffect(() => {
@@ -649,11 +691,15 @@ export function GameStage() {
               const id = owed[0].rungId;
               const rewardId = owed[0].rewardId;
               setProgress((p) => claim(p, id, { shown: true, rewardId }));
+              const name = owed[0].reward.name;
               setAccepted((a) =>
                 a.boundary === boundary
-                  ? { boundary, n: a.n + 1 }
-                  : { boundary, n: 1 },
+                  ? { boundary, names: [...a.names, name] }
+                  : { boundary, names: [name] },
               );
+              if (owed.length === 1) {
+                setLanded({ boundary, names: [...acceptedNames, name] });
+              }
             }}
           />
         ) : revealing ? (
@@ -672,12 +718,31 @@ export function GameStage() {
               const id = owed[0].rungId;
               const rewardId = owed[0].rewardId;
               setProgress((p) => claim(p, id, { shown: true, rewardId }));
+              const name = owed[0].reward.name;
               setAccepted((a) =>
                 a.boundary === boundary
-                  ? { boundary, n: a.n + 1 }
-                  : { boundary, n: 1 },
+                  ? { boundary, names: [...a.names, name] }
+                  : { boundary, names: [name] },
               );
+              // The last card of the stack is the one that was seen to
+              // fly into the record, so it is the one the landing screen
+              // follows.
+              if (owed.length === 1) {
+                setLanded({ boundary, names: [...acceptedNames, name] });
+              }
             }}
+          />
+        ) : null}
+
+        {/* After the last card, before the board comes back: where it
+            went, what is held, and what the next one costs. */}
+        {landing && !revealing ? (
+          <RecordLanding
+            from={before.boundary === boundary ? before.progress : progress}
+            to={progress}
+            names={landing.names}
+            onOpenRecord={() => openHandbook("shelf")}
+            onResume={() => setLanded(null)}
           />
         ) : null}
 

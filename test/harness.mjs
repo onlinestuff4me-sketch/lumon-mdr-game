@@ -136,8 +136,27 @@ export const state = (page) =>
       gestureOpen: e.gesture !== null,
       marqueeActive: e.marquee.active,
       reticleActive: e.reticle.active,
+      // False while a finished file's meters are still running out to
+      // their ends. Every end-of-file overlay waits on it.
+      settled: s.settled,
     };
   });
+
+/**
+ * Wait out the beat a finished file gets to itself.
+ *
+ * The engine holds a completed board for 600ms so the bin meters and the
+ * header meter are seen to reach 100% before anything covers them. A test
+ * that asserts on an end-of-file overlay has to wait for the same signal
+ * the overlays wait for, or it is asserting on a frame the refiner never
+ * sees either.
+ */
+export const settled = (page) =>
+  page.waitForFunction(
+    () => window.__mdr.getSnapshot().settled,
+    null,
+    { timeout: 4000 },
+  );
 
 /** Solve the reticle taper: what must the finger touch for the reticle of
  *  `kind` to land on this board point? Uses the engine's own function, so a
@@ -232,16 +251,40 @@ export async function tap(page, origin, at) {
  * pretending the cards are not there.
  */
 export async function settleIncentives(page) {
-  const card = page.locator("[data-reward-action]");
+  // Three controls carry the sequence: the card's own action (OPEN,
+  // CONTINUE, FILE), the landing screen that follows the last card, and
+  // the notice a closed record raises. A test that is trying to get back
+  // to a board has to clear all of them.
+  const action = page.locator(
+    "[data-reward-action], [data-record-landing], [data-record-notice]",
+  );
+  // A finished file holds its meters for 600ms before any overlay may be
+  // drawn over them, so "nothing on screen" is not a true answer until
+  // that window has passed — counting immediately after the last packet
+  // lands reports an empty screen and then leaves a card standing on the
+  // board for the rest of the test. Ask the engine rather than guessing a
+  // delay: a fixed wait long enough to be safe is also long enough for a
+  // screen with nothing owed to advance out from under the caller.
+  await page
+    .waitForFunction(
+      () => {
+        const s = window.__mdr?.getSnapshot?.();
+        return !s || s.phase !== "complete" || s.settled;
+      },
+      null,
+      { timeout: 3000 },
+    )
+    .catch(() => {});
+  await page.waitForTimeout(120);
   let cleared = 0;
-  for (let i = 0; i < 14; i++) {
-    if ((await card.count()) === 0) break;
-    // The last card of a boundary takes about half a second to shrink into
-    // the record; clicking through that is how a test ends up racing an
-    // element that is on its way out of the DOM.
-    await card.first().click({ timeout: 4000 }).catch(() => {});
+  for (let i = 0; i < 20; i++) {
+    if ((await action.count()) === 0) break;
+    // The last card of a boundary takes about two thirds of a second to
+    // fly into the record; clicking through that is how a test ends up
+    // racing an element that is on its way out of the DOM.
+    await action.first().click({ timeout: 4000 }).catch(() => {});
     cleared++;
-    await page.waitForTimeout(340);
+    await page.waitForTimeout(420);
   }
   return cleared;
 }

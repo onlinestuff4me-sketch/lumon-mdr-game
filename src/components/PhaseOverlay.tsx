@@ -79,6 +79,10 @@ export function PhaseOverlay({
   // Nor does the scrim: an auto-advancing screen must stay looking like the
   // board it just cleared, not like a dimmed interstitial.
   if (hud.phase === "complete" && hud.ceremony === "none") return null;
+  // Nor while a finished file's meters are still running out: the panel
+  // that says FILE REFINED must not be the thing that stops the refiner
+  // watching the file be refined.
+  if (hud.phase === "complete" && !hud.settled) return null;
 
   const level = LEVELS[hud.levelIndex];
 

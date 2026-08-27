@@ -207,6 +207,21 @@ Only at a completion boundary: the screen is refined, the board is cleared,
 and the next file has not begun loading. Never mid-file, never over a first
 attempt at a new mechanic, never on top of another reward.
 
+**And never before the file is seen to finish.** The last packet credits
+its bin and completes the file on the same frame, while the bin meter and
+the header meter still have 300 ms of animation left to run and the absorb
+flight has 450 ms. A card keyed to the completion alone lands on top of all
+three: the refiner does the work and never watches it land. The engine
+therefore holds a completed board for **600 ms** — `SETTLE_S` — and
+publishes `settled` on the HUD snapshot. Every end-of-file overlay waits on
+it: the card, the file panel, and the closed-record notice alike. Both
+meters pulse once as they reach their ends, so the arrival is an event
+rather than a value that was already there.
+
+A screen that advances itself waits for `max(SETTLE_S, autoAdvanceMs)`, so
+the settle can never be cut short by a wipe and, at today's 900 ms, costs
+nothing.
+
 The thirteen orientation screens need one addition to make that true. They
 carry no ceremony today — the engine holds `complete` for 900 ms and wipes
 straight into the next screen. **An owed reward suspends that auto-advance.**
@@ -220,8 +235,17 @@ ever loading behind a celebration.
    quit cannot lose or reroll the reward.
 2. **Anticipation, 0.5–1.5 s** — the results clear, the room tone ducks, a
    sealed `INCENTIVE EARNED` card enters.
-3. **Reveal** — the seal opens; name and media appear together, for the
-   first time.
+3. **Reveal** — the seal *parts*: two halves of an opaque lid split on a
+   bright seam and retract off the plate, which was fetched into the
+   browser's cache while the card sat sealed and has never been in the
+   document. Name and media appear together, for the first time.
+
+   Nothing on the card may move when this happens. Every band — the label,
+   the title, the plate, the caption — is a fixed height, and the plate
+   frame is a fixed 9:16 in both states, which is the aspect every poster
+   is authored at. A card that re-centres itself on the frame the picture
+   arrives is a card that jitters at exactly the moment the refiner is
+   looking hardest.
 4. **Celebration, 5–8 s** for an object; longer for the dance experience and
    the Waffle tiers, both skippable after first viewing. Video where one
    exists, poster where it does not, still where motion is reduced — and a
@@ -232,6 +256,22 @@ ever loading behind a celebration.
 
 Every card carries a dismiss control from its first frame. Reduced motion
 substitutes a clean fade, the still image and a short sound.
+
+### How the terminal draws these
+
+A cathode-ray tube does not fade things in. It strikes a line across the
+middle of the screen and lets it bloom outwards, and it loses signal the
+same way in reverse. Every overlay in the incentive sequence enters on that
+vocabulary — `crt-open` unfurls the panel from a bright horizontal line,
+`crt-band` runs the leading edge of the sweep down it once, `crt-resolve`
+lets the content settle a beat behind the beam — so a reward that appears
+reads as this terminal drawing it rather than as a web page swapping a div.
+
+The one control on each of these screens throbs (`crt-throb`, a 1.9 s
+breath on the glow, not a blink). It is the only thing on the screen that
+does anything, and a refiner who does not know that is a refiner sitting in
+front of a card that appears to have stopped. Every one of these keyframes
+has a `prefers-reduced-motion` variant that flattens it to its end state.
 
 ### When two arrive at once
 
@@ -281,17 +321,43 @@ sentence or the session is new even when the plate is not.
 
 ### Where it goes: the incentive record
 
-An accepted incentive does not vanish. The last card of a boundary shrinks
-into the **incentive record**, a block that fades in beneath it as it goes:
-`INCENTIVE RECORD · 7 ITEMS HELD ›`, the next threshold underneath.
+An accepted incentive does not vanish. The last card of a boundary **flies
+into the incentive record** — a real block, drawn at a fixed anchor
+(`RECORD_DOCK`) and *measured on screen*, so the card is aimed at where the
+block actually is rather than at a plausible-looking offset:
+`INCENTIVE RECORD · 7 ITEMS HELD ›`, the next threshold underneath. While
+the card is in flight the block still reads the old count; it is the
+landing that ticks it up.
 
 That block is the one piece of permanent furniture the reward system adds.
 It sits at the foot of every completed file, it is tappable, and it opens
-the handbook *at the shelf* rather than at Section IV. The teaching is in
-the animation: a refiner who has watched an incentive be filed into a
-thing knows what that thing is, and never has to be told to go looking for
-it. It appears during the filing even on the orientation screens that
-advance themselves, which is the only furniture those screens carry.
+the handbook *at the shelf* rather than at Section IV.
+
+### The landing, which is where the teaching happens
+
+Filing is not a transition back to the board. It is its own screen, and it
+exists because three questions arrive at that exact moment and at no other:
+
+| Question | What answers it |
+| --- | --- |
+| Where did that go? | The block the card flew into is still there, in the same place, unmoved. |
+| What do I have now? | The count ticks up under the refiner's eye rather than arriving already changed — which is why both the before and after ledgers are passed in. |
+| What do I do next? | The record carries the forecast: the nearest lane, its meter, and the one action that advances it. |
+
+And one it answers for later: the block is live here, and it is the same
+block that sits at the foot of every file screen. A refiner who taps it
+here has learned where their things live.
+
+The header on this screen is anchored *off the dock*, not off the top of
+the viewport — the block's position is fixed, and a header measured from
+the top overlaps it on any screen height it was not tuned against.
+
+This matters most on the thirteen orientation screens, which carry no
+ceremony and wipe 900 ms after clearing. Before the landing existed, an
+early incentive shrank into a block that appeared for half a second and
+left with the screen, on precisely the files where the ladder pays out
+hardest. The landing holds the board until it is dismissed, so those
+screens teach the record rather than flashing it.
 
 ### When a record closes
 
