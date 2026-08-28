@@ -1293,6 +1293,18 @@ section("incentives");
   eq("with nothing left in the queue", done.rewardQueue.length, 0);
   check("a stack lands on one record screen, not two",
     (await landing().count()) === 1);
+  // The panel behind this screen covers the header, so the header's strip
+  // is not the box to fly at: the summary used to shrink into something
+  // hidden and then have a panel drawn over the top of where it went.
+  {
+    const aim = await page.evaluate(() => {
+      const panel = document.querySelector('[data-record-box="panel"]');
+      const page_ = document.querySelector("[data-incentive-summary]");
+      return { panel: !!panel, summary: !!page_ };
+    });
+    check("with a record box on the panel behind it to fly into",
+      aim.panel && aim.summary, JSON.stringify(aim));
+  }
   check("and it counts them as two kept", (await seen("2 INCENTIVES KEPT")) === 1);
   await resume();
 
@@ -1346,6 +1358,83 @@ section("incentives");
   check("and from the header, at every moment of the game",
     (await page.locator('[data-record-box="hud"]').count()) === 1);
 
+  // ── a stage moves the meter; a replayed file says it will not ────
+  await seed({
+    version: 1, filesCompleted: 0, screensCompleted: 0, binsTotal: 0,
+    binsByTemper: { WO: 0, FC: 0, DR: 0, MA: 0 },
+    creditedLevelIds: [], perfectScreensTotal: 0, perfectScreenStreak: 0,
+    rewardState: {}, rewardQueue: [], seenFactIds: [], factsByRung: {},
+    inspectCounts: {}, lastShownRewardId: null,
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  {
+    const bar = () =>
+      page.evaluate(() => {
+        const box = document.querySelector('[data-record-box="hud"]');
+        const fill = box?.querySelector(".bg-phos-400");
+        return {
+          text: box?.innerText.replace(/\n/g, " | ") ?? "",
+          w: fill ? Math.round(fill.getBoundingClientRect().width) : -1,
+        };
+      });
+    await load(page, 0);
+    await page.waitForTimeout(300);
+    const before = await bar();
+    // One stage of a three-stage file. The file counter cannot move — the
+    // file is not refined — but the refiner did a screen's work, and a
+    // record that shows nothing for it is why "REFINE 2 MORE FILES" sat
+    // unchanged for a dozen screens.
+    let guard = 0;
+    while ((await state(page)).progress < 100 && guard++ < 12) {
+      const g = await findGroup(page);
+      if (!g) break;
+      await tap(page, origin, await touchFor(page, g.one, "marquee"));
+      if (!(await state(page)).carrying) break;
+      await carryToBin(page, origin, g);
+    }
+    await page.waitForTimeout(500);
+    const after = await bar();
+    check("a stage of a file moves the record's meter",
+      after.w > before.w, JSON.stringify([before, after]));
+    check("while the whole-file count stays honest",
+      after.text.includes("0/1"), after.text);
+  }
+
+  // A save that has already credited these files earns nothing by
+  // replaying them, which is correct — and used to be reported as though
+  // the instruction on screen could still be followed.
+  await seed({
+    version: 1, screensCompleted: 12, binsTotal: 30,
+    binsByTemper: { WO: 10, FC: 8, DR: 7, MA: 5 },
+    creditedLevelIds: await page.evaluate(() =>
+      window.__mdr.levels.filter((l) => l.name === "ORIENTATION").map((l) => l.id)),
+    perfectScreensTotal: 4, perfectScreenStreak: 4,
+    rewardState: { S01: "claimed", S02: "claimed", S03: "claimed" },
+    rewardQueue: [], seenFactIds: [], factsByRung: {},
+    inspectCounts: {}, lastShownRewardId: null,
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  {
+    const p = await ledger();
+    eq("a save with no file count derives one from its credited levels",
+      p.filesCompleted, undefined);
+    await load(page, 0);
+    await page.waitForTimeout(300);
+    const text = await page.evaluate(
+      () => document.querySelector('[data-record-box="hud"]')?.innerText ?? "");
+    check("a file already in the ledger says it will not count again",
+      /ALREADY REFINED/.test(text), text.replace(/\n/g, " | "));
+    // And a fresh file says nothing of the kind.
+    await load(page, await byName(page, "DRANESVILLE"));
+    await page.waitForTimeout(300);
+    const fresh = await page.evaluate(
+      () => document.querySelector('[data-record-box="hud"]')?.innerText ?? "");
+    check("a file that has not been refined does not",
+      !/ALREADY REFINED/.test(fresh), fresh.replace(/\n/g, " | "));
+  }
+
   // ── the full record: categories, counts, and concealed slots ─────
   await seed({
     version: 1, filesCompleted: 8, screensCompleted: 14, binsTotal: 42,
@@ -1371,7 +1460,7 @@ section("incentives");
   await page.waitForTimeout(600);
   check("the header strip opens the full record",
     (await seen("INCENTIVES RECORD")) >= 1);
-  for (const label of ["ISSUED ITEMS", "OUTIE FACTS", "WELLNESS SESSIONS", "DEPARTMENT EVENTS"]) {
+  for (const label of ["ISSUED ITEMS", "OUTIE FACTS", "HANDBOOK NOTES", "WELLNESS SESSIONS", "DEPARTMENT EVENTS"]) {
     check(`  ${label} has a section of its own`, (await seen(label)) >= 1);
   }
   check("earned entries are named", (await seen("FINGER TRAP")) >= 1);

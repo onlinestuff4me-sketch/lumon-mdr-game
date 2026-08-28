@@ -205,6 +205,24 @@ export const ORIENT_STAGES: readonly OrientStage[] = [
  *  outwards and quieten as the ladder climbs. */
 const OR_FOCUS = ["center", "center", "mid", "mid", "edge", "edge"] as const;
 
+/**
+ * One addendum per orientation file, not one for all six.
+ *
+ * Every completed file releases a line from the Perpetuity Wing, and the
+ * six orientation files were releasing the same one — so the screen that
+ * marks finishing a file said nothing about the file that had just been
+ * finished. Each is about its own lesson, in the wing's own register:
+ * grandiose, unhelpful, and perfectly serious.
+ */
+const OR_LORE = [
+  "Everything you will ever refine is already on the screen. Most of it is only pretending to be still.",
+  "A second group is not twice the work. Kier held that it is the same work, held twice.",
+  "Two tempers on one screen is the first real question this department asks of you.",
+  "The wheel turns whether or not you are watching it. Nothing on it waits its turn.",
+  "Some bins are not for you. A bin that stays empty has still done its work.",
+  "All four at once is not a test. Kier did not believe in tests. It is a Tuesday.",
+] as const;
+
 function orientationScreens(): LevelDef[] {
   const out: LevelDef[] = [];
   const total = ORIENT_STAGES.reduce((n, st) => n + st.screens, 0);
@@ -256,8 +274,7 @@ function orientationScreens(): LevelDef[] {
         tempers: [...new Set(tempers)],
         ...(showBins ? { showBins } : {}),
         spacing: groups >= 4 ? 5 : 6,
-        lore:
-          "Everything you will ever refine is already on the screen. Most of it is only pretending to be still.",
+        lore: OR_LORE[stage],
         seconds: 0,
         untimed: true,
         training: true,

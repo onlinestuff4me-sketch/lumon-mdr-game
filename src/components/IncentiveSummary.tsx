@@ -82,7 +82,16 @@ export function IncentiveSummary({
     if (!stowing) return;
     const id = requestAnimationFrame(() => {
       const page = document.querySelector("[data-incentive-summary]");
-      const dock = document.querySelector('[data-record-box="hud"]');
+      // Whichever record is going to be *visible* when the scrim lifts.
+      //
+      // On a file that ends with a ceremony, the FILE REFINED panel is
+      // already behind this screen and it covers the header — so the page
+      // was flying at a strip nobody could see, and landing behind a
+      // panel that then appeared over the top of it. The panel draws the
+      // same record box; aim at that one when it is there.
+      const dock =
+        document.querySelector('[data-record-box="panel"]') ??
+        document.querySelector('[data-record-box="hud"]');
       if (!page || !dock) return;
       const p = page.getBoundingClientRect();
       const d = dock.getBoundingClientRect();

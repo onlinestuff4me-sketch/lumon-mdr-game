@@ -240,13 +240,22 @@ The incentive record is divided into four, in the show's own vocabulary
 | Category | Contains | How many |
 | --- | --- | --- |
 | `ISSUED ITEMS` | Finger trap, eraser, melon bar, crystal portrait, egg bar, remembrance melon | 10 payouts |
-| `OUTIE FACTS` | One approved sentence about the person you are outside | 10 payouts |
+| `OUTIE FACTS` | One approved sentence about the person you are outside | 6 payouts |
+| `HANDBOOK NOTES` | Lumon on the subject of a temper. About the work, never about the worker | 4 payouts |
 | `WELLNESS SESSIONS` | Several sentences, read to you in the room | 3 payouts |
 | `DEPARTMENT EVENTS` | Music Dance Experience, both Waffle Party tiers | 5 payouts |
 
 Counted in *payouts* (ladder rungs), not in catalog entries — the fact card
-is one picture issued ten times with ten different sentences, and "1 of 1
-OUTIE FACTS" would be a lie to a refiner with nine more coming.
+is one picture issued many times with different sentences, and "1 of 1
+OUTIE FACTS" would be a lie to a refiner with more coming.
+
+**An outie fact is about an outie.** Every sentence in that bank begins
+"Your outie", and a data invariant fails the build if one does not. Lumon's
+own doctrine — a passage about Woe for refining Woe — rides the same blank
+card and is a *handbook note*, with its own reward, its own headline and
+its own shelf. They were the same thing for a while, which is how a
+milestone for refining Woe came to announce "WELLNESS HAS A FACT ABOUT YOUR
+OUTIE" and then print a sentence about Kier.
 
 ### What may and may not be said about an unearned incentive
 

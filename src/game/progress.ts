@@ -121,6 +121,24 @@ function filesAmong(levelIds: readonly string[]): number {
   return files;
 }
 
+/**
+ * Whether the file this level belongs to has already been credited in
+ * full.
+ *
+ * The *file*, not the level. Crediting is per level, so a refiner standing
+ * on stage two of three has stage one in the ledger already — and asking
+ * about the level would report "already refined" in the middle of refining
+ * it, which is both wrong and exactly the moment the meter is supposed to
+ * move.
+ */
+export function fileCredited(levelIndex: number, p: Progress): boolean {
+  const level = LEVELS[levelIndex];
+  if (!level) return false;
+  const key = level.fileKey ?? level.id;
+  const stages = LEVELS.filter((l) => (l.fileKey ?? l.id) === key);
+  return stages.every((l) => p.creditedLevelIds.includes(l.id));
+}
+
 const KEY = "lumon.mdr.progress.v1";
 const VERSION = 1;
 

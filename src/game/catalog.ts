@@ -51,6 +51,11 @@ export interface RewardDef {
    * experience is an event that presents as a dance floor.
    */
   readonly event?: true;
+  /**
+   * Lumon on the subject of the work, rather than news about the person
+   * you are outside. Rides the same blank card; shelves separately.
+   */
+  readonly doctrine?: true;
   /** Shown for the first time at the reveal, and never before it. */
   readonly name: string;
   /**
@@ -98,6 +103,19 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
     name: "A FACT ABOUT YOUR OUTIE",
     earned: "WELLNESS HAS A FACT ABOUT YOUR OUTIE",
     line: "Wellness has prepared a statement concerning the person you are outside. It is not a matter for discussion.",
+    poster: asset("r03_outie_fact_card.webp"),
+  },
+  R04: {
+    kind: "fact",
+    doctrine: true,
+    name: "A NOTE FROM THE HANDBOOK",
+    earned: "THE HANDBOOK HAS A NOTE ON THE TEMPERS",
+    line: "A passage concerning the tempers has been made available to you. It concerns the work, not the worker.",
+    // The same blank card the Outie facts use, because it is the same
+    // object: a sentence Lumon has decided you should read. What it is
+    // *not* is a fact about your outie, which is why it has a reward of
+    // its own — the temper milestones were handing out doctrine about
+    // Kier under a headline promising news from home.
     poster: asset("r03_outie_fact_card.webp"),
   },
   R05: {

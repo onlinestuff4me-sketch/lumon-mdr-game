@@ -522,10 +522,39 @@ console.log(`\n── outie facts ${"─".repeat(46)}`);
   if (doctrine.length !== 4) fail(`${doctrine.length} doctrine cards, not one per temper`);
   ok(`${canon.length} show-derived and ${original.length} original facts, plus ${doctrine.length} doctrine lines`);
 
+  // THE BUG THIS EXISTS FOR: the four temper milestones read doctrine and
+  // presented it on the Outie card, so a milestone for refining Woe
+  // announced "WELLNESS HAS A FACT ABOUT YOUR OUTIE" and then printed a
+  // sentence about Kier. Two rules keep them apart from here on.
+  //
+  // 1. Every sentence in the Outie bank is about the outie.
+  for (const f of [...canon, ...original]) {
+    if (!/\byour outie\b/i.test(f.text)) {
+      fail(`${f.id} is in the Outie bank and is not about an outie: ${f.text}`);
+    }
+  }
+  // 2. Doctrine is never presented as one. A rung reading a doctrine line
+  //    must award the handbook note, and a rung awarding the Outie card
+  //    must never read one.
+  for (const rung of LADDER) {
+    const plan = FACT_PLAN[rung.id];
+    const reads = (plan?.fixed ?? []).some((id) => id.startsWith("DOC_"));
+    if (reads && rung.reward !== "R04") {
+      fail(`${rung.id} reads doctrine but awards ${rung.reward}, not the handbook note`);
+    }
+    if (!reads && rung.reward === "R04") {
+      fail(`${rung.id} awards the handbook note but reads no doctrine`);
+    }
+  }
+  ok("doctrine is shelved as a handbook note, never as a fact about an outie");
+
   // Every rung that awards a fact card or a session has a plan, and every
   // plan belongs to such a rung.
   for (const rung of LADDER) {
-    const wants = rung.reward === "R03" ? 1 : rung.reward === "R06" ? -1 : 0;
+    // R03 and R04 both typeset one sentence on the blank card; R06 reads
+    // several. Everything else reads none.
+    const oneLiner = rung.reward === "R03" || rung.reward === "R04";
+    const wants = oneLiner ? 1 : rung.reward === "R06" ? -1 : 0;
     const planned = factCount(rung.id);
     if (wants === 1 && planned !== 1) fail(`${rung.id} is a fact card but reads ${planned} facts`);
     if (wants === -1 && planned < 3) fail(`${rung.id} is a session but reads only ${planned} facts`);

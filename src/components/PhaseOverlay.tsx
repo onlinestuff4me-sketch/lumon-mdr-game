@@ -16,6 +16,8 @@ interface Props {
   onOpenRecord: () => void;
   /** True when an incentive has just been filed into the block. */
   recordLanding: boolean;
+  /** True when this file was already credited and cannot pay again. */
+  alreadyRefined: boolean;
   onStart: () => void;
   onNext: () => void;
   onRestart: () => void;
@@ -59,6 +61,7 @@ export function PhaseOverlay({
   filed,
   onOpenRecord,
   recordLanding,
+  alreadyRefined,
   onStart,
   onNext,
   onRestart,
@@ -85,6 +88,15 @@ export function PhaseOverlay({
   if (hud.phase === "complete" && !hud.settled) return null;
 
   const level = LEVELS[hud.levelIndex];
+
+  /**
+   * Which file this is, out of how many — counted in files rather than in
+   * levels, because "FILE 13 OF 29" on the last stage of orientation is
+   * counting a unit the refiner was never shown.
+   */
+  const fileKeys = LEVELS.map((l) => l.fileKey ?? l.id);
+  const fileCount = new Set(fileKeys).size;
+  const fileNumber = new Set(fileKeys.slice(0, hud.levelIndex + 1)).size;
 
   return (
     <div className="absolute inset-0 z-60 flex flex-col items-center justify-center bg-phos-950/94 px-7 text-center">
@@ -187,53 +199,60 @@ export function PhaseOverlay({
           every one of the twenty orientation screens for 900ms apiece. */}
       {hud.phase === "complete" && hud.ceremony !== "none" ? (
         <>
-          {/* Four separate ways of saying "you finished" is three too many.
-              The ticker behind this scrim already carries the praise line
-              and the HUD already reads 100%, so the panel says it once and
-              spends the rest of the screen on what was earned and what is
-              next. */}
+          {/* The file that was just refined, by name and loudest — this
+              screen exists to say which one is done. The ticker behind the
+              scrim already carries the praise line and the header already
+              reads 100%, so "REFINED" is a stamp under the name rather
+              than the headline. */}
           <p className="text-[9px] tracking-[0.3em] text-phos-600">
-            FILE {hud.levelIndex + 1} OF {LEVELS.length} · {level.name}
+            FILE {fileNumber} OF {fileCount} · REFINED
           </p>
-          <h1 className="crt-text-glow mt-2 text-[13px] font-bold tracking-[0.22em] text-phos-200">
-            FILE REFINED
+          <h1 className="crt-text-glow mt-2 max-w-[290px] text-[15px] font-bold leading-tight tracking-[0.16em] text-phos-200">
+            {level.name} #{level.fileCode}
           </h1>
           <div className="mt-3 h-px w-24 bg-phos-600" />
 
-          {/* One line of the story, released per completed file — and, for
-              now, the only thing this screen hands over. The reward reveal
-              lands in front of this panel rather than inside it. */}
-          <div className="mt-4 w-full max-w-[280px] rounded-[3px] border border-phos-700 bg-phos-900/40 px-3 py-2.5">
-            <div className="text-[8px] tracking-[0.24em] text-phos-600">
-              PERPETUITY WING · ADDENDUM {hud.levelIndex + 1}
-            </div>
-            <p className="mt-1 text-[10px] italic leading-relaxed text-phos-300">
-              {hud.lore}
-            </p>
-            <p className="mt-1.5 text-[8px] tracking-[0.18em] text-phos-600">
-              FILED · HANDBOOK &gt; ARCHIVE
-            </p>
-          </div>
-          {/* The record. Under the addendum rather than over it: the file
-              just refined gets its own moment first, and this is the thing
-              that sends the refiner back in — it says what the next
-              incentive costs.
+          {/* The wing's line about *this* file. Unbordered and quiet: it
+              is flavour released for finishing, and it was carrying the
+              weight of the whole screen while the thing the refiner
+              actually needed sat under it in smaller type. */}
+          <p className="mt-3 text-[8px] tracking-[0.24em] text-phos-600">
+            PERPETUITY WING · ADDENDUM {hud.levelIndex + 1}
+          </p>
+          <p className="mt-1.5 max-w-[280px] text-[10px] italic leading-relaxed text-phos-500">
+            {hud.lore}
+          </p>
+
+          {/* What this file bought, and what the next incentive costs. The
+              only bordered object on the screen, because it is the thing
+              that sends the refiner back in.
 
               The same component the header strip draws, deliberately: this
               panel covers the header, and a refiner who has learned one
-              box has learned both. */}
-          <div className="mt-4 flex w-full max-w-[280px] flex-col items-center gap-1.5">
+              box has learned both — and it is where the incentive summary
+              flies when it stows itself. */}
+          <div className="mt-5 flex w-full max-w-[280px] flex-col items-center gap-1.5">
             <IncentiveRecordBox
               progress={progress}
               onOpen={onOpenRecord}
               variant="panel"
               landing={recordLanding}
+              alreadyRefined={alreadyRefined}
             />
             {filed.length > 0 ? (
               <p className="text-[8px] leading-snug tracking-[0.14em] text-phos-600">
                 {filed.map((n) => `${n} ISSUED AGAIN`).join(" · ")} · KEPT
               </p>
             ) : null}
+            <button
+              type="button"
+              data-view-record
+              onClick={onOpenRecord}
+              className="mt-0.5 inline-flex items-center gap-1 text-[9px] tracking-[0.2em] text-phos-500 underline-offset-4 active:text-phos-300"
+            >
+              VIEW ALL INCENTIVES
+              <ChevronRight size={10} strokeWidth={2.4} aria-hidden />
+            </button>
           </div>
           {hud.isLastLevel ? (
             <>
