@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
  * Locks the whole experience to a 9:16 portrait screen.
  *
  * On a phone this fills the display; on a desktop it letterboxes to a
- * centred slab so the CRT never stretches. Sizing is done with a pure CSS
+ * centerd slab so the CRT never stretches. Sizing is done with a pure CSS
  * `min()` pair rather than a resize listener — no layout thrash, and it
  * survives the mobile URL bar collapsing (dvh).
  */

@@ -3,7 +3,7 @@ import type { Pace } from "./constants";
 /**
  * Player settings, persisted per browser.
  *
- * Losing your shift length, your mute state and your colour assist on every
+ * Losing your shift length, your mute state and your color assist on every
  * reload is its own small punishment, and this game is played in short
  * sittings on a phone. Every read and write is guarded: storage throws
  * outright in some contexts (private windows, blocked site data), and a

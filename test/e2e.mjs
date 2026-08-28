@@ -13,6 +13,8 @@
 import {
   open, state, findGroup, touchFor, drag, tap, touchTap, load, setMode,
   boxAndBin, carryToBin, byName, section, check, eq, summary, settleIncentives,
+  lastTrainingIndex, orientationIndices, refineFile,
+  settled,
 } from "./harness.mjs";
 
 const { browser, page, origin, errors, cdp } = await open();
@@ -46,7 +48,7 @@ section("gesture lifecycle");
     ["zero-length drag", async () => drag(page, origin, { x: 40, y: 300 }, { x: 41, y: 301 })],
     ["box containing nothing", async () => drag(page, origin, { x: 20, y: 250 }, { x: 60, y: 290 })],
     ["drag off the top edge", async () => drag(page, origin, g.ctr, { x: g.ctr.x, y: -40 })],
-    ["cancelled pointer", async () => {
+    ["canceled pointer", async () => {
       await page.mouse.move(origin.x + g.ctr.x, origin.y + g.ctr.y);
       await page.mouse.down();
       await page.waitForTimeout(80);
@@ -112,21 +114,86 @@ section("reachability");
 
   // The control deck must sit above the board, so it never crosses the path
   // a packet is dragged along.
-  const deck = await page.evaluate(() => {
+  // Nothing may sit between the board and the bins: down there it would cut
+  // across the path every packet is dragged along. The mode deck used to
+  // be the thing this was guarding against; it is gone entirely now — the
+  // board decides probe from select by what the refiner does — and the
+  // guard still has to hold for whatever is put there next.
+  const bands = await page.evaluate(() => {
     const L = window.__mdr.layout;
-    const el = [...document.querySelectorAll("*")].find((n) =>
+    const modes = [...document.querySelectorAll("*")].some((n) =>
       n.textContent?.trim().startsWith("MODE:"));
-    const st = document.querySelector('[role="application"]').getBoundingClientRect();
-    const r = el?.getBoundingClientRect();
-    return r
-      ? { deckBottom: Math.round(r.bottom - st.top), gridTop: Math.round(L.grid.y),
-          gridBottom: Math.round(L.grid.y + L.grid.h), binsTop: Math.round(L.h - L.binsH) }
-      : null;
+    const record = document.querySelector('[data-record-box="hud"]');
+    return {
+      recordDrawn: !!record,
+      modes,
+      gridBottom: Math.round(L.grid.y + L.grid.h),
+      binsTop: Math.round(L.binsTop),
+      gap: L.gap,
+      recordTop: Math.round(L.recordTop),
+      binsH: L.binsH,
+      recordAt: L.recordAt,
+    };
   });
-  check("the control deck is above the board", !!deck && deck.deckBottom <= deck.gridTop + 2,
-    JSON.stringify(deck));
-  check("and nothing sits between the board and the bins",
-    !!deck && deck.binsTop - deck.gridBottom < 4, JSON.stringify(deck));
+  check("there is no mode switch to press", !bands.modes);
+  // The two doors out of the game, both in the header, both labelled.
+  {
+    const hb = page.locator("[data-handbook]");
+    check("the handbook is a labelled button, not a lone question mark",
+      (await hb.innerText()).includes("HANDBOOK"));
+    check("and the settings have a control of their own",
+      (await page.locator("[data-settings]").count()) === 1);
+    // Audio unlocks on the first touch anywhere; the nudge that used to
+    // say so was a line of text sitting on the board, and the toggle it
+    // was really about lives in settings.
+    check("nothing on the board asks to enable audio",
+      !/ENABLE TERMINAL AUDIO/.test(await page.evaluate(() => document.body.innerText)));
+    await page.locator("[data-settings]").click();
+    await page.waitForTimeout(500);
+    check("the gear opens the terminal settings",
+      (await page.getByText("TERMINAL SETTINGS").count()) >= 1);
+    check("where the audio toggle is",
+      (await page.getByText("TERMINAL AUDIO").count()) >= 1);
+    await page.locator('[aria-label="Close handbook"]').click();
+    await page.waitForTimeout(300);
+  }
+  // Exactly one gap, the same one that separates every other band. The
+  // complaint that produced this was bins sitting on top of the record.
+  check("the board and the bins are one gap apart",
+    bands.binsTop - bands.gridBottom === bands.gap, JSON.stringify(bands));
+  // One row, however many bins. Adding a bin narrows the row; it never
+  // deepens it, which is what used to cost the board a fifth of its height
+  // the moment the fourth temper arrived.
+  {
+    const decks = await page.evaluate(async () => {
+      const out = [];
+      for (const i of [0, window.__mdr.levels.findIndex((l) => l.name === "CALIBRATION")]) {
+        window.__mdr.startLevel(i);
+        const L = window.__mdr.layout;
+        const r = L.activeTempers.map((t) => L.binRects[t]);
+        out.push({
+          n: r.length,
+          tops: [...new Set(r.map((b) => Math.round(b.y)))].length,
+          h: Math.round(r[0].h),
+          deck: L.binsH,
+        });
+      }
+      return out;
+    });
+    check("every bin deck is a single row",
+      decks.every((d) => d.tops === 1), JSON.stringify(decks));
+    check("and one bin is exactly as tall as four",
+      new Set(decks.map((d) => d.h)).size === 1, JSON.stringify(decks));
+    check("so the deck is the same depth whatever the file shows",
+      new Set(decks.map((d) => d.deck)).size === 1, JSON.stringify(decks));
+    await load(page, 0);
+  }
+
+  check("and so are the bins and the incentives record",
+    bands.recordAt === "top"
+      ? bands.recordTop < bands.gridBottom
+      : bands.recordTop - (bands.binsTop + bands.binsH) === bands.gap,
+    JSON.stringify(bands));
 
   // A deck can show more bins than the file can fill (the orientation rung
   // that introduces bins which must NOT be fed). The layout reserves a cell
@@ -174,7 +241,7 @@ section("reachability");
 section("playthroughs");
 {
   // Orientation, tap-only, all the way through the final full-deck screen.
-  await load(page, 12);
+  await load(page, await lastTrainingIndex(page));
   let guard = 0;
   while ((await state(page)).progress < 100 && guard++ < 10) {
     const g = await findGroup(page);
@@ -446,7 +513,7 @@ section("reticle and hint");
       still: e.packet !== null,
     };
   });
-  check("touching the box recentres it under the thumb", grab.offBy <= 2,
+  check("touching the box recenters it under the thumb", grab.offBy <= 2,
     `${grab.offBy}px from the carry reticle`);
   check("and it does not slip again while dragging", grab.drift <= 2,
     `${grab.drift}px unexplained`);
@@ -497,26 +564,48 @@ section("reticle and hint");
   // A tap anywhere over the group counts, not just within a pad of a glyph.
   // A five-digit group spread over two rows has gaps wider than the pad in
   // the middle of it, and taps landing there were being dropped.
-  await load(page, 0);
-  const g = await findGroup(page);
-  const gaps = await page.evaluate(() => {
-    const e = window.__mdr, b = e.board, c = b.clusters[0];
-    const pts = c.members.map((m) => ({ x: b.nodes[m].hx + b.nodes[m].dx, y: b.nodes[m].hy + b.nodes[m].dy }));
-    const x0 = Math.min(...pts.map((p) => p.x)), x1 = Math.max(...pts.map((p) => p.x));
-    const y0 = Math.min(...pts.map((p) => p.y)), y1 = Math.max(...pts.map((p) => p.y));
-    // Sample the footprint and keep the points furthest from every glyph —
-    // the ones a pad-only hit test would miss.
-    let worst = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, d: 0 };
-    for (let i = 0; i <= 10; i++) {
-      for (let j = 0; j <= 10; j++) {
-        const x = x0 + ((x1 - x0) * i) / 10;
-        const y = y0 + ((y1 - y0) * j) / 10;
-        const d = Math.min(...pts.map((p) => Math.hypot(p.x - x, p.y - y)));
-        if (d > worst.d) worst = { x, y, d };
+  // Search for the shape this is about rather than assuming cluster zero on
+  // screen zero still has it. The board's row count is a tuning dial — it
+  // went from 28 to 26 when the bins grew a line — and a fixture pinned to
+  // one cluster stops testing the property the moment that dial moves.
+  const gaps = await (async () => {
+    let best = null;
+    // Across a spread of files, because the shape needs a group of five or
+    // more spread over two rows and the early screens only ever show one
+    // group of four.
+    for (const i of [0, 4, 8, await byName(page, "CALIBRATION"), await byName(page, "DRANESVILLE")]) {
+      await load(page, i);
+      const found = await page.evaluate(() => {
+    const e = window.__mdr, b = e.board;
+    const hole = (c) => {
+      const pts = c.members.map((m) => ({
+        x: b.nodes[m].hx + b.nodes[m].dx,
+        y: b.nodes[m].hy + b.nodes[m].dy,
+      }));
+      const x0 = Math.min(...pts.map((p) => p.x)), x1 = Math.max(...pts.map((p) => p.x));
+      const y0 = Math.min(...pts.map((p) => p.y)), y1 = Math.max(...pts.map((p) => p.y));
+      // Sample the footprint and keep the point furthest from every glyph —
+      // the one a pad-only hit test would miss.
+      let worst = { x: (x0 + x1) / 2, y: (y0 + y1) / 2, d: 0 };
+      for (let i = 0; i <= 10; i++) {
+        for (let j = 0; j <= 10; j++) {
+          const x = x0 + ((x1 - x0) * i) / 10;
+          const y = y0 + ((y1 - y0) * j) / 10;
+          const d = Math.min(...pts.map((p) => Math.hypot(p.x - x, p.y - y)));
+          if (d > worst.d) worst = { x, y, d };
+        }
       }
+      return { worst, corners: [{ x: x0, y: y0 }, { x: x1, y: y1 }] };
+    };
+    const live = b.clusters.filter((c) => !c.refined && c.members.length >= 4);
+    return live.map(hole).sort((a, z) => z.worst.d - a.worst.d)[0] ?? hole(b.clusters[0]);
+      });
+      if (!best || found.worst.d > best.worst.d) best = found;
+      if (best.worst.d > 22) break;
     }
-    return { worst, corners: [{ x: x0, y: y0 }, { x: x1, y: y1 }] };
-  });
+    return best;
+  })();
+  const g = await findGroup(page);
   check("the group has a gap wider than the 22px pad", gaps.worst.d > 22,
     `${gaps.worst.d.toFixed(0)}px from the nearest digit`);
   await tap(page, origin, await touchFor(page, gaps.worst, "marquee"));
@@ -556,7 +645,7 @@ section("reticle and hint");
 }
 {
   // Starting on empty board still draws a box, so boxing stays available.
-  await load(page, 12);
+  await load(page, await lastTrainingIndex(page));
   const g = await findGroup(page);
   const pad = 26;
   await drag(
@@ -582,7 +671,9 @@ section("reticle and hint");
 // glyphs, the way a thumb does it.
 section("taps land where the finger is");
 {
-  const SCREENS = [0, 2, 4, 6, 8, 10, 12];
+  // Every other orientation screen, derived: the ramp is a table and the
+  // count moves when it is tuned.
+  const SCREENS = (await orientationIndices(page)).filter((_, i) => i % 2 === 0);
   let attempts = 0;
   const missed = [];
   const stuck = [];
@@ -590,7 +681,7 @@ section("taps land where the finger is");
     await load(page, level);
     if (!(await findGroup(page))) continue;
     // Nine points across the group's own footprint, corners included, plus
-    // the exact centre of its topmost digit — the point that was dead.
+    // the exact center of its topmost digit — the point that was dead.
     // Read off the LIVE footprint each time: these groups drift, and a
     // thumb aims at where the digits are now, which is the whole point.
     const frac = [];
@@ -898,7 +989,7 @@ section("ambient temper");
   });
   eq("one group on screen: its temper alone plays", solo.beds, [solo.group]);
 
-  await load(page, 12);                      // the full-deck screen
+  await load(page, await lastTrainingIndex(page));                      // the full-deck screen
   const many = await page.evaluate(() => {
     const e = window.__mdr;
     return {
@@ -944,8 +1035,8 @@ section("ambient temper");
 // ═══ 9. the bin catches what is brought near it ══════════════════════
 section("bin catch");
 {
-  // The packet's centre is what is tested, and the box is a hundred pixels
-  // wide — demanding the centre fully inside the bin meant drops released
+  // The packet's center is what is tested, and the box is a hundred pixels
+  // wide — demanding the center fully inside the bin meant drops released
   // at its top edge fell back into the hand.
   const dropAt = async (dy) => {
     await load(page, 0);
@@ -960,7 +1051,7 @@ section("bin catch");
       const b = e.packetBounds(e.packet);
       e.pointerDown(1, b.x + b.w / 2, b.y + b.h / 2);
       e.pointerMove(1, x, y + 40);
-      // Land the packet centre itself at the probe point: the drop tests
+      // Land the packet center itself at the probe point: the drop tests
       // where the box is, not where the finger is.
       const want = { x, y };
       const cur = { x: e.packet.x, y: e.packet.y };
@@ -1054,30 +1145,69 @@ section("incentives");
       if (!(await state(page)).carrying) break;
       await carryToBin(page, origin, g);
     }
-    await page.waitForTimeout(150);
+    await settled(page);
   };
   const seen = (text) => page.getByText(text, { exact: false }).count();
   const action = () => page.locator("[data-reward-action]");
+  const landing = () => page.locator("[data-record-landing]");
+  /** Clear the landing screen that follows the last card of a stack. */
+  const resume = async () => {
+    await landing().click({ timeout: 4000 });
+    await page.waitForTimeout(200);
+  };
+  /**
+   * Refine a whole file and stop the instant its last stage reads 100%,
+   * before the engine has released the board — the window the settle
+   * exists to protect.
+   */
+  const finishUnsettled = async (index) => {
+    await refineFile(page, origin, index);
+  };
 
   // ── one incentive: sealed until tapped, then filed ───────────────
   await seed({
-    version: 1, screensCompleted: 0, binsTotal: 0,
+    version: 1, filesCompleted: 0, screensCompleted: 0, binsTotal: 0,
     binsByTemper: { WO: 0, FC: 0, DR: 0, MA: 0 },
     creditedLevelIds: [], perfectScreensTotal: 0, perfectScreenStreak: 0,
     rewardState: {}, rewardQueue: [], seenFactIds: [], factsByRung: {},
     inspectCounts: {}, lastShownRewardId: null,
   });
-  await finish(0);
+  await finishUnsettled(0);
 
-  check("finishing the first screen seals an incentive", (await seen("INCENTIVE EARNED")) === 1);
+  // The first incentive is a file-completion incentive, and the first
+  // file is three stages: each one moves the header meter a third, and
+  // nothing is owed until the third of them lands.
+  eq("a file's stages each pay a share of it, not an incentive",
+    (await ledger()).rewardQueue.length, 1);
+  eq("and the ledger counts one file, not three screens",
+    (await ledger()).filesCompleted, 1);
+
+  // The last packet completes the file on the frame it lands, and the bin
+  // meters take 300ms to reach their ends. Covering them with a card on
+  // that frame means the refiner does the work and never sees it finish.
+  {
+    const st = await state(page);
+    check("a finished file is not settled the instant it completes",
+      st.progress === 100 && st.settled === false, JSON.stringify(st.settled));
+    check("and nothing is drawn over the meters while they fill",
+      (await action().count()) === 0);
+  }
+  await settled(page);
+  await page.waitForTimeout(120);
+
+  check("refining the whole first file seals an incentive",
+    (await seen("YOU'VE EARNED AN INCENTIVE")) === 1);
+  // The cause may be stated; the effect may not.
+  check("and says why it was issued",
+    (await seen("REFINEMENT MILESTONE \u00b7 1 FILE REFINED")) === 1);
   check("and says nothing about what it is", (await seen("FINGER TRAP")) === 0);
   eq("nothing is owed unclaimed in storage yet", (await ledger()).rewardState.S01, "earned_pending");
 
   // The board must not run on underneath it, and the seal must not open
   // itself: a card that opens on a timer is a card someone can miss.
   await page.waitForTimeout(2000);
-  eq("the next screen does not load behind the card",
-    await page.evaluate(() => window.__mdr.levelIndex), 0);
+  eq("the next file does not load behind the card",
+    await page.evaluate(() => window.__mdr.levelIndex), 2);
   check("and the seal is still sealed two seconds later", (await seen("FINGER TRAP")) === 0);
 
   await action().click();
@@ -1085,42 +1215,73 @@ section("incentives");
   check("tapping it reveals name and picture together", (await seen("FINGER TRAP")) === 1);
   check("with its plate on screen",
     (await page.locator('img[alt="FINGER TRAP"]').count()) === 1);
-  check("and the control now files it", (await action().innerText()).includes("FILE"));
+  check("and the control now keeps it",
+    (await action().innerText()).includes("KEEP INCENTIVE"));
 
   await action().click();
   await page.waitForTimeout(900);
   eq("filing claims it", (await ledger()).rewardState.S01, "claimed");
   eq("and empties the queue", (await ledger()).rewardQueue.length, 0);
-  await page.waitForFunction(() => window.__mdr.levelIndex === 1, null, { timeout: 6000 });
-  check("and the held screen advances once the card is gone", true);
+
+  // Where it went. The card flies into the incentive record and the
+  // record stays on screen, holding the board, until it is dismissed —
+  // this is the only moment a refiner is taught where their things live.
+  check("keeping lands on the summary, not back on the board",
+    (await landing().count()) === 1);
+  check("which names what was just kept", (await seen("FINGER TRAP")) === 1);
+  check("counts it against its category", (await seen("ISSUED ITEMS")) === 1);
+  check("with the category's real denominator", (await seen("1 OF 10")) === 1);
+  // Twice over: on the summary itself, and on the end-of-file panel it is
+  // covering. Both are the same component, which is the point.
+  check("says what the next incentive costs", (await seen("NEXT INCENTIVE")) >= 1);
+  check("without saying what it is", (await seen("CLASSIFIED")) >= 1);
+  await page.waitForTimeout(700);
+  eq("and the board does not advance underneath it",
+    await page.evaluate(() => window.__mdr.levelIndex), 2);
+
+  await resume();
+  await page.waitForTimeout(400);
+  // A file that has ended properly hands over to its own panel rather than
+  // wiping straight into the next one.
+  check("and the file's own panel is waiting behind it",
+    (await seen("FILE REFINED")) >= 1);
+  check("with the record on it", (await page.locator('[data-record-box="panel"]').count()) === 1);
 
   // ── two at once: announced as two, then shown one at a time ──────
   await seed({
-    version: 1, screensCompleted: 1, binsTotal: 39,
+    version: 1, filesCompleted: 1, screensCompleted: 1, binsTotal: 39,
     binsByTemper: { WO: 39, FC: 0, DR: 0, MA: 0 },
-    creditedLevelIds: ["orientation-01"],
+    creditedLevelIds: [],
     perfectScreensTotal: 1, perfectScreenStreak: 1,
     rewardState: { S01: "claimed" }, rewardQueue: [], seenFactIds: [],
     factsByRung: {}, inspectCounts: {}, lastShownRewardId: null,
   });
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
-  await finish(1);
+  // The last orientation file is one stage and can be finished by tapping,
+  // so a single refinement crosses both thresholds: the second file
+  // completed, and the fortieth bin.
+  await finish(await lastTrainingIndex(page));
 
-  check("a screen that crosses two thresholds says so up front",
-    (await seen("2 INCENTIVES EARNED")) === 1);
-  check("and offers to accept them together",
-    (await action().innerText()).includes("ACCEPT ALL 2"));
+  check("a file that crosses two thresholds says so up front",
+    (await seen("YOU'VE EARNED 2 INCENTIVES")) === 1);
+  check("behind one seal, opened once",
+    (await action().innerText()).includes("OPEN"));
   await action().click();
   await page.waitForTimeout(300);
-  check("the first is the screen-lane reward", (await seen("STANDARD REFINER ERASER")) === 1);
+  check("the first is the file-lane incentive",
+    (await seen("YOU HAVE BEEN ISSUED AN ERASER")) === 1);
   check("and the second is not on screen with it", (await seen("MELON BAR")) === 0);
+  check("whose control promises the next one",
+    (await action().innerText()).includes("SEE NEXT INCENTIVE"));
   check("numbered within the stack", (await seen("INCENTIVE 1 OF 2")) === 1);
 
   await action().click();
   await page.waitForTimeout(400);
   check("accepting the first brings up the second", (await seen("INCENTIVE 2 OF 2")) === 1);
-  check("with no second seal to open", (await seen("INCENTIVES EARNED")) === 0);
+  check("and the last of a stack keeps them all",
+    (await action().innerText()).includes("KEEP INCENTIVES"));
+  check("with no second seal to open", (await seen("YOU'VE EARNED")) === 0);
   const mid = await ledger();
   eq("the first is claimed", mid.rewardState.S02, "claimed");
   eq("the second is still owed", mid.rewardState.B040, "earned_pending");
@@ -1130,12 +1291,16 @@ section("incentives");
   const done = await ledger();
   eq("both end up claimed", [done.rewardState.S02, done.rewardState.B040], ["claimed", "claimed"]);
   eq("with nothing left in the queue", done.rewardQueue.length, 0);
+  check("a stack lands on one record screen, not two",
+    (await landing().count()) === 1);
+  check("and it counts them as two kept", (await seen("2 INCENTIVES KEPT")) === 1);
+  await resume();
 
   // ── an object already held is filed, not shown again ─────────────
   await seed({
-    version: 1, screensCompleted: 2, binsTotal: 2,
+    version: 1, filesCompleted: 2, screensCompleted: 2, binsTotal: 2,
     binsByTemper: { WO: 2, FC: 0, DR: 0, MA: 0 },
-    creditedLevelIds: ["orientation-01", "orientation-02"],
+    creditedLevelIds: [],
     perfectScreensTotal: 0, perfectScreenStreak: 0,
     // The finger trap is already on the shelf, and the queue owes it again.
     rewardState: { S01: "claimed", S02: "claimed", P03: "earned_pending" },
@@ -1175,13 +1340,52 @@ section("incentives");
   check("a second issue of an object is never the card that was shown",
     refiled.lastShownRewardId !== "R02", String(refiled.lastShownRewardId));
   eq("but it is claimed all the same", refiled.rewardState.P03, "claimed");
-  check("and the record says it was filed", (await seen("ISSUED AGAIN")) >= 1);
-  check("and the record can be opened from the file screen",
-    (await page.locator("[data-incentive-record]").count()) === 1);
+  check("and the record says it was kept again", (await seen("ISSUED AGAIN")) >= 1);
+  check("and the record can be opened from the end-of-file panel",
+    (await page.locator('[data-record-box="panel"]').count()) === 1);
+  check("and from the header, at every moment of the game",
+    (await page.locator('[data-record-box="hud"]').count()) === 1);
+
+  // ── the full record: categories, counts, and concealed slots ─────
+  await seed({
+    version: 1, filesCompleted: 8, screensCompleted: 14, binsTotal: 42,
+    binsByTemper: { WO: 20, FC: 10, DR: 7, MA: 5 },
+    creditedLevelIds: [], perfectScreensTotal: 3, perfectScreenStreak: 1,
+    rewardState: {
+      S01: "claimed", S02: "claimed", S03: "claimed", S05: "claimed",
+      S09: "claimed", B010: "claimed", P01: "claimed",
+    },
+    rewardQueue: [], seenFactIds: ["OF_CANON_011"],
+    factsByRung: { S03: ["OF_CANON_011"] },
+    inspectCounts: {}, lastShownRewardId: null,
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  await load(page, 14);
+  await page.waitForTimeout(300);
+
+  // The strip is a live control over a live board — it sits above the
+  // input surface, and the header around it stays transparent to pointers
+  // so a packet dragged to the top edge can still be picked back up.
+  await page.locator('[data-record-box="hud"]').click({ timeout: 5000 });
+  await page.waitForTimeout(600);
+  check("the header strip opens the full record",
+    (await seen("INCENTIVES RECORD")) >= 1);
+  for (const label of ["ISSUED ITEMS", "OUTIE FACTS", "WELLNESS SESSIONS", "DEPARTMENT EVENTS"]) {
+    check(`  ${label} has a section of its own`, (await seen(label)) >= 1);
+  }
+  check("earned entries are named", (await seen("FINGER TRAP")) >= 1);
+  check("and the ones still to come are not",
+    (await seen("CLASSIFIED")) >= 1 && (await seen("NOT YET ISSUED")) >= 1);
+  // The record admits how many are left. It never admits what they are.
+  check("no unearned name leaks into the record",
+    (await seen("WAFFLE PARTY")) === 0 && (await seen("EGG BAR")) === 0);
+  await page.locator('[aria-label="Close handbook"]').click();
+  await page.waitForTimeout(400);
 
   // ── a reload during the ceremony keeps the reward ────────────────
   await seed({
-    version: 1, screensCompleted: 4, binsTotal: 6,
+    version: 1, filesCompleted: 1, screensCompleted: 4, binsTotal: 6,
     binsByTemper: { WO: 6, FC: 0, DR: 0, MA: 0 },
     creditedLevelIds: ["orientation-01", "orientation-02", "orientation-03", "orientation-04"],
     perfectScreensTotal: 0, perfectScreenStreak: 0,
@@ -1217,21 +1421,22 @@ section("wellness");
       if (!(await state(page)).carrying) break;
       await carryToBin(page, origin, g);
     }
-    await page.waitForTimeout(150);
+    await settled(page);
   };
 
-  // Two screens short of the first fact card.
+  // One file short of the first fact card, and standing on a file that
+  // finishes in a single stage — so completing it credits a whole one.
   await seed({
-    version: 1, screensCompleted: 2, binsTotal: 2,
+    version: 1, filesCompleted: 2, screensCompleted: 2, binsTotal: 2,
     binsByTemper: { WO: 2, FC: 0, DR: 0, MA: 0 },
-    creditedLevelIds: ["orientation-01", "orientation-02"],
+    creditedLevelIds: [],
     perfectScreensTotal: 2, perfectScreenStreak: 2,
     rewardState: { S01: "claimed", S02: "claimed" },
     rewardQueue: [], seenFactIds: [], factsByRung: {}, inspectCounts: {},
   });
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
-  await finish(2);
+  await finish(await lastTrainingIndex(page));
 
   const chosen = (await ledger()).factsByRung.S03 ?? [];
   check("the sentence is chosen and stored when the card is earned", chosen.length === 1,
@@ -1274,27 +1479,27 @@ section("music dance experience");
       if (!(await state(page)).carrying) break;
       await carryToBin(page, origin, g);
     }
-    await page.waitForTimeout(200);
+    await settled(page);
   };
 
-  // Twelve screens in, everything before claimed: the next completed
-  // screen is the one that turns the floor into a dance floor.
+  // Seven files in, everything before claimed: the next file refined is
+  // the one that turns the floor into a dance floor.
   const done = {};
   for (const id of ["S01", "S02", "S03", "S05", "S09", "B010", "P01", "P03", "P05"]) {
     done[id] = "claimed";
   }
   await seed({
-    version: 1, screensCompleted: 12, binsTotal: 28,
+    version: 1, filesCompleted: 7, screensCompleted: 12, binsTotal: 28,
     binsByTemper: { WO: 8, FC: 8, DR: 6, MA: 6 },
-    creditedLevelIds: Array.from({ length: 12 }, (_, i) => `orientation-${String(i + 1).padStart(2, "0")}`),
+    creditedLevelIds: [],
     perfectScreensTotal: 6, perfectScreenStreak: 6,
     rewardState: done, rewardQueue: [], seenFactIds: [], factsByRung: {}, inspectCounts: {},
   });
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
-  await finish(12);
+  await finish(await lastTrainingIndex(page));
 
-  check("the thirteenth screen offers the dance experience",
+  check("the eighth file offers the dance experience",
     (await page.getByText("MUSIC DANCE EXPERIENCE").count()) >= 1);
   check("with the show's own genre at the top of the menu",
     (await page.getByText("DEFIANT JAZZ").count()) === 1);

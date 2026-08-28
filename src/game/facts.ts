@@ -104,7 +104,7 @@ const ORIGINAL: readonly Fact[] = [
  * Temper doctrine, one line each, for the mastery lane.
  *
  * Written for this branch in the handbook's register — Kier-adjacent
- * grandiosity that explains nothing — and labelled as original apocrypha
+ * grandiosity that explains nothing — and labeled as original apocrypha
  * like everything else the show did not say. They ride the same blank
  * card as an Outie fact because that is the plate the game has, and they
  * are the same kind of object: a sentence Lumon has decided you should

@@ -55,14 +55,14 @@ const HUM_BUZZ_TONE = 1580;
 /**
  * The keyboards: the rest of the office, typing. Synthesised, not
  * sampled — each key is a noise click plus a low thump, matching the
- * measured profile of the reference recording (a broad click centred
+ * measured profile of the reference recording (a broad click centerd
  * near 3kHz over a thump at 150Hz), fired in human bursts with pauses.
  * Very soft: it should be noticed only when it stops.
  */
 const TYPING_GAIN = 0.145;
 const TYPING_RATE = 12; // keys per second inside a burst
 const TYPING_THUMP = 0.2; // low-body weight, 0..1
-const TYPING_CLICK_HZ = 2150; // click bandpass centre
+const TYPING_CLICK_HZ = 2150; // click bandpass center
 /** How far the bed steps back while a probe is live, so the two never
  *  argue over which temper the refiner is being told about. */
 const AMBIENT_DUCK = 0.4;
@@ -227,7 +227,7 @@ export class AudioEngine {
    * The four tempers, rebuilt as disturbances of the mains hum.
    *
    * Everything below is made from the hum's own family — 50Hz, its
-   * harmonics, and near-neighbours of them — so a temper never sounds
+   * harmonics, and near-neighbors of them — so a temper never sounds
    * like an instrument playing over the room tone: it sounds like the
    * room tone going slightly wrong. What tells the four apart is not
    * pitch or melody but *time*: how the disturbance moves.
@@ -239,7 +239,7 @@ export class AudioEngine {
    *
    * The probe drives the same disturbance harder (apply() opens each
    * voice's filter and raises its gain with intensity), so what you hear
-   * under the lens is recognisably the thing you half-heard in the room —
+   * under the lens is recognizably the thing you half-heard in the room —
    * louder and closer, never a different sound.
    */
   private buildWoe(ctx: AudioContext, out: GainNode): VoiceParam {
@@ -359,7 +359,7 @@ export class AudioEngine {
     filter.frequency.value = 300;
     filter.Q.value = 1.6;
 
-    // The hum's second harmonic against a neighbour 3Hz off — too fast to
+    // The hum's second harmonic against a neighbor 3Hz off — too fast to
     // breathe with, too slow to be a texture: an uneasy waver. The 11Hz
     // shiver on top is the sound of something held too tight, matched in
     // spirit to the visual tremor without trying to race the display.

@@ -138,7 +138,7 @@ export function renderGrid(ctx: CanvasRenderingContext2D, e: GameEngine): void {
     // it survives a small phone screen and a thumb better than brightness.
     const swell = n.scale * (1 + 0.26 * a);
 
-    // Cross-fade phosphor green into the temper's colour as it agitates.
+    // Cross-fade phosphor green into the temper's color as it agitates.
     // Both alphas are driven by `a` alone so a barely-stirred cluster reads
     // as green, not as a permanently tinted giveaway.
     atlas.draw(ctx, "idle", n.digit, x, y, 0.82 * (1 - a) * wa, n.rot, swell);
@@ -266,7 +266,7 @@ function drawReticle(ctx: CanvasRenderingContext2D, e: GameEngine): void {
   const atlas = e.atlas;
 
   // On the file that teaches the lens it closes down rather than blinking
-  // out. Scaling about the lens centre shrinks the glass, the magnified
+  // out. Scaling about the lens center shrinks the glass, the magnified
   // digits, the cached sheen, the bezel and the ticks together. Clipping to
   // a smaller radius instead would leave the highlight and the rim sitting
   // still while the glass moved, so the transform wraps the whole reticle.
@@ -285,12 +285,12 @@ function drawReticle(ctx: CanvasRenderingContext2D, e: GameEngine): void {
   ctx.arc(x, y, LENS_R, 0, Math.PI * 2);
   ctx.clip();
 
-  // Ground under the lens: the board colour, lifted a little so the glass
+  // Ground under the lens: the board color, lifted a little so the glass
   // reads as holding light rather than as a hole.
   ctx.fillStyle = "#03120b";
   ctx.fillRect(x - LENS_R, y - LENS_R, LENS_R * 2, LENS_R * 2);
 
-  // Magnified content. Everything within LENS_R / ZOOM of the centre maps
+  // Magnified content. Everything within LENS_R / ZOOM of the center maps
   // out to the rim.
   const reach = LENS_R / LENS_ZOOM + 14;
   for (const n of e.board.nodes) {
@@ -442,7 +442,7 @@ export function renderOverlay(
 
   const def = TEMPER_DEFS[packet.temper];
   // Without assist the packet stays anonymous — binning it is the refiner's
-  // judgement call, not a colour match.
+  // judgment call, not a color match.
   const ink = e.assist ? def.css : "#c3fddf";
   const n = packet.digits.length;
   const cols = Math.ceil(Math.sqrt(n));
@@ -487,7 +487,7 @@ export function renderOverlay(
     ctx.globalCompositeOperation = "source-over";
   }
 
-  // ── the frame, scaled about the packet centre ─────────────────────
+  // ── the frame, scaled about the packet center ─────────────────────
   ctx.save();
   ctx.scale(frameScale, frameScale);
 
@@ -703,7 +703,7 @@ function drawBinHint(
   const COUNT = 3;
   for (let i = 0; i < COUNT; i++) {
     // Each chevron slides along the path and wraps, so the row reads as
-    // motion towards the bin rather than as three static marks.
+    // motion toward the bin rather than as three static marks.
     const p = ((t * 0.55 + i / COUNT) % 1);
     const d = start + p * span;
     const cx = packet.x + ux * d;

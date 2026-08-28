@@ -4,7 +4,7 @@ import { LEVELS } from "../game/constants";
 import type { HudSnapshot } from "../game/engine";
 import { activeRun, continueIndex, type RunStore } from "../game/runs";
 import type { Progress } from "../game/progress";
-import { IncentiveRecord } from "./IncentiveRecord";
+import { IncentiveRecordBox } from "./IncentiveRecordBox";
 
 interface Props {
   hud: HudSnapshot;
@@ -79,6 +79,10 @@ export function PhaseOverlay({
   // Nor does the scrim: an auto-advancing screen must stay looking like the
   // board it just cleared, not like a dimmed interstitial.
   if (hud.phase === "complete" && hud.ceremony === "none") return null;
+  // Nor while a finished file's meters are still running out: the panel
+  // that says FILE REFINED must not be the thing that stops the refiner
+  // watching the file be refined.
+  if (hud.phase === "complete" && !hud.settled) return null;
 
   const level = LEVELS[hud.levelIndex];
 
@@ -213,14 +217,23 @@ export function PhaseOverlay({
           {/* The record. Under the addendum rather than over it: the file
               just refined gets its own moment first, and this is the thing
               that sends the refiner back in — it says what the next
-              incentive costs, and it is where the last one visibly went. */}
-          <div className="mt-4 flex justify-center">
-            <IncentiveRecord
+              incentive costs.
+
+              The same component the header strip draws, deliberately: this
+              panel covers the header, and a refiner who has learned one
+              box has learned both. */}
+          <div className="mt-4 flex w-full max-w-[280px] flex-col items-center gap-1.5">
+            <IncentiveRecordBox
               progress={progress}
               onOpen={onOpenRecord}
-              filed={filed}
+              variant="panel"
               landing={recordLanding}
             />
+            {filed.length > 0 ? (
+              <p className="text-[8px] leading-snug tracking-[0.14em] text-phos-600">
+                {filed.map((n) => `${n} ISSUED AGAIN`).join(" · ")} · KEPT
+              </p>
+            ) : null}
           </div>
           {hud.isLastLevel ? (
             <>

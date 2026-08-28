@@ -20,7 +20,7 @@ function idx(col: number, row: number): number {
 
 /**
  * True when placing `cell` into `cluster` would leave it within `spacing`
- * cells of a *different* cluster. At spacing 1 this is the 8-neighbourhood:
+ * cells of a *different* cluster. At spacing 1 this is the 8-neighborhood:
  * the minimum that stops a marquee straddling two clusters, since the
  * selection rules depend on a box resolving to exactly one temper. Early
  * files raise it so clusters sit alone in open ground and can be found and
@@ -131,21 +131,30 @@ export function createBoard(
   const real = tempers.length * perTemper;
   for (let s = Math.max(1, spacing); s > 1; s--) {
     const attempt = seedBoard(seed, tempers, perTemper, s, extras, focus);
-    // Only the real clusters have to fit: a board that cannot hold every
-    // decoy is still winnable, and a board short a real cluster is not.
-    if (attempt.clusters.filter((c) => !c.decoy && !c.fifth).length >= real) {
+    // Decoys are the only clusters allowed to fall off a crowded board:
+    // one fewer bystander is a slightly easier file. A missing *real*
+    // cluster makes a bin unfillable, and a missing fifth temper silently
+    // removes the beat a file was built around — Cold Harbor is the whole
+    // point of the fifth, and it lost it the day the board went from 28
+    // rows to 26. Both are required; the spacing gives way instead.
+    const wantFifth = extras.filter((e) => e.fifth).length;
+    const gotFifth = attempt.clusters.filter((c) => c.fifth).length;
+    if (
+      attempt.clusters.filter((c) => !c.decoy && !c.fifth).length >= real &&
+      gotFifth >= wantFifth
+    ) {
       return attempt;
     }
   }
   return seedBoard(seed, tempers, perTemper, 1, extras, focus);
 }
 
-export type Focus = "centre" | "mid" | "edge" | null;
+export type Focus = "center" | "mid" | "edge" | null;
 
-/** Chebyshev radius each focus aims for, 0 at the board's centre and 1 at
+/** Chebyshev radius each focus aims for, 0 at the board's center and 1 at
  *  its border. */
 const FOCUS_TARGET: Record<Exclude<Focus, null>, number> = {
-  centre: 0.1,
+  center: 0.1,
   mid: 0.55,
   edge: 0.78,
 };
@@ -173,9 +182,9 @@ function rankByFocus(
     const ny = (((i / COLS) | 0) - cy) / cy;
     // Chebyshev rather than Euclidean: the board is much taller than it is
     // wide, and a radial measure would call the whole top and bottom "edge"
-    // while treating most of the width as centre.
+    // while treating most of the width as center.
     const r = Math.max(Math.abs(nx), Math.abs(ny)) + (rng() - 0.5) * 0.22;
-    // Each focus aims at a band rather than at an extreme. Maximising `r`
+    // Each focus aims at a band rather than at an extreme. Maximizing `r`
     // for "edge" produced clusters flush to the border — four cells all in
     // the last row, or all in the last column — which are the hardest
     // targets in the game, sitting on a teaching screen.
@@ -295,12 +304,12 @@ const BARREL_K = 0.05;
  * curved face of the tube.
  *
  * The factor *falls* with radius, which is what makes this a barrel and not
- * a pincushion: the middle of each row reaches furthest from the centre and
+ * a pincushion: the middle of each row reaches furthest from the center and
  * the corners draw in, so rows bow outward the way they do on real glass.
  * Scaling by r² the other way is the inverse curve and sags the rows
  * inward, which is what this looked like before.
  *
- * Containment is not "f <= 1" — f peaks at 1 + K at the centre. It holds
+ * Containment is not "f <= 1" — f peaks at 1 + K at the center. It holds
  * because the product is bounded: nx * f(nx, 0) has derivative
  * (1 + 2K - 3K*nx^2)/(1 + K), positive for every |nx| <= 1, so it rises
  * monotonically to exactly 1 at the mid-edge and f falls as |ny| grows.
@@ -310,7 +319,7 @@ const BARREL_K = 0.05;
  *
  * K trades bow against pitch: the warp necessarily crowds the glyphs
  * somewhere, and this curve puts that crowding at the edges and corners
- * rather than at the centre. It is tuned against glyph *ink*, not against
+ * rather than at the center. It is tuned against glyph *ink*, not against
  * the atlas cell — the cell is 1.8x the font size because it carries the
  * baked phosphor halo, and halos overlapping is the effect, not a defect.
  * At K = 0.05 the worst row pitch still clears the ink by 2.3px on a 320px

@@ -118,20 +118,20 @@ console.log(`\n── placement gradient ${"─".repeat(38)}`);
   }
   const mean = (a: number[]) => a.reduce((x, y) => x + y, 0) / a.length;
   // Rung boundaries from the ramp table itself, grouped by focus band.
-  const bands: Record<string, number[]> = { centre: [], mid: [], edge: [] };
+  const bands: Record<string, number[]> = { center: [], mid: [], edge: [] };
   {
     let i = 0;
-    const FOCUS = ["centre", "centre", "mid", "mid", "edge", "edge"];
+    const FOCUS = ["center", "center", "mid", "mid", "edge", "edge"];
     ORIENT_STAGES.forEach((st, sIdx) => {
       for (let k = 0; k < st.screens; k++) bands[FOCUS[sIdx]].push(rs[i++]);
     });
   }
-  const centre = mean(bands.centre), mid = mean(bands.mid), edge = mean(bands.edge);
-  console.log(`  centre ${centre.toFixed(2)}   mid ${mid.toFixed(2)}   edge ${edge.toFixed(2)}`);
-  if (!(centre < mid && mid < edge)) fail("groups do not move outwards across orientation");
-  if (centre > 0.3) fail(`the first screens are not central enough (${centre.toFixed(2)})`);
+  const center = mean(bands.center), mid = mean(bands.mid), edge = mean(bands.edge);
+  console.log(`  center ${center.toFixed(2)}   mid ${mid.toFixed(2)}   edge ${edge.toFixed(2)}`);
+  if (!(center < mid && mid < edge)) fail("groups do not move outwards across orientation");
+  if (center > 0.3) fail(`the first screens are not central enough (${center.toFixed(2)})`);
   if (edge < 0.6) fail(`the last screens are not peripheral enough (${edge.toFixed(2)})`);
-  ok("groups start centred and work outwards");
+  ok("groups start centerd and work outwards");
 }
 
 console.log(`\n── the shape of the queue ${"─".repeat(34)}`);
@@ -141,8 +141,35 @@ console.log(`\n── the shape of the queue ${"─".repeat(34)}`);
   if (orient.length !== total) {
     fail(`want ${total} orientation screens (per the ramp table), got ${orient.length}`);
   }
-  if (orient.slice(0, -1).some((l) => l.ceremony !== "none")) {
-    fail("every orientation screen but the last must advance itself");
+  // Mid-file stages advance themselves; the end of a file does not. That
+  // is what makes the header meter honest — it fills across a lesson and
+  // stops at 100% where an incentive may be owed, instead of being wiped
+  // through by a 900ms auto-advance.
+  for (const l of orient) {
+    const end = l.stage ? l.stage[0] === l.stage[1] : true;
+    if (end && l.ceremony !== "full") {
+      fail(`${l.id} ends a file and must keep its ceremony`);
+    }
+    if (!end && l.ceremony !== "none") {
+      fail(`${l.id} is mid-file and must advance itself`);
+    }
+  }
+  // Every orientation rung is exactly one file, and its stages are
+  // adjacent and numbered.
+  {
+    const keys = orient.map((l) => l.fileKey ?? l.id);
+    if (new Set(keys).size !== ORIENT_STAGES.length) {
+      fail(`want ${ORIENT_STAGES.length} orientation files, got ${new Set(keys).size}`);
+    }
+    let i = 0;
+    ORIENT_STAGES.forEach((st) => {
+      for (let k = 0; k < st.screens; k++, i++) {
+        const l = orient[i];
+        if (!l.stage || l.stage[0] !== k + 1 || l.stage[1] !== st.screens) {
+          fail(`${l.id} says stage ${JSON.stringify(l.stage)}, want [${k + 1}, ${st.screens}]`);
+        }
+      }
+    });
   }
   if (orient.filter((l) => l.archived !== false).length !== 1) {
     fail("orientation must hold exactly one archive row");
@@ -212,28 +239,50 @@ console.log(`\n── the shape of the queue ${"─".repeat(34)}`);
 
 console.log(`\n── incentive ladder ${"─".repeat(41)}`);
 {
-  /** Refine every screen in order, crediting the ledger as the game does. */
+  const fileKeyOf = (lv: (typeof LEVELS)[number]) => lv.fileKey ?? lv.id;
+  /** Every file, in order, as the list of levels that make it up. */
+  const FILES: (typeof LEVELS)[number][][] = [];
+  for (const lv of LEVELS) {
+    const last = FILES[FILES.length - 1];
+    if (last && fileKeyOf(last[0]) === fileKeyOf(lv)) last.push(lv);
+    else FILES.push([lv]);
+  }
+
+  /**
+   * Refine every level in order, crediting the ledger as the game does.
+   *
+   * `earnedAt` is keyed by *file* number, because that is the unit the
+   * ladder counts and the unit a refiner experiences: an orientation
+   * lesson is three stages and one file, and an incentive that arrives
+   * "two files in" is what the front-loading assertions below are about.
+   */
   const playthrough = (perfect = true) => {
     let p: Progress = emptyProgress();
     const earnedAt: Record<string, number> = {};
-    LEVELS.forEach((lv, i) => {
-      const step = applyCompletion(p, {
-        levelId: lv.id,
-        tempers: lv.tempers,
-        quota: lv.quota,
-        perfect,
-        countsForPerfect: (lv.showBins ?? lv.tempers).length > 1,
+    FILES.forEach((file, fileIndex) => {
+      // A file counts for precision if any of its stages offered a choice
+      // of bin, and it is clean only if every stage was.
+      const counts = file.some((lv) => (lv.showBins ?? lv.tempers).length > 1);
+      file.forEach((lv, stage) => {
+        const step = applyCompletion(p, {
+          levelId: lv.id,
+          tempers: lv.tempers,
+          quota: lv.quota,
+          perfect,
+          countsForPerfect: counts,
+          fileComplete: stage === file.length - 1,
+        });
+        p = step.progress;
+        for (const rung of step.earned) {
+          if (earnedAt[rung.id] !== undefined) fail(`${rung.id} earned twice`);
+          earnedAt[rung.id] = fileIndex + 1;
+          // Claiming is what the boundary does; the ledger only has to
+          // hold the promise until then. Claim here so prerequisites
+          // (Waffle II waits for Waffle I) are exercised as they ship.
+          p.rewardState[rung.id] = "claimed";
+        }
+        p.rewardQueue = [];
       });
-      p = step.progress;
-      for (const rung of step.earned) {
-        if (earnedAt[rung.id] !== undefined) fail(`${rung.id} earned twice`);
-        earnedAt[rung.id] = i + 1;
-        // Claiming is what M2 will do at the boundary; the ledger only has
-        // to hold the promise until then. Claim here so prerequisites
-        // (Waffle II waits for Waffle I) are exercised the way they ship.
-        p.rewardState[rung.id] = "claimed";
-      }
-      p.rewardQueue = [];
     });
     return { p, earnedAt };
   };
@@ -242,6 +291,9 @@ console.log(`\n── incentive ladder ${"─".repeat(41)}`);
 
   if (p.screensCompleted !== LEVELS.length) {
     fail(`credited ${p.screensCompleted} screens, not ${LEVELS.length}`);
+  }
+  if (p.filesCompleted !== FILES.length) {
+    fail(`credited ${p.filesCompleted} files, not ${FILES.length}`);
   }
   const handBins = LEVELS.reduce((n, l) => n + l.quota * l.tempers.length, 0);
   if (p.binsTotal !== handBins) fail(`credited ${p.binsTotal} bins, not ${handBins}`);
@@ -254,23 +306,26 @@ console.log(`\n── incentive ladder ${"─".repeat(41)}`);
       fail(`${rung.id} (${rung.reward}) is never earned in a full playthrough`);
     }
   }
-  ok(`all ${LADDER.length} rungs earned in ${LEVELS.length} screens / ${p.binsTotal} bins`);
+  ok(
+    `all ${LADDER.length} rungs earned in ${FILES.length} files ` +
+      `(${LEVELS.length} screens) / ${p.binsTotal} bins`,
+  );
 
   // Front-loading, measured rather than asserted in prose: the first three
-  // screens each pay, and no two consecutive screens after that go by
-  // without something.
+  // files each pay, and no two consecutive files after that go by without
+  // something.
   for (const at of [1, 2, 3]) {
-    if (!Object.values(earnedAt).includes(at)) fail(`screen ${at} pays nothing`);
+    if (!Object.values(earnedAt).includes(at)) fail(`file ${at} pays nothing`);
   }
   {
     let gap = 0;
     let worst = 0;
-    for (let i = 1; i <= LEVELS.length; i++) {
+    for (let i = 1; i <= FILES.length; i++) {
       gap = Object.values(earnedAt).includes(i) ? 0 : gap + 1;
       worst = Math.max(worst, gap);
     }
-    if (worst > 2) fail(`${worst} screens in a row with no incentive`);
-    ok(`longest gap between incentives is ${worst} screens`);
+    if (worst > 2) fail(`${worst} files in a row with no incentive`);
+    ok(`longest gap between incentives is ${worst} files`);
   }
 
   // Boundaries: one below earns nothing, exactly at earns it, and a rung
@@ -328,6 +383,7 @@ console.log(`\n── incentive ladder ${"─".repeat(41)}`);
       quota: LEVELS[0].quota,
       perfect: true,
       countsForPerfect: true,
+      fileComplete: true,
     };
     const first = applyCompletion(emptyProgress(), one);
     const again = applyCompletion(first.progress, one);
@@ -359,6 +415,7 @@ console.log(`\n── incentive ladder ${"─".repeat(41)}`);
         quota: lv.quota,
         perfect: true,
         countsForPerfect: (lv.showBins ?? lv.tempers).length > 1,
+        fileComplete: true,
       }).progress;
     }
     if (forecast(counters(p2)).length !== 0) fail("the forecast still promises something after the last file");
@@ -368,13 +425,18 @@ console.log(`\n── incentive ladder ${"─".repeat(41)}`);
   // Perfect play, and its opposite.
   {
     const mixed = playthrough(false).p;
-    const eligible = LEVELS.filter((l) => (l.showBins ?? l.tempers).length > 1).length;
-    if (mixed.perfectScreensTotal !== 0) fail("an imperfect run counted perfect screens");
-    if (mixed.perfectScreenStreak !== 0) fail("an imperfect run kept a streak");
+    // Files, not screens: precision counts a file refined without error,
+    // and a file counts at all only if some stage of it put more than one
+    // bin on the deck.
+    const eligible = FILES.filter((f) =>
+      f.some((l) => (l.showBins ?? l.tempers).length > 1),
+    ).length;
+    if (mixed.perfectScreensTotal !== 0) fail("an imperfect run counted perfect files");
+    if (mixed.perfectScreenStreak !== 0) fail("an imperfect run kept a record");
     if (p.perfectScreensTotal !== eligible) {
-      fail(`a clean run counted ${p.perfectScreensTotal} perfect screens, not ${eligible}`);
+      fail(`a clean run counted ${p.perfectScreensTotal} perfect files, not ${eligible}`);
     }
-    ok(`perfect screens track the drops, on the ${eligible} screens with a bin to get wrong`);
+    ok(`precision tracks the drops, on the ${eligible} files with a bin to get wrong`);
   }
 
   // Waffle II is compound and waits for Waffle I.
@@ -401,13 +463,17 @@ console.log(`\n── reward media ${"─".repeat(45)}`);
 {
   let files = 0;
   for (const [id, def] of Object.entries(CATALOG)) {
-    for (const [kind, url] of Object.entries(def)) {
-      if (kind === "name" || kind === "line" || kind === "kind") continue;
+    // Named explicitly rather than "every field that is not one of these":
+    // the blocklist silently turned every new prose field into a filename
+    // the moment one was added, and reported the copy as a missing asset.
+    for (const [kind, url] of [["poster", def.poster] as const]) {
       const path = `public/${String(url).replace(/^\.?\//, "")}`;
       files++;
       if (!existsSync(path)) fail(`${id}: ${kind} is missing — ${path}`);
     }
-    if (!def.name || !def.line) fail(`${id}: a reward needs a name and a line`);
+    if (!def.name || !def.line || !def.earned) {
+      fail(`${id}: a reward needs a name, a line and an earned headline`);
+    }
   }
   // Posters only, deliberately: the celebration clips are held back, and
   // the encoder that brings them back lives in tools/. A stray .mp4 in the
@@ -427,7 +493,7 @@ console.log(`\n── reward media ${"─".repeat(45)}`);
 }
 
 // ── the fact bank ────────────────────────────────────────────────────
-// The rules here are the fact bank's own: two labelled pools kept apart,
+// The rules here are the fact bank's own: two labeled pools kept apart,
 // one sentence used for card, caption and voice alike, a mature entry that
 // nothing selects while there is no setting to allow it, and a draw that
 // is decided once and cannot be rerolled by closing the app.
@@ -451,7 +517,7 @@ console.log(`\n── outie facts ${"─".repeat(46)}`);
   // Doctrine is game-written by definition: a temper line presented as
   // something the show said would be exactly the merge the audit forbids.
   for (const f of doctrine) {
-    if (f.label !== "ORIGINAL_APOCRYPHA") fail(`${f.id} is doctrine but labelled canon`);
+    if (f.label !== "ORIGINAL_APOCRYPHA") fail(`${f.id} is doctrine but labeled canon`);
   }
   if (doctrine.length !== 4) fail(`${doctrine.length} doctrine cards, not one per temper`);
   ok(`${canon.length} show-derived and ${original.length} original facts, plus ${doctrine.length} doctrine lines`);

@@ -7,21 +7,16 @@ import { counters, type Progress } from "../game/progress";
  *
  * The contract this component exists to keep is a negative one. It may
  * show the counter, the target, the remainder and the exact action. It may
- * never show a name, an image, a silhouette, a category, a colour theme or
+ * never show a name, an image, a silhouette, a category, a color theme or
  * the threshold after this one — so nothing here takes a reward id, and
  * the only string it prints about the prize itself is that the prize is
  * classified.
  *
- * Two variants, because the two places it renders have different jobs.
- *
- * `panel` is the end of a file, where the refiner has just been handed
- * something and the screen already has a great deal to say. It shows one
- * lane — the nearest — as a footer line under the addendum: a promise, an
- * instruction, a meter. No box, because the addendum is the object on that
- * screen and two bordered cards compete.
- *
- * `handbook` is where someone has gone looking. It shows every lane, in a
- * card of its own, with the counters spelled out.
+ * This is the handbook's version: every lane at once, in a card of its
+ * own, with the counters spelled out — the answer for someone who has
+ * gone looking. The compressed one-lane version that rides in the header
+ * strip and on the end-of-file panel belongs to `IncentiveRecordBox`,
+ * which has to keep the same contract in a great deal less room.
  */
 
 function Meter({ pct }: { pct: number }) {
@@ -37,10 +32,6 @@ function Meter({ pct }: { pct: number }) {
 
 const pctOf = (lane: LaneForecast) =>
   Math.min(100, Math.round((lane.current / lane.target) * 100));
-
-/** "COMPLETE 1 MORE SCREEN" — the action, without its full stop. */
-const shout = (lane: LaneForecast) =>
-  lane.action.replace(/\.$/, "").toUpperCase();
 
 function FullLane({ lane }: { lane: LaneForecast }) {
   return (
@@ -77,46 +68,15 @@ function FullLane({ lane }: { lane: LaneForecast }) {
 
 interface Props {
   progress: Progress;
-  variant?: "panel" | "handbook";
 }
 
-export function IncentiveForecast({ progress, variant = "handbook" }: Props) {
+export function IncentiveForecast({ progress }: Props) {
   const lanes = forecast(counters(progress));
   // Before the first screen is refined there is no forecast: the finger trap
   // and the eraser arrive unannounced, and the ladder introduces itself once
   // it has already paid out. A ladder with nothing left to give also says
   // nothing rather than showing an empty counter.
-  if (progress.screensCompleted < 1 || lanes.length === 0) return null;
-
-  if (variant === "panel") {
-    // The nearest goal, because one instruction is worth more than two.
-    // Both lanes are a handbook away, and the other one is rarely the
-    // interesting one: what a refiner wants at the end of a file is the
-    // shortest thing they could do next.
-    const lane = [...lanes].sort((a, b) => a.remaining - b.remaining)[0];
-    return (
-      <div className="w-full text-left">
-        <div className="flex items-baseline justify-between gap-2 text-[8px] tracking-[0.22em] text-phos-600">
-          <span>NEXT INCENTIVE</span>
-          <span>CLASSIFIED</span>
-        </div>
-        <p className="crt-text-glow mt-1.5 text-[10px] font-bold tracking-[0.14em] text-phos-300">
-          {shout(lane)}
-        </p>
-        <div className="mt-1.5 flex items-center gap-2">
-          <Meter pct={pctOf(lane)} />
-          <span className="shrink-0 text-[8px] tabular-nums tracking-[0.14em] text-phos-600">
-            {lane.current}/{lane.target}
-          </span>
-        </div>
-        {lane.also ? (
-          <p className="mt-1.5 text-[8px] tracking-[0.16em] text-phos-600">
-            {`ALSO ${lane.also.current}/${lane.also.target} ${lane.also.label} · BOTH REQUIRED`}
-          </p>
-        ) : null}
-      </div>
-    );
-  }
+  if (progress.filesCompleted < 1 || lanes.length === 0) return null;
 
   const owed = progress.rewardQueue.length;
   return (

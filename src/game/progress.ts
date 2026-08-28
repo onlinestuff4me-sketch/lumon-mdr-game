@@ -24,7 +24,7 @@
  * objects the refiner owns, not a scoreboard that resets with the quarter.
  */
 
-import { TEMPERS } from "./constants";
+import { LEVELS, TEMPERS } from "./constants";
 import { pickFacts } from "./facts";
 import { newlyEarned, type Counters, type Rung } from "./rewards";
 import type { Temper } from "./types";
@@ -44,7 +44,22 @@ export type RewardState = "earned_pending" | "presenting" | "claimed";
 
 export interface Progress {
   version: number;
+  /**
+   * Levels credited. Informational now: the ladder counts files.
+   *
+   * Kept under its old name because it is in every save already, and a
+   * key rename in storage buys nothing.
+   */
   screensCompleted: number;
+  /**
+   * Files refined — what the screens lane actually counts.
+   *
+   * A file may be several levels (the orientation lessons are two or
+   * three each), and it is credited once, when its last stage completes.
+   * Absent in saves written before files existed; `coerce` derives it
+   * from the credited level ids, which is exact rather than a guess.
+   */
+  filesCompleted: number;
   binsTotal: number;
   binsByTemper: Record<Temper, number>;
   /** Level ids already credited. The whole of the idempotency guarantee. */
@@ -84,6 +99,28 @@ export interface Progress {
   inspectCounts: Record<string, number>;
 }
 
+/**
+ * How many whole files a set of credited level ids amounts to.
+ *
+ * A file counts only when *every* stage of it has been credited — half of
+ * an orientation lesson is not a file refined, and the ladder must not
+ * treat it as one.
+ */
+function filesAmong(levelIds: readonly string[]): number {
+  const done = new Set(levelIds);
+  const stages = new Map<string, { total: number; have: number }>();
+  for (const level of LEVELS) {
+    const key = level.fileKey ?? level.id;
+    const row = stages.get(key) ?? { total: 0, have: 0 };
+    row.total += 1;
+    if (done.has(level.id)) row.have += 1;
+    stages.set(key, row);
+  }
+  let files = 0;
+  for (const row of stages.values()) if (row.have === row.total) files += 1;
+  return files;
+}
+
 const KEY = "lumon.mdr.progress.v1";
 const VERSION = 1;
 
@@ -91,6 +128,7 @@ export function emptyProgress(): Progress {
   return {
     version: VERSION,
     screensCompleted: 0,
+    filesCompleted: 0,
     binsTotal: 0,
     binsByTemper: { WO: 0, FC: 0, DR: 0, MA: 0 },
     creditedLevelIds: [],
@@ -107,7 +145,7 @@ export function emptyProgress(): Progress {
 
 export function counters(p: Progress): Counters {
   return {
-    screens: p.screensCompleted,
+    screens: p.filesCompleted,
     bins: p.binsTotal,
     byTemper: p.binsByTemper,
     perfectStreak: p.perfectScreenStreak,
@@ -130,8 +168,16 @@ export interface Completion {
   readonly tempers: readonly Temper[];
   /** Groups refined per temper. */
   readonly quota: number;
-  /** True when the screen was finished without a rejected drop. */
+  /** True when the whole file was finished without a rejected drop. */
   readonly perfect: boolean;
+  /**
+   * Whether this level was the last stage of its file.
+   *
+   * Bins are credited per stage — every group binned is a group binned —
+   * but the file counter and the precision lane only move when the file
+   * itself is done.
+   */
+  readonly fileComplete: boolean;
   /**
    * Whether a clean screen means anything here.
    *
@@ -164,15 +210,16 @@ export function applyCompletion(
   const binsByTemper = { ...p.binsByTemper };
   for (const t of done.tempers) binsByTemper[t] += done.quota;
 
+  const counts = done.countsForPerfect && done.fileComplete;
   const next: Progress = {
     ...p,
     screensCompleted: p.screensCompleted + 1,
+    filesCompleted: p.filesCompleted + (done.fileComplete ? 1 : 0),
     binsTotal: p.binsTotal + done.quota * done.tempers.length,
     binsByTemper,
     creditedLevelIds: [...p.creditedLevelIds, done.levelId],
-    perfectScreensTotal:
-      p.perfectScreensTotal + (done.countsForPerfect && done.perfect ? 1 : 0),
-    perfectScreenStreak: !done.countsForPerfect
+    perfectScreensTotal: p.perfectScreensTotal + (counts && done.perfect ? 1 : 0),
+    perfectScreenStreak: !counts
       ? p.perfectScreenStreak
       : done.perfect
         ? p.perfectScreenStreak + 1
@@ -301,12 +348,22 @@ function coerce(raw: unknown): Progress {
     }
   }
 
+  const credited = ids(p.creditedLevelIds);
   return {
     version: VERSION,
     screensCompleted: num(p.screensCompleted, 0),
+    // Saves written before files existed have no count. Derived from the
+    // credited level ids rather than guessed at: the level table knows
+    // which file each id belongs to, so the answer is exact — and a
+    // refiner who was mid-orientation does not come back owed six
+    // incentives or none.
+    filesCompleted:
+      p.filesCompleted === undefined
+        ? filesAmong(credited)
+        : num(p.filesCompleted, 0),
     binsTotal: num(p.binsTotal, 0),
     binsByTemper,
-    creditedLevelIds: ids(p.creditedLevelIds),
+    creditedLevelIds: credited,
     perfectScreensTotal: num(p.perfectScreensTotal, 0),
     perfectScreenStreak: num(p.perfectScreenStreak, 0),
     rewardState,

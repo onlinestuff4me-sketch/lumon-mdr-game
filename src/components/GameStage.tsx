@@ -15,6 +15,7 @@ import { factById, type Fact } from "../game/facts";
 import { LADDER, rungById } from "../game/rewards";
 import { RewardReveal } from "./RewardReveal";
 import { RecordNotice } from "./RecordNotice";
+import { IncentiveSummary } from "./IncentiveSummary";
 import { MdeStage } from "./MdeStage";
 import {
   loadRuns,
@@ -27,10 +28,10 @@ import {
 import { computeLayout } from "../game/layout";
 import { useEngine } from "../hooks/useEngine";
 import { BinDeck } from "./BinDeck";
-import { ControlDeck } from "./ControlDeck";
 import { CRTOverlay } from "./CRTOverlay";
 import { HandbookModal } from "./HandbookModal";
 import { HUD } from "./HUD";
+import { IncentiveRecordBox } from "./IncentiveRecordBox";
 import { PhaseOverlay } from "./PhaseOverlay";
 import { Viewport } from "./Viewport";
 
@@ -104,6 +105,8 @@ export function GameStage() {
     const queue: {
       rungId: string;
       rewardId: string;
+      /** The rung itself, for the line on the sealed card saying why. */
+      rung: NonNullable<ReturnType<typeof rungById>>;
       reward: NonNullable<ReturnType<typeof presentable>>;
       major: boolean;
       facts: Fact[];
@@ -129,6 +132,7 @@ export function GameStage() {
       queue.push({
         rungId: id,
         rewardId: rung.reward,
+        rung,
         reward,
         major: rung.size !== "minor",
         // Chosen and stored when the reward was earned; looked up here,
@@ -171,8 +175,15 @@ export function GameStage() {
     return { owed: out, toFile };
   })();
 
-  // Only between files, never over a live board.
-  const revealing = hud.phase === "complete" && owed.length > 0;
+  /**
+   * Only between files, never over a live board — and never over a board
+   * whose meters are still filling. The last packet completes the file on
+   * the frame it lands, so a card keyed to the phase alone covered four
+   * bins and a header still animating to 100%: the refiner did the work
+   * and never saw it finish. `hud.settled` is the engine's word for "the
+   * meters are done, cover me".
+   */
+  const revealing = hud.phase === "complete" && hud.settled && owed.length > 0;
 
   /**
    * Which card of this boundary's stack is on screen — `INCENTIVE 1 OF 2`,
@@ -187,9 +198,42 @@ export function GameStage() {
    * so it resets itself when the next one opens without an effect to clear
    * it.
    */
-  const boundary = `${hud.levelIndex}:${progress.screensCompleted}`;
-  const [accepted, setAccepted] = useState({ boundary: "", n: 0 });
-  const acceptedHere = accepted.boundary === boundary ? accepted.n : 0;
+  const boundary = `${hud.levelIndex}:${progress.filesCompleted}`;
+  const [accepted, setAccepted] = useState<{
+    boundary: string;
+    names: string[];
+  }>({ boundary: "", names: [] });
+
+  /**
+   * The ledger as it stood when this boundary opened, so the landing
+   * screen can animate the count and the meter from what the refiner had
+   * to what they now have. Captured on the first render of the boundary
+   * and never again — `progress` is deliberately not a dependency, since
+   * the whole value of this is that it does *not* follow the claims.
+   */
+  const [before, setBefore] = useState<{ boundary: string; progress: Progress }>({
+    boundary: "",
+    progress,
+  });
+  useEffect(() => {
+    if (hud.phase !== "complete") return;
+    setBefore((b) => (b.boundary === boundary ? b : { boundary, progress }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hud.phase, boundary]);
+
+  /**
+   * The beat after the last card of a boundary has been filed: what was
+   * filed, where it went, and what the next incentive costs. It holds the
+   * board the way a card does — most of orientation advances itself, and
+   * a landing that wipes with the screen teaches nobody where anything
+   * is.
+   */
+  const [landed, setLanded] = useState<{ boundary: string; names: string[] } | null>(
+    null,
+  );
+  const landing = landed?.boundary === boundary ? landed : null;
+  const acceptedNames = accepted.boundary === boundary ? accepted.names : [];
+  const acceptedHere = acceptedNames.length;
   const stackTotal = owed.length + acceptedHere;
   const stackIndex = acceptedHere + 1;
 
@@ -225,7 +269,8 @@ export function GameStage() {
    * most of orientation advances itself, and a notice that wipes with the
    * screen is a notice nobody read.
    */
-  const noticing = hud.phase === "complete" && !revealing && brokenHere !== null;
+  const noticing =
+    hud.phase === "complete" && hud.settled && !revealing && brokenHere !== null;
   const filedHere = filedNote.boundary === boundary ? filedNote.names : [];
   const toFileNames = useRef<string[]>([]);
   toFileNames.current = toFile.map((f) => f.name);
@@ -244,8 +289,11 @@ export function GameStage() {
   }, [hud.phase, fileKey, boundary]);
 
 
-  const [handbookAt, setHandbookAt] = useState<"top" | "shelf">("top");
-  const openHandbook = useCallback((at: "top" | "shelf" = "top") => {
+  const [handbookAt, setHandbookAt] = useState<"top" | "shelf" | "settings">(
+    "top",
+  );
+  const openHandbook = useCallback(
+    (at: "top" | "shelf" | "settings" = "top") => {
     setHandbookAt(at);
     // Read the archive here rather than tracking it in an effect: the
     // drawer is the only thing that renders it, and it is unmounted until
@@ -257,7 +305,9 @@ export function GameStage() {
     // fail screen underneath it.
     engine.setPaused(true);
     setHandbook(true);
-  }, [engine]);
+    },
+    [engine],
+  );
 
   // Closing is the mirror of opening: unpausing here would drain a frame of
   // clock under a drawer that is still on screen, so the resume is left to
@@ -272,8 +322,8 @@ export function GameStage() {
   // stays put and the next file does not begin loading behind a
   // celebration.
   useEffect(() => {
-    engine.setPaused(handbook || revealing || noticing);
-  }, [engine, handbook, revealing, noticing]);
+    engine.setPaused(handbook || revealing || noticing || landing !== null);
+  }, [engine, handbook, revealing, noticing, landing]);
 
   // ── canvas attach + sizing ──────────────────────────────────────────
   useLayoutEffect(() => {
@@ -364,8 +414,12 @@ export function GameStage() {
     if (level) {
       // Read before crediting: the ledger is about to reset the run.
       const hadClean = progressRef.current.perfectScreenStreak;
-      const counts = (level.showBins ?? level.tempers).length > 1;
-      if (counts && !engine.perfect && hadClean > 0) {
+      // The last stage of a file is the one that credits it. Bins are
+      // still credited every stage — a group binned is a group binned —
+      // but a file is only refined once all of it is.
+      const fileComplete = level.stage ? level.stage[0] === level.stage[1] : true;
+      const counts = engine.fileCounts && fileComplete;
+      if (counts && !engine.filePerfect && hadClean > 0) {
         const needs = nextPerfectTarget(hadClean) ?? 3;
         setBroken({ levelId: level.id, at: hadClean, needs });
       }
@@ -374,8 +428,9 @@ export function GameStage() {
           levelId: level.id,
           tempers: level.tempers,
           quota: level.quota,
-          perfect: engine.perfect,
-          countsForPerfect: (level.showBins ?? level.tempers).length > 1,
+          perfect: engine.filePerfect,
+          countsForPerfect: engine.fileCounts,
+          fileComplete,
         }),
       );
     }
@@ -492,9 +547,10 @@ export function GameStage() {
 
   // Same call the engine makes, with the same active tempers, so the bins
   // the player sees are the rects the engine hit-tests.
+  // The band order is resolved once inside `layout.ts` and shared with the
+  // engine, so the chrome and the hit-testing can never disagree about
+  // where the bins are.
   const layout = computeLayout(size.w, size.h, hud.activeTempers);
-  const live =
-    hud.phase === "probe" || hud.phase === "select" || hud.phase === "carry";
 
   const play = useCallback(
     (index: number) => {
@@ -528,28 +584,62 @@ export function GameStage() {
           aria-hidden
         />
 
+        {/* Only the header and the coach line are laid out by flow. The
+            bins and the incentives record are placed from the layout's own
+            coordinates, so the chrome sits exactly where the engine
+            hit-tests it and the gaps between the three bands are the one
+            number `layout.gap` says they are. */}
         <div className="relative flex h-full w-full flex-col">
-          <HUD hud={hud} height={layout.hudH} />
-          {/* The coach line sits directly under the HUD, not above the
-              control deck. At the bottom of the screen it was underneath
-              the hand that was holding the phone — unreadable exactly while
-              the player was doing the thing it describes. */}
-          <StatusTicker hud={hud} height={layout.tickerH} />
-          {/* Above the board, not below it: down between the matrix and the
-              bins the deck sat across the path every packet is dragged
-              along. Nothing here is pressed during play. */}
-          <ControlDeck
+          <HUD
             hud={hud}
-            height={layout.deckH}
-            onMode={(m) => {
-              void getAudio().unlock();
-              engine.setMode(m);
-            }}
+            height={layout.hudH}
             onHandbook={() => openHandbook("top")}
+            onSettings={() => openHandbook("settings")}
           />
-          <div className="flex-1" />
-          <div className="shrink-0" style={{ height: layout.binsH }} />
+          {/* Variant `b` reserves a band for the record under the header. */}
+          {layout.recordAt === "top" ? (
+            <div
+              className="shrink-0"
+              style={{ height: layout.gap + layout.recordH }}
+            />
+          ) : null}
+          {/* The coach line sits directly under the header. At the bottom
+              of the screen it was underneath the hand holding the phone —
+              unreadable exactly while the player was doing the thing it
+              describes. In variant `c` it is drawn over the board's top
+              edge instead of taking a band of its own. */}
+          {layout.tickerOverGrid ? null : (
+            <StatusTicker hud={hud} height={layout.tickerH} />
+          )}
         </div>
+
+        {/* Under the bins in `a` and `c`, where a thumb already is and
+            where it sits beside the things it counts; under the header in
+            `b`, where it is read on the way in. */}
+        <div
+          className="absolute inset-x-0 z-40 flex items-center px-3"
+          style={{ top: layout.recordTop, height: layout.recordH }}
+        >
+          <IncentiveRecordBox
+            progress={progress}
+            onOpen={() => openHandbook("shelf")}
+            variant="hud"
+            landing={acceptedHere > 0}
+          />
+        </div>
+
+        {/* Variant `c`: the coach line floats on the board's top edge. The
+            band is still reserved, but inside the grid rather than out of
+            it — the matrix is drawn with that much clearance at the top,
+            so nothing reflows and the board keeps a whole band. */}
+        {layout.tickerOverGrid ? (
+          <div
+            className="pointer-events-none absolute inset-x-0 z-30"
+            style={{ top: layout.grid.y }}
+          >
+            <StatusTicker hud={hud} height={layout.tickerH} />
+          </div>
+        ) : null}
 
         <BinDeck bins={hud.bins} layout={layout} />
 
@@ -649,11 +739,15 @@ export function GameStage() {
               const id = owed[0].rungId;
               const rewardId = owed[0].rewardId;
               setProgress((p) => claim(p, id, { shown: true, rewardId }));
+              const name = owed[0].reward.name;
               setAccepted((a) =>
                 a.boundary === boundary
-                  ? { boundary, n: a.n + 1 }
-                  : { boundary, n: 1 },
+                  ? { boundary, names: [...a.names, name] }
+                  : { boundary, names: [name] },
               );
+              if (owed.length === 1) {
+                setLanded({ boundary, names: [...acceptedNames, name] });
+              }
             }}
           />
         ) : revealing ? (
@@ -663,21 +757,41 @@ export function GameStage() {
             // same card with different contents.
             key={owed[0].rungId}
             reward={owed[0].reward}
+            rung={owed[0].rung}
             facts={owed[0].facts}
             index={stackIndex}
             total={stackTotal}
             sealed={stackIndex === 1}
-            progress={progress}
             onAccept={() => {
               const id = owed[0].rungId;
               const rewardId = owed[0].rewardId;
               setProgress((p) => claim(p, id, { shown: true, rewardId }));
+              const name = owed[0].reward.name;
               setAccepted((a) =>
                 a.boundary === boundary
-                  ? { boundary, n: a.n + 1 }
-                  : { boundary, n: 1 },
+                  ? { boundary, names: [...a.names, name] }
+                  : { boundary, names: [name] },
               );
+              // The last card of the stack is the one that was seen to
+              // fly into the record, so it is the one the landing screen
+              // follows.
+              if (owed.length === 1) {
+                setLanded({ boundary, names: [...acceptedNames, name] });
+              }
             }}
+          />
+        ) : null}
+
+        {/* After the last card, before the board comes back: what was
+            kept, what it counts toward, and what earns the next one. It
+            stows itself into the header strip on the way out. */}
+        {landing && !revealing ? (
+          <IncentiveSummary
+            from={before.boundary === boundary ? before.progress : progress}
+            to={progress}
+            names={landing.names}
+            onOpenRecord={() => openHandbook("shelf")}
+            onResume={() => setLanded(null)}
           />
         ) : null}
 
@@ -689,19 +803,6 @@ export function GameStage() {
           />
         ) : null}
 
-        {/* Below the coach band, not inside it: at hudH + 6 this badge sat
-            on top of the ticker and clipped the line telling the player what
-            to do — which is exactly the line a first-time player needs. */}
-        {live && !hud.audioReady ? (
-          <div
-            className="pointer-events-none absolute inset-x-0 z-40 flex justify-center"
-            style={{ top: layout.grid.y + 4 }}
-          >
-            <span className="rounded-[2px] border border-phos-700 bg-phos-950/85 px-2 py-0.5 text-[8px] tracking-[0.16em] text-phos-600">
-              TAP TO ENABLE TERMINAL AUDIO
-            </span>
-          </div>
-        ) : null}
       </div>
     </Viewport>
   );

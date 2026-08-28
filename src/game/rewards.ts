@@ -34,7 +34,14 @@ export type RewardId =
   | "R22"; // waffle party ii
 
 export interface Rung {
-  /** Unique per rung, because one reward appears on several. */
+  /**
+   * Unique per rung, because one reward appears on several.
+   *
+   * The number in an id is historical — it was the threshold when the
+   * lane counted levels rather than files, and the ids are in every save
+   * on every phone, so they do not move. `at` is the threshold; the id is
+   * only a name.
+   */
   readonly id: string;
   readonly lane: Lane;
   /** The counter value that earns it. */
@@ -67,9 +74,11 @@ export interface Rung {
 /**
  * Lane A — screens completed.
  *
- * Screens, not files: the thirteen orientation screens share one file name,
- * so a file-based counter cannot see the part of the game where the rewards
- * matter most. The first three land back to back to back, because a refiner
+ * One per level, which the interface calls a file — the header has always
+ * numbered them that way ("FILE 16 OF 30"), including the thirteen
+ * orientation levels that share a file *name*. The lane keeps the internal
+ * name `screens` because that is what the save has always called it; every
+ * string a refiner reads says "file". The first three land back to back to back, because a refiner
  * who has been paid twice before the third screen understands the system
  * without being told about it.
  */
@@ -77,24 +86,24 @@ const SCREEN_LADDER: readonly Rung[] = [
   { id: "S01", lane: "screens", at: 1, reward: "R02", size: "minor" },
   { id: "S02", lane: "screens", at: 2, reward: "R01", size: "minor" },
   { id: "S03", lane: "screens", at: 3, reward: "R03", size: "minor" },
-  { id: "S05", lane: "screens", at: 5, reward: "R05", size: "minor" },
-  { id: "S09", lane: "screens", at: 9, reward: "R06", size: "major" },
+  { id: "S05", lane: "screens", at: 4, reward: "R05", size: "minor" },
+  { id: "S09", lane: "screens", at: 6, reward: "R06", size: "major" },
   // Screen 13 is the first screen carrying all four tempers and the last
   // of orientation: the field the refiner has just mastered becomes the
   // dance floor.
-  { id: "S13", lane: "screens", at: 13, reward: "R07", size: "major" },
+  { id: "S13", lane: "screens", at: 8, reward: "R07", size: "major" },
   // CALIBRATION names the four. The commendation belongs here rather than
   // on 13, so that two major events never share a boundary.
-  { id: "S15", lane: "screens", at: 15, reward: "R08", size: "major" },
-  { id: "S17", lane: "screens", at: 17, reward: "R03", size: "minor" },
-  { id: "S20", lane: "screens", at: 20, reward: "R12", size: "minor" },
-  { id: "S23", lane: "screens", at: 23, reward: "R13", size: "minor" },
-  { id: "S24", lane: "screens", at: 24, reward: "R06", size: "major" },
-  { id: "S26", lane: "screens", at: 26, reward: "R07", size: "major" },
+  { id: "S15", lane: "screens", at: 10, reward: "R08", size: "major" },
+  { id: "S17", lane: "screens", at: 12, reward: "R03", size: "minor" },
+  { id: "S20", lane: "screens", at: 14, reward: "R12", size: "minor" },
+  { id: "S23", lane: "screens", at: 16, reward: "R13", size: "minor" },
+  { id: "S24", lane: "screens", at: 18, reward: "R06", size: "major" },
+  { id: "S26", lane: "screens", at: 20, reward: "R07", size: "major" },
   {
     id: "S28",
     lane: "screens",
-    at: 28,
+    at: 22,
     reward: "R19",
     also: { lane: "bins", at: 90 },
     size: "major",
@@ -102,9 +111,9 @@ const SCREEN_LADDER: readonly Rung[] = [
   {
     id: "S30",
     lane: "screens",
-    at: 30,
+    at: 23,
     reward: "R22",
-    also: { lane: "bins", at: 105 },
+    also: { lane: "bins", at: 104 },
     after: ["S28"],
     size: "landmark",
   },
@@ -182,12 +191,48 @@ export function rungById(id: string): Rung | undefined {
   return BY_ID.get(id);
 }
 
+/**
+ * What each lane is called in front of a refiner.
+ *
+ * "Files", not "screens". The counter really is one-per-level and the
+ * header has always numbered levels as files ("FILE 16 OF 30"), so
+ * "screens" was an internal word leaking into the interface. It is also
+ * the word `docs/DESIGN_SYSTEM.md` reserves for the data a refiner
+ * refines — nothing else in this game may be called a file.
+ *
+ * The counter is `filesCompleted`, credited when a file's last stage
+ * finishes. The lane keeps the internal name `screens` because that is
+ * what the save has always called it; every string a refiner reads says
+ * "file".
+ */
 export const LANE_LABEL: Record<Lane, string> = {
-  screens: "SCREENS COMPLETED",
+  screens: "FILES REFINED",
   bins: "BINS REFINED",
   temper: "TEMPER MASTERY",
-  perfect: "SCREENS WITHOUT ERROR",
+  perfect: "FILES WITHOUT ERROR",
 };
+
+/**
+ * Why this incentive was issued, for the sealed card to say before it is
+ * opened.
+ *
+ * The sealed card may explain the *cause* in as much detail as it likes —
+ * the refiner earned it and knows what they did. What it may never do is
+ * hint at the effect. Nothing here touches the catalog.
+ */
+export function reasonFor(rung: Rung): string {
+  const n = rung.at;
+  const files = `${n} ${n === 1 ? "FILE" : "FILES"}`;
+  const bins = `${n} ${n === 1 ? "BIN" : "BINS"}`;
+  if (rung.lane === "screens") return `REFINEMENT MILESTONE · ${files} REFINED`;
+  if (rung.lane === "bins") return `BIN QUOTA · ${bins} REFINED`;
+  if (rung.lane === "perfect") {
+    return `UNBLEMISHED RECORD · ${files} WITHOUT ERROR`;
+  }
+  return rung.allTempers
+    ? `TEMPER MASTERY · ${n} OF EVERY TEMPER`
+    : `TEMPER MASTERY · ${n} ${rung.temper} ${n === 1 ? "BIN" : "BINS"}`;
+}
 
 /** The label a temper rung shows: the temper's own name, not the lane's. */
 export function laneLabel(rung: Rung): string {
@@ -195,12 +240,12 @@ export function laneLabel(rung: Rung): string {
   return rung.allTempers ? "ALL FOUR TEMPERS" : `${rung.temper} BINS REFINED`;
 }
 
-/** "Complete 3 more screens." — the exact action, in the game's words. */
+/** "Refine 3 more files." — the exact action, in the game's words. */
 export function actionFor(lane: Lane, remaining: number, temper?: string): string {
   const n = Math.max(1, remaining);
   const s = n === 1 ? "" : "s";
-  if (lane === "screens") return `Complete ${n} more screen${s}.`;
-  if (lane === "perfect") return `Finish ${n} more screen${s} without error.`;
+  if (lane === "screens") return `Refine ${n} more file${s}.`;
+  if (lane === "perfect") return `Refine ${n} more file${s} without error.`;
   if (lane === "temper") {
     return temper
       ? `Refine ${n} more ${temper} bin${s}.`

@@ -2,7 +2,16 @@ import type { LevelDef, Temper } from "./types";
 
 /** Matrix dimensions — the Lumon standard refinement window. */
 export const COLS = 16;
-export const ROWS = 28;
+/**
+ * Twenty-six, down from twenty-eight.
+ *
+ * The bins grew a line each and the bands between them were evened out,
+ * which cost the board about sixty pixels. Spent on smaller glyphs that
+ * would have been a 12.7px digit; spent on two fewer rows instead, and the
+ * digits stay the size they were. The board is a fixed grid scaled to fit
+ * its rect, so this is the only dial that trades rows for legibility.
+ */
+export const ROWS = 26;
 export const CELL_COUNT = COLS * ROWS;
 
 /** Radial threshold at which a cluster begins to agitate (CSS px). */
@@ -94,7 +103,7 @@ export const TEMPER_DEFS: Record<Temper, TemperDef> = {
   },
 };
 
-/** Idle phosphor colour for inert digits. */
+/** Idle phosphor color for inert digits. */
 export const IDLE_RGB: readonly [number, number, number] = [47, 214, 138];
 
 /**
@@ -170,8 +179,21 @@ export interface OrientStage {
   readonly bins: number;
 }
 
+/**
+ * Each rung is also a *file*.
+ *
+ * A rung is one coherent lesson, so it is the natural unit for the thing
+ * the refiner is told they are refining — and it is what makes the header
+ * meter honest: `FILE ORIENTATION #0001 2/3` fills a third at a time and
+ * pays an incentive when it reaches the end. Thirteen levels under one
+ * file code meant a bar that reset twelve times inside a single "file".
+ *
+ * The first rung is three screens rather than four so that the first
+ * incentive lands at the third, which is as early as a file-completion
+ * payout can be made to arrive.
+ */
 export const ORIENT_STAGES: readonly OrientStage[] = [
-  { screens: 4, tempers: 1, groupsPerTemper: 1, bins: 1 },
+  { screens: 3, tempers: 1, groupsPerTemper: 1, bins: 1 },
   { screens: 2, tempers: 1, groupsPerTemper: 2, bins: 1 },
   { screens: 2, tempers: 2, groupsPerTemper: 1, bins: 2 },
   { screens: 2, tempers: 2, groupsPerTemper: 2, bins: 2 },
@@ -179,9 +201,9 @@ export const ORIENT_STAGES: readonly OrientStage[] = [
   { screens: 1, tempers: 4, groupsPerTemper: 1, bins: 4 },
 ];
 
-/** Focus and subtlety per rung: groups start centred and loud, and edge
+/** Focus and subtlety per rung: groups start centerd and loud, and edge
  *  outwards and quieten as the ladder climbs. */
-const OR_FOCUS = ["centre", "centre", "mid", "mid", "edge", "edge"] as const;
+const OR_FOCUS = ["center", "center", "mid", "mid", "edge", "edge"] as const;
 
 function orientationScreens(): LevelDef[] {
   const out: LevelDef[] = [];
@@ -223,10 +245,14 @@ function orientationScreens(): LevelDef[] {
       const groups = n * st.groupsPerTemper;
       const i = index++;
       const last = i === total - 1;
+      // The last stage of this rung, which is the last stage of this file:
+      // where the ceremony, the archive row and the file credit all land.
+      const endOfFile = sIdx === st.screens - 1;
       out.push({
         id: `orientation-${String(i + 1).padStart(2, "0")}`,
         name: "ORIENTATION",
-        fileCode: "0001",
+        fileCode: String(stage + 1).padStart(4, "0"),
+        fileKey: `orientation-file-${stage + 1}`,
         tempers: [...new Set(tempers)],
         ...(showBins ? { showBins } : {}),
         spacing: groups >= 4 ? 5 : 6,
@@ -240,13 +266,15 @@ function orientationScreens(): LevelDef[] {
         // One digit of overlap lifts the whole group. A new refiner is
         // never told that their correct instinct was a wrong box.
         minCapture: 1,
-        // No ceremony between screens: one continuous sequence, not a
-        // banner per screen. The last keeps the full one, so orientation
-        // ends properly and releases its single addendum.
-        ceremony: last ? "full" : "none",
+        // No ceremony between the stages of a file: one continuous
+        // sequence, not a banner per screen. The end of each orientation
+        // file keeps the full one — that is where the meter reaches 100%
+        // and an incentive may be owed, and neither should be wiped
+        // through by an auto-advance.
+        ceremony: endOfFile ? "full" : "none",
         autoAdvanceMs: 900,
         archived: last,
-        stage: [i + 1, total],
+        stage: [sIdx + 1, st.screens],
         focus: OR_FOCUS[stage],
         tapToSelect: true,
         // Only where a single bin is on the deck, so the arrows point at
@@ -397,7 +425,7 @@ export const LEVELS: readonly LevelDef[] = [
     fileCode: "0901",
     tempers: ["WO", "FC"],
     spacing: 4,
-    lore: "Sorrow and delight are neighbours on the wheel. Refiners who confuse them are reassigned, kindly.",
+    lore: "Sorrow and delight are neighbors on the wheel. Refiners who confuse them are reassigned, kindly.",
     seconds: 150,
     seed: 0x6e33,
     quota: 2,
@@ -436,7 +464,7 @@ export const LEVELS: readonly LevelDef[] = [
     fileCode: "1203",
     tempers: ["FC", "MA"],
     spacing: 4,
-    lore: "The numbers were people once. That is a rumour, and rumours are a form of frolic.",
+    lore: "The numbers were people once. That is a rumor, and rumors are a form of frolic.",
     seconds: 140,
     seed: 0x9b64,
     quota: 2,

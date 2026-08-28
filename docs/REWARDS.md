@@ -13,7 +13,7 @@
 > `product-context/README.md`.
 
 The product specification was written for a 50-file campaign whose bin counter
-reaches 1,000. This game is **30 screens carrying 18 file names, and a complete
+reaches 1,000. This game is **23 files across 29 screens, and a complete
 playthrough refines 105 groups**. Every threshold in the source documents has
 therefore been rescaled. Nothing else about the proposal changes: rewards stay
 deterministic, their requirement stays visible, and their identity stays sealed
@@ -30,12 +30,33 @@ a menu, and should be unable to answer "what is it?" until it opens.
 
 | Decision | Choice | Why |
 |---|---|---|
-| Ladder scale | **Rescale to the game we have** | All eleven rewards become earnable on the 30 screens that exist. Extending the campaign to 50 files first would put every reward behind a content-authoring project. The lane tables below leave named headroom so a longer campaign extends them rather than renumbering them. |
+| Ladder scale | **Rescale to the game we have** | All eleven rewards become earnable on the 23 files that exist. Extending the campaign to 50 files first would put every reward behind a content-authoring project. The lane tables below leave named headroom so a longer campaign extends them rather than renumbering them. |
 | Forecast reveal | **After the first reward pops** | Screens 1–2 stay clean. The finger trap arrives with no warning, and the forecast appears immediately behind it carrying the next sealed goal. The system explains itself by having already paid out once. |
 | Pacing unit | **Screens**, with named files as landmarks | Files are too coarse here: 18 names, and the first 13 screens share one. Screens give 30 rungs, which is where the density has to live. |
 | Canon posture | **Reach for the show's own names first** | Recognition is the point: a refiner who spots something they know grins, and a grin is worth more than an original joke of equal quality. Where the show establishes a name, use it. Where it does not, write in the same register and record it as original. The one line that does not move is the audit's: an item the show only ever *mentions* can be named in text, never given an invented face. |
 | Wellness voice | **Nothing is spoken** | The fact bank assumes cached voice recordings; the browser's own speech synthesis stood in for them, and in play it sounded like a robot reading a card rather than a wellness counsellor reading a file. A wrong voice is worse than no voice. The sentence is typeset on the card and captioned, which is what the specification actually requires of it; a recorded performance can be added later without changing anything else. |
 | Bin credit | **On file completion, once per file** | A file abandoned or failed credits nothing; replaying a file credits nothing a second time. Counters stay monotonic and cannot be farmed. |
+
+---
+
+## Part 0b — The vocabulary this document uses
+
+Since the flow rework, three words are load-bearing and are defined in
+`src/game/lexicon.ts` rather than remembered:
+
+- **Incentive**, never "reward". Nothing a refiner reads says *reward*.
+  Lumon issues incentives. The code keeps `RewardId` and `rewards.ts`
+  because code is not read by refiners.
+- **File** is what the refiner is told they are refining, and what this
+  ladder counts. A file is one or more *stages*: the orientation lessons
+  are two or three screens each, and the header meter fills across the
+  whole lesson rather than resetting inside it. It is not a verb for
+  putting something away.
+- **Keep** is what a refiner does with an incentive. `KEEP INCENTIVE`,
+  `4 KEPT`, `ISSUED AGAIN · KEPT`.
+
+`docs/DESIGN_SYSTEM.md` Part 6 is the full reserved-word list, and the rest
+of the system it belongs to.
 
 ---
 
@@ -47,7 +68,7 @@ the forecast copy, the save file and the archive all read from them.
 | Term | Definition | In code |
 |---|---|---|
 | **Screen** | One entry in `LEVELS`. There are 30. | `levelIndex` |
-| **File** | A distinct `name` in `LEVELS`. There are 18; the 13 orientation screens share one. Files are landmark units, not counters. | `level.name` |
+| **File** | One or more adjacent levels sharing a `fileKey`. There are 23: six orientation lessons of one to three stages each, and seventeen named files of one stage. This is the unit the screens lane counts. | `level.fileKey` |
 | **Bin** | One group correctly refined into its temper's bin. A full playthrough yields 105. Credited on file completion. | `quota × tempers.length` |
 | **Perfect screen** | A screen completed with no rejected drop. | new per-screen flag |
 | **Claim** | A reward moving from `earned_pending` to `claimed`. Idempotent: a reload mid-celebration re-presents, never re-awards. | new save field |
@@ -63,24 +84,35 @@ screen 7 ends at 10 bins, screen 13 at 32, screen 20 at 53, screen 30 at 105.
 Two lanes are visible at launch. Two more are held back (Part 3) so a player
 learning to read a temper is never shown four counters at once.
 
-### Lane A — SCREENS COMPLETED
+### Lane A — FILES REFINED
 
-| Screen | File | Reward | Size | Source threshold |
+| File | Name | Reward | Size | Source threshold |
 |---:|---|---|---|---|
-| 1 | ORIENTATION | **R02 Finger Trap** | Minor | file 2 |
-| 2 | ORIENTATION | **R01 Eraser** | Minor | file 1 |
-| 3 | ORIENTATION | **R03 Outie Fact** I | Minor | file 3 |
-| 5 | ORIENTATION | **R05 Melon Bar** | Minor | file 5 |
-| 9 | ORIENTATION | **R06 Wellness I** — 3 facts | Major | file 9 |
-| 13 | ORIENTATION (last) | **R07 MDE I** | Major | file 10 |
-| 15 | CALIBRATION | **R08 Crystal Portrait Gift** | Major | file 12 |
-| 17 | SUNSET PARK | **R03 Outie Fact** encore | Minor | file 13 |
-| 20 | KINGSPORT | **R12 Egg Bar** | Minor | file 16 |
-| 23 | MOONBEAM | **R13 Watermelon Remembrance** | Minor | file 17 |
-| 24 | TUMWATER | **R06 Wellness II** — 4 facts | Major | file 18 |
-| 26 | ALLENTOWN | **R07 MDE II** — abnormal | Major | file 24 |
-| 28 | SIENA | **R19 Waffle Party I** — with 90 bins | Major | file 34 + 200 bins |
-| 30 | COLD HARBOR | **R22 Waffle Party II** — with 105 bins, after R19 | Landmark | file 50 + 750 bins |
+| 1 | ORIENTATION (3 stages) | **R02 Finger Trap** | Minor | file 2 |
+| 2 | ORIENTATION (2) | **R01 Eraser** | Minor | file 1 |
+| 3 | ORIENTATION (2) | **R03 Outie Fact** I | Minor | file 3 |
+| 4 | ORIENTATION (2) | **R05 Melon Bar** | Minor | file 5 |
+| 6 | ORIENTATION (last) | **R06 Wellness I** — 3 facts | Major | file 9 |
+| 8 | CALIBRATION | **R07 MDE I** | Major | file 10 |
+| 10 | SUNSET PARK | **R08 Crystal Portrait Gift** | Major | file 12 |
+| 12 | EMINENCE | **R03 Outie Fact** encore | Minor | file 13 |
+| 14 | LE MANS | **R12 Egg Bar** | Minor | file 16 |
+| 16 | MOONBEAM | **R13 Watermelon Remembrance** | Minor | file 17 |
+| 18 | JESUP | **R06 Wellness II** — 4 facts | Major | file 18 |
+| 20 | NANNING | **R07 MDE II** — abnormal | Major | file 24 |
+| 22 | YAKIMA | **R19 Waffle Party I** — with 90 bins | Major | file 34 + 200 bins |
+| 23 | COLD HARBOR | **R22 Waffle Party II** — with 104 bins, after R19 | Landmark | file 50 + 750 bins |
+
+The first incentive is a *file*-completion incentive, which is why the
+first orientation lesson is three stages rather than four: each stage
+moves the header meter a third, the third one completes the file, and the
+finger trap arrives. Three screens is as early as a payout tied to
+finishing something can be made to land.
+
+The rung ids (`S01`, `S05`, `S30`) are historical — the number was the
+threshold back when the lane counted levels. `at` is the threshold; the id
+is only a name, and it is in every save on every phone, so it does not
+move.
 
 The first two swap the order the source documents give them. The finger trap
 is the funnier object and the better hook: a thing that spins and traps a
@@ -125,7 +157,7 @@ source specification asks for across the first 30% — held here across the whol
 campaign. No two majors are ever adjacent.
 
 The dropped encores — Wellness III, the egg-bar encore, the deeper bin rungs — are
-the headroom. If the campaign grows past 30 screens, they slot back in above
+the headroom. If the campaign grows past 23 files, they slot back in above
 105 bins without renumbering anything below.
 
 ---
@@ -162,7 +194,7 @@ A screen counts toward the streak only if it had **more than one bin on the
 deck**. A one-bin orientation screen cannot be mis-binned, so finishing it
 cleanly is not precision — and counting it would have paid the first
 precision reward out on screen one, before the refiner had been shown a
-second bin to get wrong. Nineteen of the thirty screens qualify.
+second bin to get wrong. Twenty-two of the twenty-three files qualify.
 
 ### Lane E — RETURN, phase 2
 
@@ -177,19 +209,21 @@ and 8 are fact cards. Deferred until the four lanes above are shipped.
 
 **Where it lives.** The file-completion panel already shows 100%, a praise line
 and the declassified addendum. The forecast is one block beneath that, plus a
-mirrored view in the handbook under the archive. No new HUD furniture: nothing
-new competes with the number field during play.
+mirrored view in the handbook under the archive, and — since the flow
+rework — a permanent two-line strip in the header. That strip is the one
+piece of furniture the incentive system adds to the playing screen; it is
+deliberately dense and dim, and it is the only thing in the header that
+takes a tap.
 
 **What it says**, computed at runtime, never authored per reward:
 
 ```text
-NEXT INCENTIVE
-17 / 20 SCREENS REFINED
-Complete 3 more screens.
-INCENTIVE DETAILS: CLASSIFIED
+NEXT INCENTIVE                 CLASSIFIED
+REFINE 3 MORE FILES
+▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░  17/20
 ```
 
-**What it must never say:** the reward's name, image, silhouette, category, colour
+**What it must never say:** the reward's name, image, silhouette, category, color
 theme, rarity, file name, or any threshold beyond the next one in each lane. A
 compound reward shows both counters and the line `BOTH CONDITIONS REQUIRED`.
 
@@ -207,8 +241,23 @@ Only at a completion boundary: the screen is refined, the board is cleared,
 and the next file has not begun loading. Never mid-file, never over a first
 attempt at a new mechanic, never on top of another reward.
 
-The thirteen orientation screens need one addition to make that true. They
-carry no ceremony today — the engine holds `complete` for 900 ms and wipes
+**And never before the file is seen to finish.** The last packet credits
+its bin and completes the file on the same frame, while the bin meter and
+the header meter still have 300 ms of animation left to run and the absorb
+flight has 450 ms. A card keyed to the completion alone lands on top of all
+three: the refiner does the work and never watches it land. The engine
+therefore holds a completed board for **600 ms** — `SETTLE_S` — and
+publishes `settled` on the HUD snapshot. Every end-of-file overlay waits on
+it: the card, the file panel, and the closed-record notice alike. Both
+meters pulse once as they reach their ends, so the arrival is an event
+rather than a value that was already there.
+
+A screen that advances itself waits for `max(SETTLE_S, autoAdvanceMs)`, so
+the settle can never be cut short by a wipe and, at today's 900 ms, costs
+nothing.
+
+The orientation stages need one addition to make that true. A stage that
+is not the end of its file carries no ceremony — the engine holds `complete` for 900 ms and wipes
 straight into the next screen. **An owed reward suspends that auto-advance.**
 The cleared board stays where it is, the sealed card enters over it, and the
 wipe into the next file does not start until the queue is empty. Nothing is
@@ -220,8 +269,17 @@ ever loading behind a celebration.
    quit cannot lose or reroll the reward.
 2. **Anticipation, 0.5–1.5 s** — the results clear, the room tone ducks, a
    sealed `INCENTIVE EARNED` card enters.
-3. **Reveal** — the seal opens; name and media appear together, for the
-   first time.
+3. **Reveal** — the seal *parts*: two halves of an opaque lid split on a
+   bright seam and retract off the plate, which was fetched into the
+   browser's cache while the card sat sealed and has never been in the
+   document. Name and media appear together, for the first time.
+
+   Nothing on the card may move when this happens. Every band — the label,
+   the title, the plate, the caption — is a fixed height, and the plate
+   frame is a fixed 9:16 in both states, which is the aspect every poster
+   is authored at. A card that re-centers itself on the frame the picture
+   arrives is a card that jitters at exactly the moment the refiner is
+   looking hardest.
 4. **Celebration, 5–8 s** for an object; longer for the dance experience and
    the Waffle tiers, both skippable after first viewing. Video where one
    exists, poster where it does not, still where motion is reduced — and a
@@ -232,6 +290,22 @@ ever loading behind a celebration.
 
 Every card carries a dismiss control from its first frame. Reduced motion
 substitutes a clean fade, the still image and a short sound.
+
+### How the terminal draws these
+
+A cathode-ray tube does not fade things in. It strikes a line across the
+middle of the screen and lets it bloom outwards, and it loses signal the
+same way in reverse. Every overlay in the incentive sequence enters on that
+vocabulary — `crt-open` unfurls the panel from a bright horizontal line,
+`crt-band` runs the leading edge of the sweep down it once, `crt-resolve`
+lets the content settle a beat behind the beam — so a reward that appears
+reads as this terminal drawing it rather than as a web page swapping a div.
+
+The one control on each of these screens throbs (`crt-throb`, a 1.9 s
+breath on the glow, not a blink). It is the only thing on the screen that
+does anything, and a refiner who does not know that is a refiner sitting in
+front of a card that appears to have stopped. Every one of these keyframes
+has a `prefers-reduced-motion` variant that flattens it to its end state.
 
 ### When two arrive at once
 
@@ -272,26 +346,74 @@ a running order, so they hold however the ladder is rearranged later.
 4. **An object already on the shelf is not shown again.** A second finger
    trap is still owed, still counted, and still appears on the shelf as
    `×2` — but a repeat of the same photograph is the game repeating
-   itself. It is filed instead, and the record block names it: `FINGER
-   TRAP ISSUED AGAIN · FILED`.
+   itself. It is kept without a card, and the end-of-file panel names it:
+   `FINGER TRAP ISSUED AGAIN · KEPT`.
 
 Rewards whose content changes every time — fact cards, Wellness sessions,
 the dance experience — are never repeats in this sense, because the
 sentence or the session is new even when the plate is not.
 
-### Where it goes: the incentive record
+### Where it goes: the incentives record
 
-An accepted incentive does not vanish. The last card of a boundary shrinks
-into the **incentive record**, a block that fades in beneath it as it goes:
-`INCENTIVE RECORD · 7 ITEMS HELD ›`, the next threshold underneath.
+An accepted incentive does not vanish, and the record it goes into is not
+a thing the refiner has to be told about. It is in the header, on every
+screen, for the whole game:
 
-That block is the one piece of permanent furniture the reward system adds.
-It sits at the foot of every completed file, it is tappable, and it opens
-the handbook *at the shelf* rather than at Section IV. The teaching is in
-the animation: a refiner who has watched an incentive be filed into a
-thing knows what that thing is, and never has to be told to go looking for
-it. It appears during the filing even on the orientation screens that
-advance themselves, which is the only furniture those screens carry.
+```text
+INCENTIVES RECORD                        4 KEPT ›
+REFINE 1 MORE FILE   ▓▓▓▓▓▓░░░░░░░░░░      1/2
+```
+
+It is furniture. It is there before the first incentive exists, reading
+`NONE KEPT`, because furniture that materializes halfway through a session
+reads as a glitch rather than as a place. It sits above the input surface
+so it can be tapped over a live board, and the header around it is
+`pointer-events-none` so a packet dragged to the top edge stays grabbable.
+
+The same component draws the card on the end-of-file panel, which covers
+the header — one object, two shapes, so a refiner who learns one has
+learned both (`IncentiveRecordBox`).
+
+### The summary, which is where the teaching happens
+
+Keeping is not a transition back to the board. It is its own screen, and it
+exists because four questions arrive at that moment and at no other:
+
+| Question | What answers it |
+| --- | --- |
+| What did I just get? | Named. "An incentive" is not a thing anyone remembers owning; a finger trap is. |
+| What does that make in total? | Progress per category — ten issued items, ten outie facts, three wellness sessions, five department events — counted in payouts, ticking up under the refiner's eye. Which is why the screen takes both the ledger before the payout and the ledger after it. |
+| What do I do next? | One instruction, from the nearest lane, with its meter and its raw numbers. |
+| Where does this live now? | It shrinks into the header strip on the way out, and the scrim lifts as it goes so the strip is lit before the page arrives. |
+
+Only categories the refiner has opened an account in are listed. A row
+reading `0 OF 5 DEPARTMENT EVENTS` on the first file is a promise this
+screen has no business making; the full record is where the scale of what
+is left is admitted.
+
+There is deliberately no paragraph explaining any of this. An earlier
+version had one — *"Your record is held at this terminal and appears at the
+foot of every file"* — and it was both true and unnecessary, because the
+screen demonstrates it.
+
+This matters most on the orientation stages, which carry no
+ceremony and wipe 900 ms after clearing. Before the summary existed, an
+early incentive shrank into a block that appeared for half a second and
+left with the screen, on precisely the files where the ladder pays out
+hardest.
+
+### The full record
+
+One tap from the strip, from the summary, or from the handbook. Four
+sections, one per category, each with its own meter; every payout kept is a
+named row, and every payout still to come is a row reading
+`CLASSIFIED · NOT YET ISSUED`.
+
+This is the only screen in the game that admits there is more coming. It
+says how *many* and never what they are — a concealed slot carries no name,
+no silhouette, no plate, and no hint of category beyond the section it sits
+in. That is the whole of the compromise: a refiner may know how far through
+they are, and may never know what is next.
 
 ### When a record closes
 
@@ -381,7 +503,7 @@ sheets. Three things that were invisible before:
   the celebration's main event.
 - **The office scene is right.** Empty MDR floor, four-workstation island,
   beige CRTs, green carpet, chrome cart with a record player, rainbow bands
-  travelling across the ceiling. No people, no likenesses.
+  traveling across the ceiling. No people, no likenesses.
 
 One canon flag, raised rather than acted on: **the watermelon remembrance
 clip and plate show a specific human face** — carved with the rind as hair
@@ -434,10 +556,10 @@ collapses into a phosphor bloom and fills one of three Dance Meter segments. Sam
 instruction, same feel, zero new gestures, and every touch target stays the size
 it already is.
 
-Second constraint: temper colour is off by default in this game — clusters are
+Second constraint: temper color is off by default in this game — clusters are
 read by motion, sound and haptics. The MDE must light clusters by **motion and
-brightness first**, with colour as the redundant channel it already is. The
-supplied MDE reference images assume colour is always on; they are behaviour
+brightness first**, with color as the redundant channel it already is. The
+supplied MDE reference images assume color is always on; they are behavior
 references, not a palette instruction.
 
 ### The genre menu
@@ -492,12 +614,12 @@ one may occupy a locked slot.
 
 | Source finding | Resolution here |
 |---|---|
-| B1, B3 — four rewards past the end of the campaign; bin ladder needs 1,000 | Both ladders rescaled to 30 screens / 105 bins (Parts 2–3) |
-| B2 — "file" ambiguous across 13 orientation screens | Screens are the counter; files are landmarks (Part 1) |
+| B1, B3 — four rewards past the end of the campaign; bin ladder needs 1,000 | Both ladders rescaled to 23 files / 104 bins (Parts 2–3) |
+| B2 — "file" ambiguous across 13 orientation screens | Orientation is six files of two or three stages; the file is the counter and the word means one thing (Part 1) |
 | B4 — twelve-screen tutorial is thirteen screens here | Lane A maps to screens, so the shape follows the build; the source's screen 9–12 payload lands on 9–15 |
 | B5 — no counters exist | New store and migration rules (Part 6) |
 | B6 — the specs have no fail state | Bins credit on completion only; a failed or abandoned file credits nothing (Part 0) |
-| B7, B8 — MDE assumes always-on colour and per-digit taps | Cluster granularity, motion-first lighting (Part 8) |
+| B7, B8 — MDE assumes always-on color and per-digit taps | Cluster granularity, motion-first lighting (Part 8) |
 | B10 — the game ships no media files | Derivative pipeline, originals untouched (Part 7) |
 | D1 — the 60-bin fact card exists in three documents and not the lore doc | Kept at 60; the lore doc's 64 is a separate hidden beat and stays hidden |
 | D2 — DESIGN's collision example merges two MDE rewards | Queue, never merge — the PRD, lore doc and manifest all agree against it (Part 4) |

@@ -108,7 +108,7 @@ export function applyTemperMotion(
 }
 
 /**
- * Idle behaviour for every node whose cluster is at rest (and for inert
+ * Idle behavior for every node whose cluster is at rest (and for inert
  * filler). Rather than snapping home, transforms *settle* toward the drift
  * target, so a cluster calming down decays instead of popping.
  */

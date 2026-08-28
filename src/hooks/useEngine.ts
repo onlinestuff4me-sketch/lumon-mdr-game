@@ -4,7 +4,7 @@ import { GameEngine, type HudSnapshot } from "../game/engine";
 /**
  * Creates the engine once per mount and keeps React in step with it.
  *
- * A lazy `useState` initialiser (rather than a ref written during render)
+ * A lazy `useState` initializer (rather than a ref written during render)
  * gives a stable instance without touching a ref mid-render. The engine
  * allocates nothing expensive in its constructor and starts no loop until
  * `attach` is called, so StrictMode's double invocation is harmless.
