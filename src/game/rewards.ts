@@ -24,6 +24,7 @@ export type RewardId =
   | "R01" // eraser
   | "R02" // finger trap
   | "R03" // fact about your outie
+  | "R04" // a note from the handbook, on the tempers
   | "R05" // melon bar
   | "R06" // wellness session
   | "R07" // music dance experience
@@ -149,7 +150,12 @@ const TEMPER_LADDER: readonly Rung[] = TEMPERS.map((t) => ({
   lane: "temper" as const,
   at: 10,
   temper: t,
-  reward: "R03" as const,
+  // A note from the handbook, not a fact about your outie. The temper
+  // milestones read doctrine — a passage about Woe for refining Woe — and
+  // doctrine is about the work, not about the person you are outside.
+  // They shared the Outie card for a while, which put a sentence about
+  // Kier under a headline promising news from home.
+  reward: "R04" as const,
   size: "minor" as const,
 }));
 

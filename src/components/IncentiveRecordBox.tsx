@@ -25,9 +25,6 @@ import { forecast, type LaneForecast } from "../game/rewards";
 /** "REFINE 1 MORE FILE" — the action, shouted, without its full stop. */
 const shout = (lane: LaneForecast) => lane.action.replace(/\.$/, "").toUpperCase();
 
-const pctOf = (lane: LaneForecast) =>
-  Math.min(100, Math.round((lane.current / lane.target) * 100));
-
 interface Props {
   progress: Progress;
   /** Opens the full record. */
@@ -42,6 +39,25 @@ interface Props {
   variant: "hud" | "panel";
   /** True just after an incentive has been kept, for the pulse. */
   landing?: boolean;
+  /**
+   * How far into the current file the refiner is, 0 to 1.
+   *
+   * The screens lane counts whole files, and the orientation files are two
+   * and three stages — so a refiner could clear a screen, watch nothing
+   * move, clear another, and watch nothing move again. The number stays
+   * whole; the *bar* counts the part-file, so every screen visibly buys
+   * something.
+   */
+  filePartial?: number;
+  /**
+   * True when the file on screen has already been credited.
+   *
+   * Replaying a file earns nothing — counters are monotonic and credit
+   * once — and a record that goes on saying REFINE 2 MORE FILES while the
+   * refiner does exactly that is giving an instruction that cannot work.
+   * It says so instead.
+   */
+  alreadyRefined?: boolean;
 }
 
 export function IncentiveRecordBox({
@@ -49,6 +65,8 @@ export function IncentiveRecordBox({
   onOpen,
   variant,
   landing = false,
+  filePartial = 0,
+  alreadyRefined = false,
 }: Props) {
   const kept = heldRewards(progress).length;
   // The nearest goal, because one instruction is worth more than two. The
@@ -58,6 +76,16 @@ export function IncentiveRecordBox({
     ? [...lanes].sort((a, b) => a.remaining - b.remaining)[0]
     : null;
   const hud = variant === "hud";
+  // Only the file lane has a part-file to add. A bin quota moves per bin
+  // and a precision run moves per file, and neither is helped by a bar
+  // that runs ahead of its own number.
+  const partial =
+    lane && lane.lane === "screens" && !alreadyRefined
+      ? Math.max(0, Math.min(1, filePartial))
+      : 0;
+  const meterPct = lane
+    ? Math.min(100, ((lane.current + partial) / lane.target) * 100)
+    : 0;
 
   return (
     <button
@@ -117,13 +145,13 @@ export function IncentiveRecordBox({
                 hud ? "text-[8px]" : "text-[10px]"
               }`}
             >
-              {shout(lane)}
+              {alreadyRefined ? "THIS FILE IS ALREADY REFINED" : shout(lane)}
             </span>
             <div className="h-[3px] flex-1 overflow-hidden rounded-sm bg-phos-800">
               <div
                 className="h-full bg-phos-400 transition-[width] duration-500 ease-out"
                 style={{
-                  width: `${pctOf(lane)}%`,
+                  width: `${meterPct}%`,
                   boxShadow: "0 0 6px var(--color-phos-400)",
                 }}
               />

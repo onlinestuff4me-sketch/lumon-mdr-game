@@ -32,11 +32,17 @@ import type { RewardDef } from "./catalog";
  * party and the dance experience are both department events; only one of
  * them takes over the floor.
  */
-export type Category = "items" | "facts" | "wellness" | "events";
+export type Category =
+  | "items"
+  | "facts"
+  | "notes"
+  | "wellness"
+  | "events";
 
 export const CATEGORY_ORDER: readonly Category[] = [
   "items",
   "facts",
+  "notes",
   "wellness",
   "events",
 ];
@@ -44,6 +50,7 @@ export const CATEGORY_ORDER: readonly Category[] = [
 export const CATEGORY_LABEL: Record<Category, string> = {
   items: "ISSUED ITEMS",
   facts: "OUTIE FACTS",
+  notes: "HANDBOOK NOTES",
   wellness: "WELLNESS SESSIONS",
   events: "DEPARTMENT EVENTS",
 };
@@ -52,6 +59,7 @@ export const CATEGORY_LABEL: Record<Category, string> = {
 export const CATEGORY_ONE: Record<Category, string> = {
   items: "ISSUED ITEM",
   facts: "OUTIE FACT",
+  notes: "HANDBOOK NOTE",
   wellness: "WELLNESS SESSION",
   events: "DEPARTMENT EVENT",
 };
@@ -87,6 +95,11 @@ export function heldLabel(n: number): string {
 
 /** The category a reward is shelved under. */
 export function categoryOf(def: RewardDef): Category {
+  // Both ride the blank card, and they are not the same thing: an Outie
+  // fact is news about the person you are outside, a handbook note is
+  // Lumon on the subject of the work. Shelving them together was what let
+  // a passage about Kier be announced as a fact about your outie.
+  if (def.doctrine) return "notes";
   if (def.kind === "fact") return "facts";
   if (def.kind === "session") return "wellness";
   return def.event ? "events" : "items";

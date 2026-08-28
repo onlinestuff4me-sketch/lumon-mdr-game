@@ -84,6 +84,42 @@ screen 7 ends at 10 bins, screen 13 at 32, screen 20 at 53, screen 30 at 105.
 Two lanes are visible at launch. Two more are held back (Part 3) so a player
 learning to read a temper is never shown four counters at once.
 
+### The cadence, measured
+
+Generated from a clean playthrough, and the answer to "am I getting these
+often enough". Every row is a screen on which something was earned:
+
+| Screen | File | | Screen | File | | Screen | File |
+|---:|---|---|---:|---|---|---:|---|
+| 3 | 1 · finger trap | | 13 | 7 · handbook note | | 22 | 16 · remembrance melon |
+| 5 | 2 · eraser | | 14 | 8 · MDE + melon bar | | 24 | 18 · Wellness II |
+| 7 | 3 · outie fact ×3 | | 16 | 10 · portrait ×3 | | 25 | 19 · portrait |
+| 9 | 4 · melon bar | | 17 | 11 · handbook note | | 26 | 20 · MDE |
+| 11 | 5 · fact + trap | | 18 | 12 · fact + note | | 27 | 21 · Wellness |
+| 12 | 6 · Wellness I | | 20 | 14 · egg bar | | 28 | 22 · Waffle I |
+| | | | 21 | 15 · outie fact | | 29 | 23 · Waffle II |
+
+**The longest run of screens paying nothing is two**, and it is screens 1
+and 2 — before the first file has been finished at all. After that it is
+never more than one. Every one of the six orientation files pays.
+
+A screen-by-screen cadence is the number that matters, not a per-file one:
+a refiner counts screens, because a screen is what they just did.
+
+### Two things that make it *feel* less often than it is
+
+1. **A stage is not a file.** The orientation files are two and three
+   stages, so the counter can sit still across a screen. The *bar* does
+   not: it carries the part-file, so every screen visibly buys something
+   even when the number does not move.
+2. **A replayed file earns nothing.** Counters are monotonic and credit
+   once — correct, and it was being reported as though it were not. A
+   refiner who came back to a save and walked back through orientation
+   watched `REFINE 2 MORE FILES` sit unchanged for a dozen screens,
+   because every one of those files was already in the ledger. The record
+   now says `THIS FILE IS ALREADY REFINED` instead of repeating an
+   instruction that cannot work.
+
 ### Lane A — FILES REFINED
 
 | File | Name | Reward | Size | Source threshold |

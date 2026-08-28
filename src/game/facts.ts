@@ -153,7 +153,10 @@ export const FACT_PLAN: Record<
   { canon: number; original: number; fixed?: readonly string[] }
 > = {
   // The temper lane reads doctrine rather than drawing from the bank: a
-  // milestone for refining Woe should say something about Woe.
+  // milestone for refining Woe should say something about Woe. It is
+  // presented as a handbook note (R04), never as an Outie fact — the bank
+  // below is entirely sentences about the person you are outside, and
+  // doctrine is not one of them.
   TWO10: { canon: 0, original: 0, fixed: ["DOC_WO"] },
   TFC10: { canon: 0, original: 0, fixed: ["DOC_FC"] },
   TDR10: { canon: 0, original: 0, fixed: ["DOC_DR"] },

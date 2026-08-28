@@ -6,6 +6,7 @@ import { loadArchive, recordCompletion } from "../game/archive";
 import {
   claim,
   creditScreen,
+  fileCredited,
   inspect,
   loadProgress,
   type Progress,
@@ -198,6 +199,29 @@ export function GameStage() {
    * so it resets itself when the next one opens without an effect to clear
    * it.
    */
+  /**
+   * True when the file on screen has already been credited.
+   *
+   * Counters are monotonic and credit once, so replaying a file earns
+   * nothing — which is correct, and was being reported as though it were
+   * not. A refiner who came back to a save and walked back through
+   * orientation watched REFINE 2 MORE FILES sit unchanged for a dozen
+   * screens, because every one of those files was already in the ledger.
+   */
+  const [arrived, setArrived] = useState({ level: -1, credited: false });
+  useEffect(() => {
+    // Asked on arrival, not continuously. By the time the completion panel
+    // is drawn the file has just been credited, so a live check would
+    // report "already refined" about the file the refiner has this second
+    // finished — the question is whether it was done *before* they got
+    // here.
+    setArrived({
+      level: hud.levelIndex,
+      credited: fileCredited(hud.levelIndex, progressRef.current),
+    });
+  }, [hud.levelIndex]);
+  const replaying = arrived.level === hud.levelIndex && arrived.credited;
+
   const boundary = `${hud.levelIndex}:${progress.filesCompleted}`;
   const [accepted, setAccepted] = useState<{
     boundary: string;
@@ -625,6 +649,8 @@ export function GameStage() {
             onOpen={() => openHandbook("shelf")}
             variant="hud"
             landing={acceptedHere > 0}
+            filePartial={hud.fileProgress}
+            alreadyRefined={replaying}
           />
         </div>
 
@@ -700,6 +726,7 @@ export function GameStage() {
           filed={filedHere}
           onOpenRecord={() => openHandbook("shelf")}
           recordLanding={acceptedHere > 0}
+          alreadyRefined={replaying}
           onStart={() => play(0)}
           onNext={() => engine.nextLevel()}
           onRestart={() => engine.restart()}
