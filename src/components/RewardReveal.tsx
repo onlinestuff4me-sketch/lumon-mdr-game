@@ -4,6 +4,8 @@ import type { RewardDef } from "../game/catalog";
 import type { Fact } from "../game/facts";
 import { keepLabel } from "../game/lexicon";
 import { reasonFor, type Rung } from "../game/rewards";
+import { useTypeOver } from "../hooks/useTypeOver";
+import { FileGlyph } from "./FileGlyph";
 
 /**
  * One incentive: sealed, then opened.
@@ -43,8 +45,37 @@ import { reasonFor, type Rung } from "../game/rewards";
  * picture the refiner had just earned the right to look at.
  */
 
-/** How long the lid takes to clear the plate. */
-const PART_MS = 420;
+/**
+ * How long the lid takes to clear the plate.
+ *
+ * Slow enough to watch. This is the payoff frame of the whole loop and it
+ * used to be over before a refiner had finished registering that they had
+ * tapped; the headline types itself over in roughly the same span, so the
+ * name lands as the picture does.
+ */
+const PART_MS = 700;
+
+/**
+ * How long the card takes to fold itself into a file on the way out.
+ *
+ * KEEP INCENTIVE used to simply cut to the summary, which left the refiner
+ * to infer that the thing they had just been shown had gone anywhere at
+ * all. It shrinks into a file instead, and the summary catches that same
+ * file and walks it into the meter it counted toward.
+ */
+const KEEP_MS = 340;
+
+/** The block a terminal leaves under the character it is about to write. */
+function Caret({ on }: { on: boolean }) {
+  if (!on) return null;
+  return (
+    <span
+      aria-hidden
+      className="ml-[2px] inline-block h-[1em] w-[5px] translate-y-[0.12em] bg-phos-300"
+      style={{ animation: "crt-caret 760ms steps(1, end) infinite" }}
+    />
+  );
+}
 
 interface Props {
   reward: RewardDef;
@@ -83,6 +114,8 @@ export function RewardReveal({
   const [parting, setParting] = useState(false);
   /** Which sentence of a session is on the card. */
   const [step, setStep] = useState(0);
+  /** True while the card is folding itself into a file. */
+  const [keeping, setKeeping] = useState(false);
   const reduced =
     typeof window !== "undefined" &&
     (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
@@ -113,6 +146,40 @@ export function RewardReveal({
   const lastStep = step >= facts.length - 1;
   const advances = facts.length > 1 && !lastStep;
 
+  /**
+   * The two lines the seal rewrites.
+   *
+   * The headline is the whole point: the card announces that *something*
+   * was earned, and then that sentence is typed over, in place, with the
+   * name of the thing. The caption under the plate does the same from
+   * empty — while sealed it says nothing, because what it used to say now
+   * lives on the lid where the refiner is already looking.
+   *
+   * A card that opens without a seal (the second and third of a stack) has
+   * no "before" to type over, so its headline is simply the name.
+   */
+  const sealedHead =
+    total > 1 ? `YOU'VE EARNED ${total} INCENTIVES` : "YOU'VE EARNED AN INCENTIVE";
+  const caption = fact && reward.kind !== "fact" ? fact.text : reward.line;
+
+  const head = useTypeOver(reward.earned, {
+    go: open,
+    initial: sealedHead,
+    eraseMs: 12,
+    typeMs: 24,
+    gapMs: 110,
+    instant: !sealed || reduced,
+  });
+  // Behind the headline, and quicker per character because it is a
+  // sentence rather than a title.
+  const body = useTypeOver(caption, {
+    go: open,
+    eraseMs: 7,
+    typeMs: 13,
+    gapMs: 340,
+    instant: reduced,
+  });
+
   const label = !open ? "OPEN" : advances ? "CONTINUE" : keepLabel(index, total);
 
   return (
@@ -137,7 +204,18 @@ export function RewardReveal({
         />
       )}
 
-      <div className="flex w-full max-w-[248px] flex-col items-center">
+      <div
+        className="flex w-full max-w-[248px] flex-col items-center"
+        style={
+          keeping
+            ? {
+                transition: `transform ${KEEP_MS}ms cubic-bezier(.5,0,.3,1), opacity ${KEEP_MS}ms ease-in`,
+                transform: "scale(0.08)",
+                opacity: 0,
+              }
+            : undefined
+        }
+      >
         {/* Rule 6. Every band below is a fixed height. */}
         {/* Letterhead when there is one incentive, position when there is
             a stack. Never "INCENTIVE EARNED" above a headline that already
@@ -148,11 +226,10 @@ export function RewardReveal({
         </p>
 
         <h1 className="crt-text-glow mt-2 flex h-[34px] items-center justify-center text-[12px] font-bold leading-tight tracking-[0.12em] text-phos-200">
-          {open
-            ? reward.earned
-            : total > 1
-              ? `YOU'VE EARNED ${total} INCENTIVES`
-              : "YOU'VE EARNED AN INCENTIVE"}
+          <span>
+            {head.text}
+            <Caret on={head.typing} />
+          </span>
         </h1>
         <div className="mt-2 h-px w-24 bg-phos-600" />
 
@@ -198,7 +275,7 @@ export function RewardReveal({
           {!open || parting ? (
             <>
               <div
-                className="absolute inset-x-0 top-0 flex h-1/2 items-end justify-center border-b border-phos-800/60 bg-phos-900/95"
+                className="absolute inset-x-0 top-0 flex h-1/2 flex-col items-center justify-end border-b border-phos-800/60 bg-phos-900/95 px-5 pb-3 text-center"
                 style={
                   parting && !reduced
                     ? {
@@ -207,9 +284,17 @@ export function RewardReveal({
                     : undefined
                 }
               >
-                <span className="pb-3 text-[10px] tracking-[0.3em] text-phos-600">
+                <span className="text-[10px] tracking-[0.3em] text-phos-600">
                   SEALED
                 </span>
+                {/* The notice belongs on the thing it is describing. Said
+                    under the card it was one more line of small print;
+                    said on the lid, directly under the word SEALED, it is
+                    the lid explaining itself, and it leaves with the lid. */}
+                <p className="mt-2 text-[8px] leading-snug tracking-[0.04em] text-phos-700">
+                  The contents of this incentive remain classified until it is
+                  opened.
+                </p>
               </div>
               <div
                 className="absolute inset-x-0 bottom-0 h-1/2 border-t border-phos-800/60 bg-phos-900/95"
@@ -246,14 +331,27 @@ export function RewardReveal({
         {/* Reserved whether or not there is anything to say, so the button
             below it never moves. Three lines' worth, which is the longest
             line in the catalog. */}
+        {/* Empty while sealed — the classified notice moved onto the lid —
+            and then typed in, the same way the headline is. */}
         <p className="mt-3 flex h-[44px] items-center justify-center text-[10px] italic leading-snug text-phos-400">
-          {open
-            ? fact && reward.kind !== "fact"
-              ? fact.text
-              : reward.line
-            : "The contents of this issue remain classified until it is opened."}
+          <span>
+            {body.text}
+            <Caret on={body.typing} />
+          </span>
         </p>
       </div>
+
+      {/* What the card becomes. It fades up in the middle of the screen as
+          the card collapses through it, so there is one object leaving
+          rather than a page disappearing and a file appearing. */}
+      {keeping ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
+          style={{ animation: `crt-resolve ${KEEP_MS}ms ease-out 1 forwards` }}
+        >
+          <FileGlyph size={38} />
+        </div>
+      ) : null}
 
       {/* Live from the first frame, which is what keeps every part of this
           skippable. It throbs because it is the only thing on the screen
@@ -270,10 +368,20 @@ export function RewardReveal({
             return;
           }
           if (advances) return setStep((n) => n + 1);
-          onAccept();
+          if (reduced || keeping) return onAccept();
+          setKeeping(true);
+          setTimeout(onAccept, KEEP_MS);
         }}
         className="crt-text-glow relative z-10 mt-4 inline-flex items-center gap-2 rounded-[3px] border border-phos-400 bg-phos-600/25 px-5 py-2.5 text-[11px] font-bold tracking-[0.2em] text-phos-200 active:bg-phos-600/50"
-        style={{ animation: "crt-throb 1.9s ease-in-out infinite" }}
+        style={
+          keeping
+            ? {
+                transition: `transform ${KEEP_MS}ms ease-in, opacity ${KEEP_MS}ms ease-in`,
+                transform: "scale(0.4)",
+                opacity: 0,
+              }
+            : { animation: "crt-throb 1.9s ease-in-out infinite" }
+        }
       >
         {label}
         <ChevronRight size={12} strokeWidth={2.6} />

@@ -13,7 +13,7 @@
 import {
   open, state, findGroup, touchFor, drag, tap, touchTap, load, setMode,
   boxAndBin, carryToBin, byName, section, check, eq, summary, settleIncentives,
-  lastTrainingIndex, orientationIndices, refineFile,
+  lastTrainingIndex, orientationIndices, refineFile, readLedger, writeLedger,
   settled,
 } from "./harness.mjs";
 
@@ -1124,16 +1124,54 @@ section("saves");
   await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });
   eq("loading the older save resumes its own place",
     await page.evaluate(() => window.__mdr.levelIndex), 1);
+
+  // ── and a save is a save: its files and its incentives are its own ──
+  //
+  // The archive and the ledger used to be global, so a new save opened on
+  // a terminal that already knew every file the refiner had ever refined
+  // and held every incentive they had ever kept.
+  {
+    const slots = () =>
+      page.evaluate(() => {
+        const runs = JSON.parse(localStorage.getItem("lumon.mdr.runs.v1") ?? "null");
+        const of = (base, id) =>
+          JSON.parse(localStorage.getItem(`${base}.${id}`) ?? "null");
+        return {
+          active: runs.active,
+          ids: runs.runs.map((r) => r.id),
+          unscoped: {
+            archive: localStorage.getItem("lumon.mdr.archive.v1"),
+            progress: localStorage.getItem("lumon.mdr.progress.v1"),
+          },
+          each: runs.runs.map((r) => ({
+            id: r.id,
+            archive: (of("lumon.mdr.archive.v1", r.id) ?? []).length,
+            files: of("lumon.mdr.progress.v1", r.id)?.filesCompleted ?? null,
+          })),
+        };
+      });
+    const st = await slots();
+    // Creation order: the first save refined a file, the second is the one
+    // begun fresh. A ledger that has never been written is simply absent,
+    // which is the same thing as empty and is what a new save looks like.
+    const [first, second] = st.each;
+    check("two saves, each with a slot of its own",
+      st.each.length === 2 && first.id !== second.id, JSON.stringify(st.each));
+    check("and nothing is left in the old global slot",
+      st.unscoped.archive === null && st.unscoped.progress === null,
+      JSON.stringify(st.unscoped));
+    check("the save that refined a file remembers it",
+      first.archive >= 1, JSON.stringify(first));
+    check("and the new one starts from nothing",
+      second.archive === 0 && (second.files ?? 0) === 0, JSON.stringify(second));
+  }
 }
 
 // ═══ 11. the incentive pops, stacks, and holds the queue ═════════════
 section("incentives");
 {
-  const ledger = () =>
-    page.evaluate(() => JSON.parse(localStorage.getItem("lumon.mdr.progress.v1") ?? "null"));
-  const seed = async (p) => {
-    await page.evaluate((v) => localStorage.setItem("lumon.mdr.progress.v1", v), JSON.stringify(p));
-  };
+  const ledger = () => readLedger(page);
+  const seed = (p) => writeLedger(page, p);
   /** Finish an orientation screen by tapping its groups into their bins. */
   const finish = async (index) => {
     await load(page, index);
@@ -1201,6 +1239,10 @@ section("incentives");
   check("and says why it was issued",
     (await seen("REFINEMENT MILESTONE \u00b7 1 FILE REFINED")) === 1);
   check("and says nothing about what it is", (await seen("FINGER TRAP")) === 0);
+  // The notice sits on the lid, under the word SEALED — on the thing it is
+  // describing, rather than as one more line of small print under the card.
+  check("the lid says why it is blank",
+    (await seen("contents of this incentive remain classified")) === 1);
   eq("nothing is owed unclaimed in storage yet", (await ledger()).rewardState.S01, "earned_pending");
 
   // The board must not run on underneath it, and the seal must not open
@@ -1211,10 +1253,17 @@ section("incentives");
   check("and the seal is still sealed two seconds later", (await seen("FINGER TRAP")) === 0);
 
   await action().click();
-  await page.waitForTimeout(300);
-  check("tapping it reveals name and picture together", (await seen("FINGER TRAP")) === 1);
-  check("with its plate on screen",
+  await page.waitForTimeout(150);
+  check("tapping it puts the plate on screen at once",
     (await page.locator('img[alt="FINGER TRAP"]').count()) === 1);
+  // The headline is not swapped, it is typed over: the announcement is
+  // backspaced away and the name written in its place. For most of a
+  // second the card is mid-word, which is the whole point of it.
+  await page.waitForTimeout(1500);
+  check("and the name is typed over the announcement",
+    (await seen("FINGER TRAP")) === 1);
+  check("leaving nothing of what it replaced",
+    (await seen("YOU'VE EARNED AN INCENTIVE")) === 0);
   check("and the control now keeps it",
     (await action().innerText()).includes("KEEP INCENTIVE"));
 
@@ -1231,21 +1280,27 @@ section("incentives");
   check("which names what was just kept", (await seen("FINGER TRAP")) === 1);
   check("counts it against its category", (await seen("ISSUED ITEMS")) === 1);
   check("with the category's real denominator", (await seen("1 OF 10")) === 1);
-  // Twice over: on the summary itself, and on the end-of-file panel it is
-  // covering. Both are the same component, which is the point.
-  check("says what the next incentive costs", (await seen("NEXT INCENTIVE")) >= 1);
+  // Last on the page and the loudest thing on it: everything above is a
+  // receipt, and this is the only object about work still to do.
+  check("says plainly that another one is coming",
+    (await seen("ANOTHER INCENTIVE IS COMING")) === 1);
+  check("and what it costs", (await seen("TO GO")) >= 1);
   check("without saying what it is", (await seen("CLASSIFIED")) >= 1);
   await page.waitForTimeout(700);
   eq("and the board does not advance underneath it",
     await page.evaluate(() => window.__mdr.levelIndex), 2);
 
   await resume();
-  await page.waitForTimeout(400);
-  // A file that has ended properly hands over to its own panel rather than
-  // wiping straight into the next one.
-  check("and the file's own panel is waiting behind it",
-    (await seen("FILE REFINED")) >= 1);
-  check("with the record on it", (await page.locator('[data-record-box="panel"]').count()) === 1);
+  await page.waitForTimeout(1600);
+  // A file that pays out ends on the summary and nowhere else. FILE
+  // REFINED says what the summary already said, so showing both made the
+  // refiner dismiss two screens in a row for one file.
+  check("a file that paid out shows no second end-of-file panel",
+    (await page.locator('[data-record-box="panel"]').count()) === 0);
+  eq("and resuming goes straight to the next file",
+    await page.evaluate(() => window.__mdr.levelIndex), 3);
+  check("with the record where it lives, in the header",
+    (await page.locator('[data-record-box="hud"]').count()) === 1);
 
   // ── two at once: announced as two, then shown one at a time ──────
   await seed({
@@ -1268,7 +1323,7 @@ section("incentives");
   check("behind one seal, opened once",
     (await action().innerText()).includes("OPEN"));
   await action().click();
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(1500);
   check("the first is the file-lane incentive",
     (await seen("YOU HAVE BEEN ISSUED AN ERASER")) === 1);
   check("and the second is not on screen with it", (await seen("MELON BAR")) === 0);
@@ -1293,17 +1348,18 @@ section("incentives");
   eq("with nothing left in the queue", done.rewardQueue.length, 0);
   check("a stack lands on one record screen, not two",
     (await landing().count()) === 1);
-  // The panel behind this screen covers the header, so the header's strip
-  // is not the box to fly at: the summary used to shrink into something
-  // hidden and then have a panel drawn over the top of where it went.
+  // Nothing is behind this screen but the board, because the file that
+  // paid out has no FILE REFINED panel — so the header's own strip is
+  // uncovered and is exactly the box to fly at. The summary used to shrink
+  // into something hidden and then have a panel drawn over where it went.
   {
-    const aim = await page.evaluate(() => {
-      const panel = document.querySelector('[data-record-box="panel"]');
-      const page_ = document.querySelector("[data-incentive-summary]");
-      return { panel: !!panel, summary: !!page_ };
-    });
-    check("with a record box on the panel behind it to fly into",
-      aim.panel && aim.summary, JSON.stringify(aim));
+    const aim = await page.evaluate(() => ({
+      panel: !!document.querySelector('[data-record-box="panel"]'),
+      hud: !!document.querySelector('[data-record-box="hud"]'),
+      summary: !!document.querySelector("[data-incentive-summary]"),
+    }));
+    check("with the header's own record box uncovered to fly into",
+      !aim.panel && aim.hud && aim.summary, JSON.stringify(aim));
   }
   check("and it counts them as two kept", (await seen("2 INCENTIVES KEPT")) === 1);
   await resume();
@@ -1346,17 +1402,25 @@ section("incentives");
   }
   // Screen three also earns a fact card, so a card is expected here — what
   // must never happen is the finger trap being *presented* a second time.
-  await settleIncentives(page);
-  await page.waitForTimeout(400);
+  // Clear the cards but stop on the summary. The note about a re-issued
+  // object used to ride the FILE REFINED panel; a file that pays out no
+  // longer has one, so the summary carries it.
+  for (let i = 0; i < 8 && (await landing().count()) === 0; i++) {
+    if ((await action().count()) === 0) break;
+    await action().first().click({ timeout: 4000 }).catch(() => {});
+    await page.waitForTimeout(1000);
+  }
+  await page.waitForTimeout(300);
   const refiled = await ledger();
   check("a second issue of an object is never the card that was shown",
     refiled.lastShownRewardId !== "R02", String(refiled.lastShownRewardId));
   eq("but it is claimed all the same", refiled.rewardState.P03, "claimed");
   check("and the record says it was kept again", (await seen("ISSUED AGAIN")) >= 1);
-  check("and the record can be opened from the end-of-file panel",
-    (await page.locator('[data-record-box="panel"]').count()) === 1);
+  check("and the full record can be opened from where the file ended",
+    (await page.locator("[data-view-record]").count()) >= 1);
   check("and from the header, at every moment of the game",
     (await page.locator('[data-record-box="hud"]').count()) === 1);
+  await settleIncentives(page);
 
   // ── a stage moves the meter; a replayed file says it will not ────
   await seed({
@@ -1496,10 +1560,8 @@ section("incentives");
 // ═══ 11b. facts are typeset and kept ═════════════════════════════════
 section("wellness");
 {
-  const ledger = () =>
-    page.evaluate(() => JSON.parse(localStorage.getItem("lumon.mdr.progress.v1") ?? "null"));
-  const seed = (p) =>
-    page.evaluate((v) => localStorage.setItem("lumon.mdr.progress.v1", v), JSON.stringify(p));
+  const ledger = () => readLedger(page);
+  const seed = (p) => writeLedger(page, p);
   const finish = async (index) => {
     await load(page, index);
     let guard = 0;
@@ -1556,8 +1618,7 @@ section("wellness");
 // ═══ 11c. the dance experience ═══════════════════════════════════════
 section("music dance experience");
 {
-  const seed = (p) =>
-    page.evaluate((v) => localStorage.setItem("lumon.mdr.progress.v1", v), JSON.stringify(p));
+  const seed = (p) => writeLedger(page, p);
   const finish = async (index) => {
     await load(page, index);
     let guard = 0;

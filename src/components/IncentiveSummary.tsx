@@ -1,27 +1,36 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { categoryProgress } from "../game/held";
 import { RECORD_TITLE, keptLabel } from "../game/lexicon";
 import { counters, type Progress } from "../game/progress";
 import { forecast } from "../game/rewards";
+import { FileGlyph } from "./FileGlyph";
 
 /**
  * What was kept, what it counts toward, and what earns the next one.
  *
  * The beat between accepting an incentive and going back to work. It
- * answers four questions a refiner has at that moment and at no other:
+ * answers four questions a refiner has at that moment and at no other, and
+ * it answers them in the order they are asked:
  *
- * 1. **What did I just get?** Named, because "an incentive" is not a thing
+ * 1. **What is this screen?** The incentives record — the same title as
+ *    the strip in the header, said first, so the rest of the screen has a
+ *    name to hang on.
+ * 2. **What did I just get?** Named, because "an incentive" is not a thing
  *    anyone remembers owning and a finger trap is.
- * 2. **What does that make in total?** Progress per category, counted in
- *    payouts — ten issued items, ten outie facts, three wellness sessions,
- *    five department events. The counts tick up under the refiner's eye
- *    rather than arriving already changed, which is why this takes both
- *    the ledger before the payout and the ledger after it.
- * 3. **What do I do next?** One instruction, from the nearest lane.
- * 4. **Where does all this live from now on?** It shrinks into the
- *    incentives record in the header on the way out — the same title, the
- *    same meter, in the place it will be for the rest of the game.
+ * 3. **What does that make in total?** Progress per category, counted in
+ *    payouts. The file that was just kept is walked into the bar it moved
+ *    and the bar is lit as it takes it: the count does not merely arrive
+ *    already changed, it is seen being changed by the thing on screen.
+ * 4. **What earns the next one?** Last, loudest, and bordered — the only
+ *    forward-looking object on a screen that is otherwise a receipt. A
+ *    refiner leaves this page knowing another one is coming and exactly
+ *    what it costs.
+ *
+ * And on the way out: **where does all this live from now on?** The page
+ * shrinks into the incentives record in the header — the same title, the
+ * same meter, in the place it will be for the rest of the game — and that
+ * box glows once it has it.
  *
  * There is deliberately no paragraph explaining any of that. The screen
  * demonstrates it instead.
@@ -29,8 +38,12 @@ import { forecast } from "../game/rewards";
 
 /** Long enough that the tick is watched, short enough to feel prompt. */
 const TICK_MS = 160;
+/** How long the kept file takes to reach the meter it counted toward. */
+const FLY_MS = 480;
+/** How long the fed meter stays lit after it lands. */
+const GLOW_MS = 1000;
 /** How long the page takes to shrink into the header strip. */
-const STOW_MS = 520;
+const STOW_MS = 620;
 
 interface Props {
   /** The ledger before this boundary paid out. */
@@ -39,6 +52,8 @@ interface Props {
   to: Progress;
   /** What was earned here, in the order it was shown. */
   names: readonly string[];
+  /** Objects issued again this file and filed without a card. */
+  filed?: readonly string[];
   /** Opens the full record. */
   onOpenRecord: () => void;
   /** Back to the file. Called once the page has been stowed. */
@@ -49,6 +64,7 @@ export function IncentiveSummary({
   from,
   to,
   names,
+  filed = [],
   onOpenRecord,
   onResume,
 }: Props) {
@@ -57,16 +73,95 @@ export function IncentiveSummary({
     (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
 
   const [shown, setShown] = useState(reduced ? to : from);
+  /** True while the kept file is on its way to the meter. */
+  const [flying, setFlying] = useState(!reduced);
+  /** Where that file is headed, measured once the bars are on screen. */
+  const [drop, setDrop] = useState<{ x: number; y: number } | null>(null);
+  /** True for a beat after it lands, which is when the meter is lit. */
+  const [fed, setFed] = useState(false);
   const [flight, setFlight] = useState<{ x: number; y: number; s: number } | null>(
     null,
   );
   const [stowing, setStowing] = useState(false);
 
+  const now = categoryProgress(shown);
+  const final = categoryProgress(to);
+  const start = categoryProgress(from);
+  const live = new Map(now.map((c) => [c.category, c]));
+  const had = new Map(start.map((c) => [c.category, c.have]));
+  /**
+   * Which shelves to draw.
+   *
+   * Taken from the ledger *after* the payout, not before: the row a refiner
+   * needs to watch move is precisely the one that was at zero a second ago,
+   * and filtering on the old ledger meant the first incentive of a category
+   * had no bar to arrive in. Rows still show the count as it stands, so a
+   * new one opens at 0 and ticks to 1 under the eye.
+   *
+   * Categories with nothing in them either way stay off: a row reading
+   * 0 OF 5 DEPARTMENT EVENTS on the first file is a promise this screen
+   * has no business making.
+   */
+  const rows = final.filter((c) => c.have > 0);
+  const gained = new Set(
+    rows.filter((c) => c.have > (had.get(c.category) ?? 0)).map((c) => c.category),
+  );
+  const kept = final.reduce((n, c) => n + c.have, 0) -
+    start.reduce((n, c) => n + c.have, 0);
+
+  const page = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * Aim the kept file at the meter it moved, then let the counts tick.
+   *
+   * Measured a frame after mount, for the same reason the stow below is:
+   * the bars have to exist and be laid out before anything can be sent at
+   * one of them. With nothing gained — every category already full, or a
+   * boundary that paid nothing — there is no flight and the counts simply
+   * tick, which is what this screen has always done.
+   */
   useEffect(() => {
     if (reduced) return;
+    if (!flying) return;
+    const target = rows.find((c) => gained.has(c.category))?.category ?? null;
+    const id = requestAnimationFrame(() => {
+      const host = page.current;
+      const dock = target
+        ? host?.querySelector(`[data-cat-meter="${target}"]`)
+        : null;
+      if (host && dock) {
+        const h = host.getBoundingClientRect();
+        const d = dock.getBoundingClientRect();
+        setDrop({
+          x: d.left + d.width / 2 - (h.left + h.width / 2),
+          y: d.top + d.height / 2 - (h.top + h.height / 2),
+        });
+      } else {
+        setDrop({ x: 0, y: 0 });
+      }
+    });
+    const land = setTimeout(() => {
+      setFlying(false);
+      setShown(to);
+      setFed(true);
+    }, FLY_MS);
+    const dim = setTimeout(() => setFed(false), FLY_MS + GLOW_MS);
+    return () => {
+      cancelAnimationFrame(id);
+      clearTimeout(land);
+      clearTimeout(dim);
+    };
+    // Runs once for the boundary: the flight belongs to this arrival, and
+    // re-running it against a ticked-over ledger would send a second file.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** Reduced motion still gets the count, just without the journey. */
+  useEffect(() => {
+    if (reduced || flying) return;
     const t = setTimeout(() => setShown(to), TICK_MS);
     return () => clearTimeout(t);
-  }, [to, reduced]);
+  }, [to, reduced, flying]);
 
   /**
    * Aim the page at the header strip and let it go.
@@ -81,19 +176,17 @@ export function IncentiveSummary({
   useEffect(() => {
     if (!stowing) return;
     const id = requestAnimationFrame(() => {
-      const page = document.querySelector("[data-incentive-summary]");
-      // Whichever record is going to be *visible* when the scrim lifts.
-      //
-      // On a file that ends with a ceremony, the FILE REFINED panel is
-      // already behind this screen and it covers the header — so the page
-      // was flying at a strip nobody could see, and landing behind a
-      // panel that then appeared over the top of it. The panel draws the
-      // same record box; aim at that one when it is there.
+      const host = page.current;
+      // Whichever record is going to be *visible* when the scrim lifts. On
+      // a file that ends without a payout the end-of-file panel is behind
+      // this screen and covers the header, and it draws the same box; a
+      // file that ended with one skips that panel entirely and the header
+      // strip is what is waiting.
       const dock =
         document.querySelector('[data-record-box="panel"]') ??
         document.querySelector('[data-record-box="hud"]');
-      if (!page || !dock) return;
-      const p = page.getBoundingClientRect();
+      if (!host || !dock) return;
+      const p = host.getBoundingClientRect();
       const d = dock.getBoundingClientRect();
       setFlight({
         x: d.left + d.width / 2 - (p.left + p.width / 2),
@@ -111,10 +204,6 @@ export function IncentiveSummary({
   const lane = lanes.length
     ? [...lanes].sort((a, b) => a.remaining - b.remaining)[0]
     : null;
-  const cats = categoryProgress(shown);
-  const before = categoryProgress(from);
-  const gained = cats.reduce((n, c) => n + c.have, 0) -
-    before.reduce((n, c) => n + c.have, 0);
 
   const stow = () => {
     if (stowing) return;
@@ -139,8 +228,9 @@ export function IncentiveSummary({
       }}
     >
       <div
+        ref={page}
         data-incentive-summary
-        className="flex w-full max-w-[286px] flex-col items-center text-center"
+        className="relative flex w-full max-w-[286px] flex-col items-center text-center"
         style={{
           transition: stowing
             ? `transform ${STOW_MS}ms cubic-bezier(.5,0,.25,1), opacity ${STOW_MS}ms ease-in`
@@ -151,80 +241,64 @@ export function IncentiveSummary({
           opacity: flight ? 0.08 : 1,
         }}
       >
-        <p className="text-[9px] tracking-[0.3em] text-phos-600">
-          {keptLabel(Math.max(1, gained))}
-        </p>
-        <h1 className="crt-text-glow mt-2 text-[13px] font-bold tracking-[0.18em] text-phos-200">
+        {/* 1. The name of the place. Same words as the header strip. */}
+        <h1 className="crt-text-glow text-[13px] font-bold tracking-[0.18em] text-phos-200">
           {RECORD_TITLE}
         </h1>
         <div className="mt-2 h-px w-24 bg-phos-600" />
 
+        {/* 2. What was kept, said plainly and named. */}
+        <p className="mt-3 text-[9px] tracking-[0.3em] text-phos-600">
+          {keptLabel(Math.max(1, kept))}
+        </p>
         {names.length > 0 ? (
-          <p className="mt-3 text-[10px] leading-relaxed text-phos-300">
+          <p className="crt-text-glow mt-1.5 text-[11px] leading-relaxed text-phos-200">
             {names.join(" · ")}
           </p>
         ) : null}
+        {filed.length > 0 ? (
+          <p className="mt-1.5 text-[8px] leading-snug tracking-[0.14em] text-phos-600">
+            {filed.map((n) => `${n} ISSUED AGAIN`).join(" · ")} · KEPT
+          </p>
+        ) : null}
 
-        {/* What each of those counts toward. Only categories the refiner
-            has opened an account in: a row reading 0 of 5 DEPARTMENT
-            EVENTS on the first file is a promise this screen has no
-            business making. */}
+        {/* 3. What each of those counts toward, and the one that just
+               moved lit as it takes the file. */}
         <div className="mt-4 w-full space-y-2">
-          {cats
-            .filter((c) => c.have > 0)
-            .map((c) => (
-              <div key={c.category} className="w-full text-left">
+          {rows.map((row) => {
+            const c = live.get(row.category) ?? row;
+            const lit = fed && gained.has(row.category);
+            return (
+              <div key={row.category} className="w-full text-left">
                 <div className="flex items-baseline justify-between gap-2 text-[8px] tracking-[0.2em]">
-                  <span className="text-phos-400">{c.label}</span>
+                  <span className={lit ? "text-phos-200" : "text-phos-400"}>
+                    {row.label}
+                  </span>
                   <span className="tabular-nums text-phos-500">
-                    {c.have} OF {c.total}
+                    {c.have} OF {row.total}
                   </span>
                 </div>
-                <div className="mt-1 h-[3px] w-full overflow-hidden rounded-sm bg-phos-800">
+                <div
+                  data-cat-meter={row.category}
+                  className="mt-1 h-[3px] w-full overflow-hidden rounded-sm bg-phos-800"
+                  style={
+                    lit ? { animation: `meter-take ${GLOW_MS}ms ease-out 1` } : undefined
+                  }
+                >
                   <div
                     className="h-full bg-phos-400 transition-[width] duration-500 ease-out"
                     style={{
-                      width: `${Math.round((c.have / c.total) * 100)}%`,
+                      width: `${Math.round((c.have / row.total) * 100)}%`,
                       boxShadow: "0 0 6px var(--color-phos-400)",
                     }}
                   />
                 </div>
               </div>
-            ))}
+            );
+          })}
         </div>
 
-        {/* What earns the next one. Never what it is. */}
-        {lane ? (
-          <div className="mt-4 w-full rounded-[3px] border border-phos-700 bg-phos-900/40 px-3 py-2.5 text-left">
-            <div className="flex items-baseline justify-between gap-2 text-[8px] tracking-[0.22em] text-phos-600">
-              <span>NEXT INCENTIVE</span>
-              <span>CLASSIFIED</span>
-            </div>
-            <p className="crt-text-glow mt-1.5 text-[11px] font-bold tracking-[0.14em] text-phos-200">
-              {lane.action.replace(/\.$/, "").toUpperCase()}
-            </p>
-            <div className="mt-1.5 flex items-center gap-2">
-              <div className="h-[3px] flex-1 overflow-hidden rounded-sm bg-phos-800">
-                <div
-                  className="h-full bg-phos-400 transition-[width] duration-500 ease-out"
-                  style={{
-                    width: `${Math.min(100, Math.round((lane.current / lane.target) * 100))}%`,
-                    boxShadow: "0 0 6px var(--color-phos-400)",
-                  }}
-                />
-              </div>
-              <span className="shrink-0 text-[8px] tabular-nums tracking-[0.14em] text-phos-600">
-                {lane.current}/{lane.target}
-              </span>
-            </div>
-            {lane.also ? (
-              <p className="mt-1.5 text-[8px] tracking-[0.16em] text-phos-600">
-                {`ALSO ${lane.also.current}/${lane.also.target} ${lane.also.label} · BOTH REQUIRED`}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
+        {/* 4. The way in to everything kept so far. */}
         <button
           type="button"
           data-view-record
@@ -234,6 +308,43 @@ export function IncentiveSummary({
           VIEW ALL INCENTIVES
           <ChevronRight size={10} strokeWidth={2.4} aria-hidden />
         </button>
+
+        {/* 5. What earns the next one — never what it is. Last on the page
+               and the brightest thing on it: everything above is a receipt
+               for work already done, and this is the only line that is
+               about the work still to do. */}
+        {lane ? (
+          <div className="mt-4 w-full rounded-[3px] border border-phos-500 bg-phos-900/60 px-3 py-3 text-left">
+            <p className="crt-text-glow text-[9px] font-bold tracking-[0.22em] text-phos-300">
+              ANOTHER INCENTIVE IS COMING
+            </p>
+            <p className="crt-text-glow mt-2 text-[13px] font-bold leading-tight tracking-[0.14em] text-phos-100">
+              {lane.action.replace(/\.$/, "").toUpperCase()}
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <div className="h-[5px] flex-1 overflow-hidden rounded-sm bg-phos-800">
+                <div
+                  className="h-full bg-phos-300 transition-[width] duration-500 ease-out"
+                  style={{
+                    width: `${Math.min(100, Math.round((lane.current / lane.target) * 100))}%`,
+                    boxShadow: "0 0 8px var(--color-phos-300)",
+                  }}
+                />
+              </div>
+              <span className="shrink-0 text-[9px] tabular-nums tracking-[0.14em] text-phos-400">
+                {lane.current}/{lane.target}
+              </span>
+            </div>
+            <p className="mt-2 text-[8px] tracking-[0.2em] text-phos-500">
+              {`${lane.remaining} TO GO · CONTENTS CLASSIFIED`}
+            </p>
+            {lane.also ? (
+              <p className="mt-1.5 text-[8px] tracking-[0.16em] text-phos-600">
+                {`ALSO ${lane.also.current}/${lane.also.target} ${lane.also.label} · BOTH REQUIRED`}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Inside the page it dismisses, so the whole thing leaves as one
             object. Left outside, it sat where it was while everything
@@ -253,6 +364,27 @@ export function IncentiveSummary({
           RESUME REFINEMENT
           <ChevronRight size={12} strokeWidth={2.6} />
         </button>
+
+        {/* The file the card folded itself into, arriving. It starts in the
+            middle of the page — where the card was — and goes into the bar
+            it moved, which is the whole of the explanation this screen
+            gives for why that bar then changes. */}
+        {flying ? (
+          <div
+            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+            style={{
+              transition: drop
+                ? `transform ${FLY_MS}ms cubic-bezier(.45,0,.25,1), opacity ${FLY_MS}ms ease-in`
+                : undefined,
+              transform: drop
+                ? `translate(${drop.x}px, ${drop.y}px) scale(0.16)`
+                : undefined,
+              opacity: drop ? 0.15 : 1,
+            }}
+          >
+            <FileGlyph size={38} />
+          </div>
+        ) : null}
       </div>
     </div>
   );

@@ -37,7 +37,12 @@ interface Props {
    * and the summary after a payout.
    */
   variant: "hud" | "panel";
-  /** True just after an incentive has been kept, for the pulse. */
+  /**
+   * True for a beat *after* something has been put in here — the summary
+   * page landing, or an incentive filed without a card. It glows once and
+   * stops. Fired during the landing rather than after it says nothing: the
+   * point is "it went in there".
+   */
   landing?: boolean;
   /**
    * How far into the current file the refiner is, 0 to 1.
@@ -103,7 +108,7 @@ export function IncentiveRecordBox({
           ? "border-phos-400 bg-phos-600/25"
           : "border-phos-700 bg-phos-900/40"
       }`}
-      style={landing ? { animation: "bin-await 700ms ease-out 1" } : undefined}
+      style={landing ? { animation: "record-dock 900ms ease-out 1" } : undefined}
     >
       <div className="flex items-baseline justify-between gap-2">
         <span

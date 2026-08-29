@@ -18,6 +18,18 @@ interface Props {
   recordLanding: boolean;
   /** True when this file was already credited and cannot pay again. */
   alreadyRefined: boolean;
+  /**
+   * True when this file's end has already been ceremonially handled by the
+   * incentive summary.
+   *
+   * A file that pays out ends on the summary screen, which says everything
+   * this panel would — what was kept, what it counts toward, what earns
+   * the next one — and then puts itself into the header. Showing FILE
+   * REFINED behind it made the refiner dismiss two screens in a row and
+   * gave the summary a panel to fly into rather than the record it
+   * belongs in. The panel is for files that ended with nothing to show.
+   */
+  ceremonyHandled: boolean;
   onStart: () => void;
   onNext: () => void;
   onRestart: () => void;
@@ -62,6 +74,7 @@ export function PhaseOverlay({
   onOpenRecord,
   recordLanding,
   alreadyRefined,
+  ceremonyHandled,
   onStart,
   onNext,
   onRestart,
@@ -86,6 +99,8 @@ export function PhaseOverlay({
   // that says FILE REFINED must not be the thing that stops the refiner
   // watching the file be refined.
   if (hud.phase === "complete" && !hud.settled) return null;
+  // Nor when the incentive summary is doing this file's ending for it.
+  if (hud.phase === "complete" && ceremonyHandled) return null;
 
   const level = LEVELS[hud.levelIndex];
 

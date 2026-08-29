@@ -25,6 +25,7 @@
  */
 
 import { LEVELS, TEMPERS } from "./constants";
+import { scopedKey } from "./runScope";
 import { pickFacts } from "./facts";
 import { newlyEarned, type Counters, type Rung } from "./rewards";
 import type { Temper } from "./types";
@@ -139,7 +140,17 @@ export function fileCredited(levelIndex: number, p: Progress): boolean {
   return stages.every((l) => p.creditedLevelIds.includes(l.id));
 }
 
-const KEY = "lumon.mdr.progress.v1";
+/**
+ * Scoped to the active save, not global.
+ *
+ * The ledger used to be deliberately global — "a document once read has
+ * been read" — which made a new save open on a terminal that already held
+ * every incentive the refiner had ever kept. A save is a save. See
+ * `runScope.ts`; this is also the legacy unscoped key, which the first run
+ * adopts so a refiner already playing keeps their incentives.
+ */
+export const PROGRESS_KEY = "lumon.mdr.progress.v1";
+const key = () => scopedKey(PROGRESS_KEY);
 const VERSION = 1;
 
 export function emptyProgress(): Progress {
@@ -396,7 +407,7 @@ function coerce(raw: unknown): Progress {
 
 export function loadProgress(): Progress {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(key());
     if (!raw) return emptyProgress();
     return coerce(JSON.parse(raw));
   } catch {
@@ -406,7 +417,7 @@ export function loadProgress(): Progress {
 
 export function saveProgress(p: Progress): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(p));
+    localStorage.setItem(key(), JSON.stringify(p));
   } catch {
     /* Storage unavailable — the ledger lasts only this session. */
   }

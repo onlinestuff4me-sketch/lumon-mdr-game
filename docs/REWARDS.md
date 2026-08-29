@@ -306,9 +306,17 @@ ever loading behind a celebration.
 2. **Anticipation, 0.5–1.5 s** — the results clear, the room tone ducks, a
    sealed `INCENTIVE EARNED` card enters.
 3. **Reveal** — the seal *parts*: two halves of an opaque lid split on a
-   bright seam and retract off the plate, which was fetched into the
-   browser's cache while the card sat sealed and has never been in the
-   document. Name and media appear together, for the first time.
+   bright seam and retract off the plate over 700 ms, which is slow enough
+   to watch. The plate was fetched into the browser's cache while the card
+   sat sealed and has never been in the document. Name and media appear
+   together, for the first time.
+
+   The headline is *typed over* as the lid retracts. "YOU'VE EARNED AN
+   INCENTIVE" is backspaced away and the name of the thing is written in
+   its place, a character at a time, with a block caret blinking under the
+   cursor; the caption under the plate is typed in behind it. A line that
+   changes meaning is retyped, never swapped — this is a terminal, and a
+   terminal has no cross-fade (`src/hooks/useTypeOver.ts`).
 
    Nothing on the card may move when this happens. Every band — the label,
    the title, the plate, the caption — is a fixed height, and the plate
@@ -336,6 +344,12 @@ vocabulary — `crt-open` unfurls the panel from a bright horizontal line,
 `crt-band` runs the leading edge of the sweep down it once, `crt-resolve`
 lets the content settle a beat behind the beam — so a reward that appears
 reads as this terminal drawing it rather than as a web page swapping a div.
+
+The sealed lid carries its own notice — `SEALED`, and directly under it
+*"The contents of this incentive remain classified until it is opened."*
+The notice belongs on the thing it describes: said under the card it was
+one more line of small print, and said on the lid it is the lid explaining
+itself, and it leaves with the lid.
 
 The one control on each of these screens throbs (`crt-throb`, a 1.9 s
 breath on the glow, not a blink). It is the only thing on the screen that
@@ -413,19 +427,55 @@ learned both (`IncentiveRecordBox`).
 ### The summary, which is where the teaching happens
 
 Keeping is not a transition back to the board. It is its own screen, and it
-exists because four questions arrive at that moment and at no other:
+exists because four questions arrive at that moment and at no other. They
+are answered in the order they are asked, top to bottom:
 
-| Question | What answers it |
-| --- | --- |
-| What did I just get? | Named. "An incentive" is not a thing anyone remembers owning; a finger trap is. |
-| What does that make in total? | Progress per category — ten issued items, ten outie facts, three wellness sessions, five department events — counted in payouts, ticking up under the refiner's eye. Which is why the screen takes both the ledger before the payout and the ledger after it. |
-| What do I do next? | One instruction, from the nearest lane, with its meter and its raw numbers. |
-| Where does this live now? | It shrinks into the header strip on the way out, and the scrim lifts as it goes so the strip is lit before the page arrives. |
+| # | Question | What answers it |
+| --- | --- | --- |
+| 1 | What is this screen? | `INCENTIVES RECORD` — the same title as the header strip, said first, so the rest of the page has a name to hang on. |
+| 2 | What did I just get? | Named. "An incentive" is not a thing anyone remembers owning; a finger trap is. |
+| 3 | What does that make in total? | Progress per category — ten issued items, ten outie facts, three wellness sessions, five department events — counted in payouts, ticking up under the refiner's eye. Which is why the screen takes both the ledger before the payout and the ledger after it. |
+| 4 | Where is everything else? | `VIEW ALL INCENTIVES`, into the full record. |
+| 5 | What earns the next one? | One instruction, from the nearest lane, with its meter and its raw numbers. |
 
-Only categories the refiner has opened an account in are listed. A row
-reading `0 OF 5 DEPARTMENT EVENTS` on the first file is a promise this
-screen has no business making; the full record is where the scale of what
-is left is admitted.
+Question 5 is **last, bordered, and the brightest thing on the page**, under
+a heading that says plainly that another one is coming and a line saying
+how many files are left to it. Everything above it is a receipt for work
+already done; this is the only object on the screen that is about work
+still to do, and it was previously buried mid-page in the same weight as
+the receipt.
+
+Rows are drawn from the ledger *after* the payout, not before. The row a
+refiner most needs to watch move is precisely the one that was at zero a
+second ago, and filtering on the old ledger left the first incentive of a
+category with no bar to arrive in. Rows show the count *as it stands*, so a
+new one opens at `0` and ticks to `1` under the eye. Categories empty in
+both ledgers stay off entirely: a row reading `0 OF 5 DEPARTMENT EVENTS` on
+the first file is a promise this screen has no business making, and the
+full record is where the scale of what is left is admitted.
+
+### The incentive is followed the whole way
+
+`KEEP INCENTIVE` does not cut. The card folds down into a **file**, the
+summary catches that same file and walks it into the category bar it moved,
+and the bar lights as it takes it (`meter-take`). Then the summary itself
+shrinks into the incentives record, and the record blooms once
+(`record-dock`) *after* it lands — a box glowing while the page is still in
+flight has answered a question nobody has asked yet.
+
+The file is one component (`FileGlyph`) drawn at every stage on purpose.
+Two similar rectangles read as two objects, and the whole point of the
+chain is that it is one.
+
+**A file that pays out ends on this screen, and only this screen.** The
+`FILE REFINED` panel is suppressed for that boundary and `RESUME
+REFINEMENT` goes straight to the next file. The panel says what the summary
+already said — what was kept, what it counts toward, what earns the next
+one — so showing both made the refiner dismiss two screens in a row, and
+gave the summary a panel to land in rather than the record it belongs in.
+The panel is for files that ended with nothing to show. The last file keeps
+its panel regardless: it says `COLD HARBOR IS COMPLETE` and offers a new
+quarter, which is not something a summary page can stand in for.
 
 There is deliberately no paragraph explaining any of this. An earlier
 version had one — *"Your record is held at this terminal and appears at the
@@ -500,6 +550,25 @@ Rules: every counter except the streak is monotonic; claims are idempotent; a
 version bump migrates already-satisfied thresholds into `earned_pending` rather
 than silently marking them claimed. An absent store is a valid new player, not
 an error.
+
+### A new save is a new save
+
+The ledger and the archive of refined files are **scoped to the run**, not to
+the browser: the real keys are `lumon.mdr.progress.v1.<runId>` and
+`lumon.mdr.archive.v1.<runId>`, resolved through `src/game/runScope.ts`. They
+were global once, so starting a new save handed the refiner a terminal that
+already knew every file they had ever refined and every incentive they had
+ever kept — with nothing left to earn and a record that would not move.
+
+The scope is set in one place, whenever the run store moves: on boot, on
+`START NEW SAVE`, and on loading a previous one (`scopeTo` in `runs.ts`).
+Reading either store before the scope is set gets whatever the legacy
+unscoped key holds, which is why `GameStage` initializes the run store
+*first* — the ordering is the fix, not an accident.
+
+A save written before slots existed is **adopted** by the first run to ask
+for it and the legacy key is then removed, so exactly one save inherits that
+history and every later one starts empty.
 
 ---
 
