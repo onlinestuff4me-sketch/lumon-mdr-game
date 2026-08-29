@@ -674,7 +674,14 @@ export function GameStage() {
           style={{ top: layout.recordTop, height: layout.recordH }}
         >
           <IncentiveRecordBox
-            progress={progress}
+            // Held at the pre-payout ledger while the summary is on screen,
+            // so the count ticks up at the moment the page lands in the box
+            // rather than silently behind the scrim. The box is covered for
+            // all of that time; the one frame it is not is the frame it
+            // changes.
+            progress={
+              landing && before.boundary === boundary ? before.progress : progress
+            }
             onOpen={() => openHandbook("shelf")}
             variant="hud"
             landing={docked}
@@ -749,11 +756,15 @@ export function GameStage() {
           />
         ) : null}
 
-        {/* The drawer deliberately sits above this (z-70 vs z-60) so it can
-            be opened from the briefing and end-of-file screens. What keeps
-            RETRY FILE from being trapped behind its scrim is the pause: the
-            clock is stopped and input ignored while the drawer is open, so
-            no phase can change underneath it. */}
+        {/* The drawer sits above every other overlay (z-80) so it can be
+            opened from the briefing, the end-of-file panel and the
+            incentive summary alike. It used to share z-70 with the summary
+            and lose on document order, so VIEW ALL INCENTIVES opened the
+            record *behind* the page that offered it and appeared to do
+            nothing at all. What keeps RETRY FILE from being trapped behind
+            its scrim is the pause: the clock is stopped and input ignored
+            while the drawer is open, so no phase can change underneath
+            it. */}
         <PhaseOverlay
           hud={hud}
           progress={progress}

@@ -62,8 +62,12 @@ const PART_MS = 700;
  * to infer that the thing they had just been shown had gone anywhere at
  * all. It shrinks into a file instead, and the summary catches that same
  * file and walks it into the meter it counted toward.
+ *
+ * Slow enough to be a beat rather than a cut. This is the first of three
+ * statements the filing sequence makes — it went into a folder — and none
+ * of them survives being played in a third of a second.
  */
-const KEEP_MS = 340;
+const KEEP_MS = 460;
 
 /**
  * The headline's typing speed, and the beat between erasing and writing.
@@ -435,6 +439,11 @@ export function RewardReveal({
               return;
             }
             if (advances) return setStep((n) => n + 1);
+            // Only the control that actually *keeps* folds the card into a
+            // file. SEE NEXT INCENTIVE hands over to the next card of the
+            // same stack — nothing has been put away yet, and playing the
+            // filing animation between two cards says it has.
+            if (index < total) return onAccept();
             if (reduced || keeping) return onAccept();
             setKeeping(true);
             setTimeout(onAccept, KEEP_MS);

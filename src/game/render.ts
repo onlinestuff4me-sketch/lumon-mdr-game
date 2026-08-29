@@ -657,11 +657,14 @@ function roundRect(
 /**
  * Faint chevrons running from a held packet down to the bin.
  *
- * It is only ever enabled on files with a *single* bin, so it points at the
- * one place a packet can go and gives nothing away. It appears with the
- * packet: waiting for the player to hesitate meant the arrows arrived after
- * the moment they were needed, which is when the box first shows up and the
- * question "where does this go?" is actually being asked.
+ * Enabled on the teaching files, and only on them. It names the right bin,
+ * which outside orientation would be the answer handed over — but inside
+ * it, the carry is the lesson, and a refiner holding their first packet
+ * over a four-bin deck has been given no other way to know where it goes.
+ * It appears with the packet: waiting for the player to hesitate meant the
+ * arrows arrived after the moment they were needed, which is when the box
+ * first shows up and the question "where does this go?" is actually being
+ * asked.
  */
 const HINT_DELAY_S = 0;
 

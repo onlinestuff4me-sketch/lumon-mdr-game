@@ -95,8 +95,13 @@ for (const lv of LEVELS) {
       }
     }
   }
-  if (lv.binHint && (lv.showBins ?? lv.tempers).length !== 1) {
-    fail(`${lv.id}: binHint on a multi-bin deck would point at the answer`);
+  // The chevrons name the right bin. Inside the teaching files that is the
+  // lesson — the carry is what those screens exist to teach, and a refiner
+  // holding their first packet over a four-bin deck has been given no
+  // other way to know where it goes. Outside them it is the answer handed
+  // over, and the invariant that matters is that they never get out.
+  if (lv.binHint && !lv.training) {
+    fail(`${lv.id}: binHint outside a teaching file hands over the answer`);
   }
 }
 ok(`every screen seeds a winnable, well-formed board`);

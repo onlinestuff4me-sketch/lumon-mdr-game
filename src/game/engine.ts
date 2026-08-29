@@ -299,9 +299,11 @@ export class GameEngine {
    * the same cluster three times is not.
    */
   latchedId = -1;
-  /** Elapsed time at which the orientation file re-offers its hint, or -1
-   *  when this file has no hint. Cleared once a packet is lifted. */
+  /** Elapsed time at which a teaching file re-offers its lesson, or -1
+   *  when this file has none. Cleared once a packet is lifted. */
   private orientHintAt = -1;
+  /** The sentence that re-offer will say, chosen with the file. */
+  private hintLine = "";
   /** Seconds at which the pulse file's next reveal may begin, and when the
    *  current reveal ends. Both -1 when this file has no pulse. */
   private pulseNextAt = -1;
@@ -695,7 +697,15 @@ export class GameEngine {
     this.phase = "probe";
     this.releaseGesture();
     this.refreshLayout();
-    this.orientHintAt = level.selfAgitate === true ? 13 : -1;
+    // Both teaching files re-offer their lesson once, for a refiner who
+    // read the first line, did nothing, and watched it go. They are
+    // different lessons, so the file picks the sentence rather than the
+    // timer.
+    this.hintLine = level.teachProbe
+      ? "HOLD A FINGER ON THE NUMBERS. THE STRANGE ONES WILL SHOW THEMSELVES."
+      : "BOX THE MOVING DIGITS. DRAG THEM TO THE BIN.";
+    this.orientHintAt =
+      level.selfAgitate === true || level.teachProbe === true ? 13 : -1;
     this.advanceAt = -1;
     this.settleAt = -1;
     this.flawless = true;
@@ -719,7 +729,18 @@ export class GameEngine {
     this.applyRedaction(level.redact === "audio");
     this.lastRefined = level.tempers[0];
     assignMorphs(this.board, level);
-    if (level.selfAgitate) {
+    if (level.teachProbe) {
+      // The one file whose whole subject is a gesture nobody has performed
+      // yet. Orientation spent twenty-one screens showing that a group
+      // moves; this file hides the movement and hands over the tool that
+      // finds it, and the coach band is the only place on the screen that
+      // can say so.
+      this.say(
+        "HOLD DOWN ON THE NUMBERS TO FIND THE STRANGE ONES.",
+        "info",
+        "untilAction",
+      );
+    } else if (level.selfAgitate) {
       // The generic "FILE LOADED" line teaches nothing to someone who does
       // not yet know the matrix hides anything.
       this.say("ONE GROUP IS ALREADY MOVING. BOX IT.", "info", "untilAction");
@@ -2127,16 +2148,16 @@ export class GameEngine {
 
     if (this.message && this.messageIsStale()) this.clearMessage();
 
-    // Orientation offers its hint a second time, once, for a player who
-    // read the first line, did nothing, and watched it disappear. Canceled
-    // the moment anything is lifted, so it can never talk over a refiner
-    // who has already understood.
+    // A teaching file offers its lesson a second time, once, for a player
+    // who read the first line, did nothing, and watched it disappear.
+    // Canceled the moment anything is lifted, so it can never talk over a
+    // refiner who has already understood.
     if (this.orientHintAt >= 0 && live) {
       if (this.packet || this.board.clusters.some((c) => c.refined)) {
         this.orientHintAt = -1;
       } else if (this.elapsed >= this.orientHintAt) {
         this.orientHintAt = -1;
-        this.say("BOX THE MOVING DIGITS. DRAG THEM TO THE BIN.", "info", "untilAction");
+        this.say(this.hintLine, "info", "untilAction");
       }
     }
 
