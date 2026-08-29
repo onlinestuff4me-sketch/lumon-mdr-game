@@ -1604,8 +1604,18 @@ section("wellness");
     [...document.body.innerText.matchAll(/Your outie[^\n]*/g)].map((m) => m[0]));
   check("the fact is typeset on the card, exactly once",
     shown.length === 1 && shown[0].endsWith("."), JSON.stringify(shown));
-  check("and the caption below it is the framing line",
-    /Wellness has prepared a statement/.test(await page.evaluate(() => document.body.innerText)));
+  // The caption arrives on the card's second beat — the band under the
+  // plate opens and the line is typed into it — so it is not on screen the
+  // frame the name is.
+  const framed = await page
+    .waitForFunction(
+      () => /Wellness has prepared a statement/.test(document.body.innerText),
+      null,
+      { timeout: 6000 },
+    )
+    .then(() => true)
+    .catch(() => false);
+  check("and the caption below it is the framing line", framed);
 
   // The same sentence, after a reload mid-ceremony: never rerolled.
   await page.reload({ waitUntil: "networkidle" });

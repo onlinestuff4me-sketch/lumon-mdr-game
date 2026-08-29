@@ -678,7 +678,12 @@ export function GameStage() {
             onOpen={() => openHandbook("shelf")}
             variant="hud"
             landing={docked}
-            filePartial={hud.fileProgress}
+            // Zero once this file is in the ledger — it is already inside
+            // the lane's whole count, and adding it again as a part-file
+            // filled the bar while the number beside it said 2 of 3.
+            filePartial={
+              fileCredited(hud.levelIndex, progress) ? 0 : hud.fileProgress
+            }
             alreadyRefined={replaying}
           />
         </div>

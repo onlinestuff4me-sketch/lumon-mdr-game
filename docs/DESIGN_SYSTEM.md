@@ -130,6 +130,13 @@ full   box-shadow 0 0 10px 1px phos-200, one `meter-full` pulse
 Every meter shows its raw numbers beside it (`4 OF 10`, `1/2`). A bar
 without its numerator is a mood, not a measurement.
 
+**A bar reads full only when its numbers do.** The incentives record adds
+the part-file the refiner is currently working on, so every screen visibly
+buys something — but that hint must never finish the last whole step, and
+it must be zero once the file is credited or the same file is counted twice.
+A meter at 100% beside the words `2/3` is the terminal contradicting itself,
+and the refiner believes the bar.
+
 ### Control
 
 ```
@@ -180,6 +187,26 @@ The keyframes live in `src/index.css`:
 **Every keyframe has a `prefers-reduced-motion` variant** that flattens it
 to its end state. That block is at the bottom of the keyframe section; a
 new animation without an entry there is an incomplete animation.
+
+### A screen reveals itself in beats, not all at once
+
+Where several pieces of new information arrive together, they arrive in
+order, and each one gets the space it needs at the moment it needs it. The
+incentive card opens in two beats: the lid retracts while the headline is
+typed over with the name, and only then does the caption band open —
+sliding the control down — with the line under the plate written into the
+space as the space appears.
+
+Two rules make that work. **Nothing above the growing thing may move**: the
+card is centred, so the band's height is paid for by a tail below the
+control that gives up exactly what the band takes, and the card's total
+height never changes. And **the control stays live through every beat** —
+during the opening it lands the whole thing at once, so watching is never
+the price of continuing.
+
+Reserving the space up front is what this replaces, and it was worse: a
+hand's width of nothing under the plate, held for text that had not been
+written yet.
 
 ### Text that changes meaning is typed over, never swapped
 

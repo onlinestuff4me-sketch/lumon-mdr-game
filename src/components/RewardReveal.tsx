@@ -65,6 +65,31 @@ const PART_MS = 700;
  */
 const KEEP_MS = 340;
 
+/**
+ * The headline's typing speed, and the beat between erasing and writing.
+ *
+ * Exported as constants because the rest of the card's choreography is
+ * timed off them: the caption band opens when the headline stops.
+ */
+const ERASE_MS = 10;
+const TYPE_MS = 20;
+const HEAD_GAP_MS = 110;
+
+/** How long the caption band takes to open, sliding the control down. */
+const BAND_MS = 320;
+
+/**
+ * The height the caption band opens to, and the height the tail gives up
+ * to pay for it.
+ *
+ * The card is centred, so growing anything would otherwise drag everything
+ * above it upward — including the plate, on the exact frame the refiner is
+ * looking at it. The band and the tail trade the same 56px in opposite
+ * directions, so the card's total height never changes and nothing above
+ * the control moves.
+ */
+const BAND_H = 56;
+
 /** The block a terminal leaves under the character it is about to write. */
 function Caret({ on }: { on: boolean }) {
   if (!on) return null;
@@ -116,6 +141,17 @@ export function RewardReveal({
   const [step, setStep] = useState(0);
   /** True while the card is folding itself into a file. */
   const [keeping, setKeeping] = useState(false);
+  /**
+   * True once the opening has finished playing out: the seal is off, the
+   * name has finished being typed, and the card is ready to say the rest.
+   *
+   * A card that opens without a seal has nothing to play, so it starts
+   * here. This is what the caption band and the control's label wait on —
+   * the second beat of the reveal, after the first has landed.
+   */
+  const [revealed, setRevealed] = useState(!sealed);
+  /** True when a refiner tapped through the opening rather than watching. */
+  const [skipped, setSkipped] = useState(false);
   const reduced =
     typeof window !== "undefined" &&
     (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
@@ -165,22 +201,47 @@ export function RewardReveal({
   const head = useTypeOver(reward.earned, {
     go: open,
     initial: sealedHead,
-    eraseMs: 12,
-    typeMs: 24,
-    gapMs: 110,
-    instant: !sealed || reduced,
+    eraseMs: ERASE_MS,
+    typeMs: TYPE_MS,
+    gapMs: HEAD_GAP_MS,
+    instant: !sealed || reduced || skipped,
   });
   // Behind the headline, and quicker per character because it is a
-  // sentence rather than a title.
+  // sentence rather than a title. It waits for the band to start opening,
+  // so the words are written into a space that is making room for them.
   const body = useTypeOver(caption, {
-    go: open,
+    go: revealed,
     eraseMs: 7,
     typeMs: 13,
-    gapMs: 340,
-    instant: reduced,
+    gapMs: 90,
+    instant: reduced || skipped,
   });
 
-  const label = !open ? "OPEN" : advances ? "CONTINUE" : keepLabel(index, total);
+  /**
+   * The opening plays in two beats, and the second waits for the first.
+   *
+   * One: the lid retracts and the headline is typed over with the name.
+   * Two: the caption band opens, sliding the control down, and the line
+   * under the plate is written into the space that just appeared.
+   *
+   * Doing both at once put three animations and a photograph on screen
+   * together and reserved a hand's width of nothing under the plate to
+   * hold text that was not there yet. Sequenced, each piece arrives as the
+   * information it carries becomes available.
+   */
+  const headMs =
+    sealedHead.length * ERASE_MS + HEAD_GAP_MS + reward.earned.length * TYPE_MS;
+  useEffect(() => {
+    if (!open || revealed) return;
+    const t = setTimeout(() => setRevealed(true), reduced ? 0 : headMs + 140);
+    return () => clearTimeout(t);
+  }, [open, revealed, reduced, headMs]);
+
+  const label = !open || !revealed
+    ? "OPEN"
+    : advances
+      ? "CONTINUE"
+      : keepLabel(index, total);
 
   return (
     <div
@@ -225,18 +286,18 @@ export function RewardReveal({
           {open && facts.length > 1 ? ` · ${step + 1}/${facts.length}` : ""}
         </p>
 
-        <h1 className="crt-text-glow mt-2 flex h-[34px] items-center justify-center text-[12px] font-bold leading-tight tracking-[0.12em] text-phos-200">
+        <h1 className="crt-text-glow mt-2 flex h-[32px] items-center justify-center text-[12px] font-bold leading-tight tracking-[0.12em] text-phos-200">
           <span>
             {head.text}
             <Caret on={head.typing} />
           </span>
         </h1>
-        <div className="mt-2 h-px w-24 bg-phos-600" />
+        <div className="mt-3 h-px w-24 bg-phos-600" />
 
         {/* Why. Sealed, this is the whole of what the card is willing to
             say; open, it stays put, so the refiner can still see what they
             did to get it. */}
-        <p className="mt-2 flex h-[11px] items-center text-[8px] tracking-[0.2em] text-phos-500">
+        <p className="mt-3 flex h-[11px] items-center text-[8px] tracking-[0.2em] text-phos-500">
           {reasonFor(rung)}
         </p>
 
@@ -244,7 +305,7 @@ export function RewardReveal({
             picture occupy exactly the same box and nothing on the card can
             move when one becomes the other. */}
         <div
-          className={`relative mt-3 aspect-[9/16] w-full overflow-hidden rounded-[3px] border border-phos-600 ${
+          className={`relative mt-4 aspect-[9/16] w-full overflow-hidden rounded-[3px] border border-phos-600 ${
             open && reward.kind === "fact" ? "bg-[#e9e5d9]" : "bg-black"
           }`}
         >
@@ -331,19 +392,81 @@ export function RewardReveal({
         {/* Reserved whether or not there is anything to say, so the button
             below it never moves. Three lines' worth, which is the longest
             line in the catalog. */}
-        {/* Empty while sealed — the classified notice moved onto the lid —
-            and then typed in, the same way the headline is. */}
-        <p className="mt-3 flex h-[44px] items-center justify-center text-[10px] italic leading-snug text-phos-400">
-          <span>
-            {body.text}
-            <Caret on={body.typing} />
-          </span>
-        </p>
+        {/* Closed while sealed — the classified notice moved onto the lid,
+            and a hand's width of reserved nothing under the plate was the
+            largest gap on the card. It opens on the second beat, and the
+            line is typed into the space as the space appears. */}
+        <div
+          className="w-full overflow-hidden"
+          style={{
+            height: revealed ? BAND_H : 0,
+            transition: reduced ? undefined : `height ${BAND_MS}ms cubic-bezier(.4,0,.2,1)`,
+          }}
+        >
+          <p className="mt-3 flex h-[44px] items-center justify-center text-[10px] italic leading-snug text-phos-400">
+            <span>
+              {body.text}
+              <Caret on={body.typing} />
+            </span>
+          </p>
+        </div>
+
+
+        {/* Live from the first frame, which is what keeps every part of this
+            skippable — while the card is opening it finishes the opening,
+            and after that it moves on. It throbs because it is the only
+            thing on the screen that does anything, and a refiner who does
+            not know that is a refiner sitting in front of a card that
+            appears to have stopped. */}
+        <button
+          type="button"
+          data-reward-action
+          onClick={() => {
+            if (!open) {
+              setOpen(true);
+              if (!reduced) setParting(true);
+              return;
+            }
+            // Mid-opening: land the whole thing now rather than making the
+            // refiner watch a machine type at them.
+            if (!revealed) {
+              setSkipped(true);
+              setRevealed(true);
+              return;
+            }
+            if (advances) return setStep((n) => n + 1);
+            if (reduced || keeping) return onAccept();
+            setKeeping(true);
+            setTimeout(onAccept, KEEP_MS);
+          }}
+          className="crt-text-glow relative z-10 mt-4 inline-flex items-center gap-2 rounded-[3px] border border-phos-400 bg-phos-600/25 px-5 py-2.5 text-[11px] font-bold tracking-[0.2em] text-phos-200 active:bg-phos-600/50"
+          // Inside the column, so it folds away with everything else; the
+          // throb simply stops rather than being animated over.
+          style={
+            keeping ? undefined : { animation: "crt-throb 1.9s ease-in-out infinite" }
+          }
+        >
+          {label}
+          <ChevronRight size={12} strokeWidth={2.6} />
+        </button>
+
+        {/* What the band spends. Held while sealed so the control sits
+            directly under the plate, and given up as the band opens, so
+            the card's height — and therefore everything above it — never
+            changes. */}
+        <div
+          className="w-full shrink-0"
+          style={{
+            height: revealed ? 0 : BAND_H,
+            transition: reduced ? undefined : `height ${BAND_MS}ms cubic-bezier(.4,0,.2,1)`,
+          }}
+        />
       </div>
 
       {/* What the card becomes. It fades up in the middle of the screen as
           the card collapses through it, so there is one object leaving
-          rather than a page disappearing and a file appearing. */}
+          rather than a page disappearing and a file appearing. A sibling
+          of the column, never a child: a child would fold away with it. */}
       {keeping ? (
         <div
           className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
@@ -352,40 +475,6 @@ export function RewardReveal({
           <FileGlyph size={38} />
         </div>
       ) : null}
-
-      {/* Live from the first frame, which is what keeps every part of this
-          skippable. It throbs because it is the only thing on the screen
-          that does anything, and a refiner who does not know that is a
-          refiner sitting in front of a card that appears to have
-          stopped. */}
-      <button
-        type="button"
-        data-reward-action
-        onClick={() => {
-          if (!open) {
-            setOpen(true);
-            if (!reduced) setParting(true);
-            return;
-          }
-          if (advances) return setStep((n) => n + 1);
-          if (reduced || keeping) return onAccept();
-          setKeeping(true);
-          setTimeout(onAccept, KEEP_MS);
-        }}
-        className="crt-text-glow relative z-10 mt-4 inline-flex items-center gap-2 rounded-[3px] border border-phos-400 bg-phos-600/25 px-5 py-2.5 text-[11px] font-bold tracking-[0.2em] text-phos-200 active:bg-phos-600/50"
-        style={
-          keeping
-            ? {
-                transition: `transform ${KEEP_MS}ms ease-in, opacity ${KEEP_MS}ms ease-in`,
-                transform: "scale(0.4)",
-                opacity: 0,
-              }
-            : { animation: "crt-throb 1.9s ease-in-out infinite" }
-        }
-      >
-        {label}
-        <ChevronRight size={12} strokeWidth={2.6} />
-      </button>
     </div>
   );
 }

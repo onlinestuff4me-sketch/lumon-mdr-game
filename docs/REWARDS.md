@@ -314,9 +314,21 @@ ever loading behind a celebration.
    The headline is *typed over* as the lid retracts. "YOU'VE EARNED AN
    INCENTIVE" is backspaced away and the name of the thing is written in
    its place, a character at a time, with a block caret blinking under the
-   cursor; the caption under the plate is typed in behind it. A line that
-   changes meaning is retyped, never swapped — this is a terminal, and a
-   terminal has no cross-fade (`src/hooks/useTypeOver.ts`).
+   cursor. A line that changes meaning is retyped, never swapped — this is
+   a terminal, and a terminal has no cross-fade
+   (`src/hooks/useTypeOver.ts`).
+
+   Then, and only then, the **second beat**: the caption band under the
+   plate opens, sliding the control down with it, and the line is typed
+   into the space as the space appears. While sealed that band is closed
+   and the control sits directly under the plate — the card used to reserve
+   a hand's width of nothing there for text that had not been written yet,
+   which was the largest gap on the screen and held the emptiest thing on
+   it. The band is paid for by a tail below the control that gives up
+   exactly what the band takes, so the card's height never changes.
+
+   Tapping during either beat lands the whole opening at once. Watching is
+   never the price of continuing.
 
    Nothing on the card may move when this happens. Every band — the label,
    the title, the plate, the caption — is a fixed height, and the plate
@@ -416,7 +428,14 @@ REFINE 1 MORE FILE   ▓▓▓▓▓▓░░░░░░░░░░      1/2
 
 It is furniture. It is there before the first incentive exists, reading
 `NONE KEPT`, because furniture that materializes halfway through a session
-reads as a glitch rather than as a place. It sits above the input surface
+reads as a glitch rather than as a place.
+
+The bar adds the part-file in progress, so every screen of a multi-stage
+file visibly buys something even though the *number* only moves on whole
+files. Two rules keep that honest: the part-file is zero once the file has
+been credited — it is already inside the whole count, and adding it again
+filled the bar while the number beside it still said `2/3` — and the bar
+may never read 100% unless the count does. It sits above the input surface
 so it can be tapped over a live board, and the header around it is
 `pointer-events-none` so a packet dragged to the top edge stays grabbable.
 
