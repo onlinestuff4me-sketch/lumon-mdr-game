@@ -9,11 +9,21 @@
  * blocked, and a lost archive must never stop the terminal booting.
  */
 
-const KEY = "lumon.mdr.archive.v1";
+import { scopedKey } from "./runScope";
+
+/**
+ * Scoped to the active save, not global.
+ *
+ * A new save must not know which files a previous one refined. See
+ * `runScope.ts`; `BASE` is also the legacy unscoped key, which the first
+ * run adopts so a refiner already playing keeps their archive.
+ */
+export const ARCHIVE_KEY = "lumon.mdr.archive.v1";
+const key = () => scopedKey(ARCHIVE_KEY);
 
 export function loadArchive(): ReadonlySet<string> {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(key());
     if (!raw) return new Set();
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return new Set();
@@ -29,7 +39,7 @@ export function recordCompletion(id: string): ReadonlySet<string> {
   const next = new Set(loadArchive());
   next.add(id);
   try {
-    localStorage.setItem(KEY, JSON.stringify([...next]));
+    localStorage.setItem(key(), JSON.stringify([...next]));
   } catch {
     /* Storage unavailable — the archive lasts only this session. */
   }

@@ -66,8 +66,12 @@ export function GameStage() {
   const rectRef = useRef<DOMRect | null>(null);
   const [size, setSize] = useState({ w: 360, h: 640 });
   const [handbook, setHandbook] = useState(false);
-  const [archive, setArchive] = useState<ReadonlySet<string>>(loadArchive);
+  // The run store goes first, and the order matters: loading it is what
+  // points the archive and the ledger at a save slot. Read either of those
+  // before the scope is set and you get whatever the legacy unscoped key
+  // holds — which is the whole bug this ordering exists to prevent.
   const [runStore, setRunStore] = useState<RunStore>(loadRuns);
+  const [archive, setArchive] = useState<ReadonlySet<string>>(loadArchive);
   const [progress, setProgress] = useState<Progress>(loadProgress);
   // The completion effect reads the ledger but must not re-run when the
   // ledger changes — it *is* what changes it.
@@ -256,10 +260,35 @@ export function GameStage() {
     null,
   );
   const landing = landed?.boundary === boundary ? landed : null;
+  /**
+   * True for a beat after the summary page has been put into the header
+   * record, so the box can say it caught it.
+   *
+   * Separate from `acceptedHere`, which is true from the moment a card is
+   * kept: a box that glows while the page is still in flight has answered
+   * a question nobody asked yet.
+   */
+  const [docked, setDocked] = useState(false);
+  useEffect(() => {
+    if (!docked) return;
+    const t = setTimeout(() => setDocked(false), 900);
+    return () => clearTimeout(t);
+  }, [docked]);
   const acceptedNames = accepted.boundary === boundary ? accepted.names : [];
   const acceptedHere = acceptedNames.length;
   const stackTotal = owed.length + acceptedHere;
   const stackIndex = acceptedHere + 1;
+  /**
+   * True when the incentive summary is this file's ending, and the FILE
+   * REFINED panel is therefore not.
+   *
+   * Not on a screen that advances itself — it has no panel to suppress and
+   * its own timer is what moves it on — and not on the last file, where
+   * the panel says COLD HARBOR IS COMPLETE and offers a new quarter, which
+   * is not something a summary page can stand in for.
+   */
+  const ceremonyHandled =
+    acceptedHere > 0 && hud.ceremony !== "none" && !hud.isLastLevel;
 
   /**
    * A second issue of something already on the shelf goes straight into
@@ -648,8 +677,13 @@ export function GameStage() {
             progress={progress}
             onOpen={() => openHandbook("shelf")}
             variant="hud"
-            landing={acceptedHere > 0}
-            filePartial={hud.fileProgress}
+            landing={docked}
+            // Zero once this file is in the ledger — it is already inside
+            // the lane's whole count, and adding it again as a part-file
+            // filled the bar while the number beside it said 2 of 3.
+            filePartial={
+              fileCredited(hud.levelIndex, progress) ? 0 : hud.fileProgress
+            }
             alreadyRefined={replaying}
           />
         </div>
@@ -727,7 +761,18 @@ export function GameStage() {
           onOpenRecord={() => openHandbook("shelf")}
           recordLanding={acceptedHere > 0}
           alreadyRefined={replaying}
-          onStart={() => play(0)}
+          ceremonyHandled={ceremonyHandled}
+          onStart={() => {
+            // The first play on a terminal that has never had one still
+            // gets a slot, so what it earns belongs to a save rather than
+            // to the browser.
+            if (!runStore.active) {
+              setRunStore(startNewRun());
+              setArchive(loadArchive());
+              setProgress(loadProgress());
+            }
+            play(0);
+          }}
           onNext={() => engine.nextLevel()}
           onRestart={() => engine.restart()}
           onNewQuarter={() => {
@@ -741,12 +786,20 @@ export function GameStage() {
           runStore={runStore}
           onPlay={play}
           onNewSave={() => {
+            // A new save is new. The archive and the ledger are scoped to
+            // the run, so both come back empty — which is the point, and
+            // was not true when they were global.
             setRunStore(startNewRun());
+            setArchive(loadArchive());
+            setProgress(loadProgress());
             play(0);
           }}
           onLoadRun={(id) => {
             const st = selectRun(id);
             setRunStore(st);
+            // And loading one brings back exactly what that save held.
+            setArchive(loadArchive());
+            setProgress(loadProgress());
             const run = st.runs.find((r) => r.id === id);
             play(run ? continueIndex(run, LEVELS.length) : 0);
           }}
@@ -817,8 +870,18 @@ export function GameStage() {
             from={before.boundary === boundary ? before.progress : progress}
             to={progress}
             names={landing.names}
+            filed={filedHere}
             onOpenRecord={() => openHandbook("shelf")}
-            onResume={() => setLanded(null)}
+            onResume={() => {
+              setLanded(null);
+              setDocked(true);
+              // The panel this page replaced was also what carried NEXT
+              // FILE, so the page has to do that too. Not on a screen that
+              // advances itself — the engine's own timer is doing it and a
+              // second call would skip a file — and not on the last, which
+              // ends the quarter rather than continuing it.
+              if (ceremonyHandled) engine.nextLevel();
+            }}
           />
         ) : null}
 

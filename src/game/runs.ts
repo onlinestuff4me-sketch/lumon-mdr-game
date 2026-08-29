@@ -27,12 +27,17 @@ export interface RunStore {
   runs: RunMeta[];
 }
 
+import { ARCHIVE_KEY } from "./archive";
+import { PROGRESS_KEY } from "./progress";
+import { adopt, setRunScope } from "./runScope";
+
 const KEY = "lumon.mdr.runs.v1";
 /** Old saves are dropped beyond this many — a list of every attempt ever
  *  made stops being a list anyone can choose from. Newest kept. */
 const MAX_RUNS = 10;
 
 function empty(): RunStore {
+  scopeTo(null);
   return { active: null, runs: [] };
 }
 
@@ -42,6 +47,21 @@ function write(store: RunStore): void {
   } catch {
     /* Storage unavailable — the run lasts only this session. */
   }
+}
+
+/**
+ * Point the archive and the ledger at a run, and let the first one adopt
+ * whatever a pre-slots build left behind.
+ *
+ * Called from every function here that can change which run is active, so
+ * no caller has to remember to do it and no read can happen against the
+ * wrong slot.
+ */
+function scopeTo(id: string | null): void {
+  setRunScope(id);
+  if (id === null) return;
+  adopt(ARCHIVE_KEY, id);
+  adopt(PROGRESS_KEY, id);
 }
 
 export function loadRuns(): RunStore {
@@ -63,6 +83,7 @@ export function loadRuns(): RunStore {
       typeof parsed.active === "string" && runs.some((r) => r.id === parsed.active)
         ? parsed.active
         : null;
+    scopeTo(active);
     return { active, runs };
   } catch {
     return empty();
@@ -116,6 +137,11 @@ export function startNewRun(): RunStore {
   };
   store.runs.push(run);
   store.active = run.id;
+  // A fresh slot, before anything can read from it. Nothing is adopted
+  // into a run that did not exist a moment ago — only the *first* run a
+  // legacy save meets takes that data, and this one is not it unless it
+  // is also the first.
+  scopeTo(run.id);
   // Trim the oldest once over the cap — by last touch, not creation, so an
   // attempt someone keeps returning to is never the one that falls off.
   if (store.runs.length > MAX_RUNS) {
@@ -131,6 +157,7 @@ export function selectRun(id: string): RunStore {
   const store = loadRuns();
   if (store.runs.some((r) => r.id === id)) {
     store.active = id;
+    scopeTo(id);
     const run = activeRun(store);
     if (run) run.updatedAt = Date.now();
     write(store);

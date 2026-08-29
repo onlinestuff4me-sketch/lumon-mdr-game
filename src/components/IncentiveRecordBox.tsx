@@ -37,16 +37,27 @@ interface Props {
    * and the summary after a payout.
    */
   variant: "hud" | "panel";
-  /** True just after an incentive has been kept, for the pulse. */
+  /**
+   * True for a beat *after* something has been put in here — the summary
+   * page landing, or an incentive filed without a card. It glows once and
+   * stops. Fired during the landing rather than after it says nothing: the
+   * point is "it went in there".
+   */
   landing?: boolean;
   /**
-   * How far into the current file the refiner is, 0 to 1.
+   * How far into the *uncredited* part of the current file the refiner is,
+   * 0 to 1.
    *
    * The screens lane counts whole files, and the orientation files are two
    * and three stages — so a refiner could clear a screen, watch nothing
    * move, clear another, and watch nothing move again. The number stays
    * whole; the *bar* counts the part-file, so every screen visibly buys
    * something.
+   *
+   * It must be zero once the file on screen has been credited, or the same
+   * file is counted twice: once inside `lane.current` and again as a whole
+   * part-file, which is how a bar came to read full above the words 2/3.
+   * The caller decides that, because the caller has the ledger.
    */
   filePartial?: number;
   /**
@@ -83,9 +94,19 @@ export function IncentiveRecordBox({
     lane && lane.lane === "screens" && !alreadyRefined
       ? Math.max(0, Math.min(1, filePartial))
       : 0;
-  const meterPct = lane
-    ? Math.min(100, ((lane.current + partial) / lane.target) * 100)
-    : 0;
+  /**
+   * A bar reads full only when the count does.
+   *
+   * The part-file is an honest hint that the current screen is buying
+   * something, but it must never finish the last whole step — a meter at
+   * 100% next to `2/3` is the terminal contradicting itself, and the
+   * refiner believes the bar.
+   */
+  const meterPct = !lane
+    ? 0
+    : lane.current >= lane.target
+      ? 100
+      : Math.min(99, ((lane.current + partial) / lane.target) * 100);
 
   return (
     <button
@@ -103,7 +124,7 @@ export function IncentiveRecordBox({
           ? "border-phos-400 bg-phos-600/25"
           : "border-phos-700 bg-phos-900/40"
       }`}
-      style={landing ? { animation: "bin-await 700ms ease-out 1" } : undefined}
+      style={landing ? { animation: "record-dock 900ms ease-out 1" } : undefined}
     >
       <div className="flex items-baseline justify-between gap-2">
         <span

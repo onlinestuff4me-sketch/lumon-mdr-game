@@ -130,6 +130,13 @@ full   box-shadow 0 0 10px 1px phos-200, one `meter-full` pulse
 Every meter shows its raw numbers beside it (`4 OF 10`, `1/2`). A bar
 without its numerator is a mood, not a measurement.
 
+**A bar reads full only when its numbers do.** The incentives record adds
+the part-file the refiner is currently working on, so every screen visibly
+buys something — but that hint must never finish the last whole step, and
+it must be zero once the file is credited or the same file is counted twice.
+A meter at 100% beside the words `2/3` is the terminal contradicting itself,
+and the refiner believes the bar.
+
 ### Control
 
 ```
@@ -169,7 +176,10 @@ The keyframes live in `src/index.css`:
 | `crt-resolve` | Content settles a beat behind the beam | Panel contents |
 | `crt-throb` | 1.9s breath on a control's glow | The waiting control |
 | `seal-part-*` / `seal-seam` | A lid splits on a bright seam and retracts | The sealed incentive |
+| `crt-caret` | A block cursor blinking under the character being written | Text being typed over |
 | `meter-full` | One brightness pulse on arrival at 100% | Every meter |
+| `meter-take` | Brighten and bloom outward — a meter being *fed* | The category bar an incentive just moved |
+| `record-dock` | A single bright bloom on a box that has just caught something | The incentives record |
 | `bin-await` | Slow brightness breath on something waiting | Target bins, a sealed card |
 | `glitch-shift` | Hard 4px jitter, steps(2) | Errors only |
 | `boot-sweep` | The tube warming up | First load |
@@ -177,6 +187,36 @@ The keyframes live in `src/index.css`:
 **Every keyframe has a `prefers-reduced-motion` variant** that flattens it
 to its end state. That block is at the bottom of the keyframe section; a
 new animation without an entry there is an incomplete animation.
+
+### A screen reveals itself in beats, not all at once
+
+Where several pieces of new information arrive together, they arrive in
+order, and each one gets the space it needs at the moment it needs it. The
+incentive card opens in two beats: the lid retracts while the headline is
+typed over with the name, and only then does the caption band open —
+sliding the control down — with the line under the plate written into the
+space as the space appears.
+
+Two rules make that work. **Nothing above the growing thing may move**: the
+card is centred, so the band's height is paid for by a tail below the
+control that gives up exactly what the band takes, and the card's total
+height never changes. And **the control stays live through every beat** —
+during the opening it lands the whole thing at once, so watching is never
+the price of continuing.
+
+Reserving the space up front is what this replaces, and it was worse: a
+hand's width of nothing under the plate, held for text that had not been
+written yet.
+
+### Text that changes meaning is typed over, never swapped
+
+A terminal does not cross-fade a headline. Where a line genuinely becomes a
+*different statement* — "YOU'VE EARNED AN INCENTIVE" becoming the name of
+the thing — it is backspaced over and retyped a character at a time, with
+`crt-caret` blinking under the cursor while the machine works
+(`src/hooks/useTypeOver.ts`). The erase is faster than the type: deleting
+is not the part anyone is reading. This is for meaning, not decoration —
+a label that is merely *updating* still just updates.
 
 ### Two timing rules
 
@@ -193,6 +233,20 @@ target is read with `getBoundingClientRect` at animation time, never from a
 tuned offset — an offset is correct on exactly one phone. Scale is derived
 from the *height* ratio when flying into a wide short target, or the page
 grows on its way into the thing it is shrinking into.
+
+### One object, handed from screen to screen
+
+A kept incentive is followed the whole way. The card folds into a file
+(`FileGlyph`, 340ms); the summary catches **that same shape** and walks it
+into the category bar it moved, which lights with `meter-take` as it takes
+it; the summary itself then shrinks into the incentives record, which
+blooms once with `record-dock` *after* it lands.
+
+Two rules hold that chain together. **The same component draws the object
+at every stage** — two similar rectangles read as two things, and the
+handoff is lost. And **the receiving glow fires after the arrival, never
+during it**: a box already glowing while the page is still in flight has
+answered a question nobody has asked yet.
 
 ---
 

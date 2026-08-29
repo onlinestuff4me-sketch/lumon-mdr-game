@@ -279,12 +279,12 @@ export async function settleIncentives(page) {
   let cleared = 0;
   for (let i = 0; i < 20; i++) {
     if ((await action.count()) === 0) break;
-    // The last card of a boundary takes about two thirds of a second to
-    // fly into the record; clicking through that is how a test ends up
-    // racing an element that is on its way out of the DOM.
+    // The card folds into a file (340ms) and the summary that catches it
+    // shrinks into the record (620ms); clicking through either is how a
+    // test ends up racing an element on its way out of the DOM.
     await action.first().click({ timeout: 4000 }).catch(() => {});
     cleared++;
-    await page.waitForTimeout(420);
+    await page.waitForTimeout(760);
   }
   return cleared;
 }
@@ -315,6 +315,35 @@ export const byName = async (page, name) => {
   if (i < 0) throw new Error(`no level named ${name}`);
   return i;
 };
+
+/**
+ * The storage key the active save writes its incentive ledger to.
+ *
+ * The archive and the ledger are scoped to a run — a new save must not
+ * inherit a previous one's files or incentives — so a test that seeds the
+ * bare `lumon.mdr.progress.v1` is writing somewhere the game will not
+ * read. With no run yet, that bare key is still right: it is the legacy
+ * slot the first run adopts.
+ */
+export const ledgerKey = (page) =>
+  page.evaluate(() => {
+    const runs = JSON.parse(localStorage.getItem("lumon.mdr.runs.v1") ?? "null");
+    return runs?.active
+      ? `lumon.mdr.progress.v1.${runs.active}`
+      : "lumon.mdr.progress.v1";
+  });
+
+/** Read the active save's ledger. */
+export const readLedger = async (page) =>
+  page.evaluate((k) => JSON.parse(localStorage.getItem(k) ?? "null"),
+    await ledgerKey(page));
+
+/** Write the active save's ledger. */
+export const writeLedger = async (page, value) =>
+  page.evaluate(
+    ({ k, v }) => localStorage.setItem(k, v),
+    { k: await ledgerKey(page), v: JSON.stringify(value) },
+  );
 
 /**
  * Refine a whole *file*, however many stages it has.
