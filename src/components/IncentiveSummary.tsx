@@ -19,31 +19,41 @@ import { FileGlyph } from "./FileGlyph";
  * 2. **What did I just get?** Named, because "an incentive" is not a thing
  *    anyone remembers owning and a finger trap is.
  * 3. **What does that make in total?** Progress per category, counted in
- *    payouts. The file that was just kept is walked into the bar it moved
- *    and the bar is lit as it takes it: the count does not merely arrive
- *    already changed, it is seen being changed by the thing on screen.
+ *    payouts.
  * 4. **What earns the next one?** Last, loudest, and bordered — the only
- *    forward-looking object on a screen that is otherwise a receipt. A
- *    refiner leaves this page knowing another one is coming and exactly
- *    what it costs.
+ *    forward-looking object on a screen that is otherwise a receipt.
  *
- * And on the way out: **where does all this live from now on?** The page
- * shrinks into the incentives record in the header — the same title, the
- * same meter, in the place it will be for the rest of the game — and that
- * box glows once it has it.
+ * ## The two animations, and why they are slow
  *
- * There is deliberately no paragraph explaining any of that. The screen
- * demonstrates it instead.
+ * Both ends of this screen are teaching, and a teaching animation that
+ * plays in a third of a second has taught nobody. Each one is a sequence
+ * of separated beats rather than one blur, and each beat is one statement:
+ *
+ * **Coming in** — the incentive is put away. The card has already folded
+ * itself into a file; this screen catches *that same file*, holds it long
+ * enough to be seen, walks it into the row it counts toward, and the row
+ * then takes it: `+1`, the number ticks, the bar grows, the whole row
+ * lights. Three statements — it went into a folder, the folder went into
+ * this shelf, the shelf is now one fuller.
+ *
+ * **Going out** — the record is put away. The page packs itself down to
+ * its title, flies into the strip in the header, and that strip lights up
+ * with the new count. The one thing left bright while it flies is the
+ * words INCENTIVES RECORD, which are also the first words on the box it
+ * lands in: the whole point of the animation is that a refiner learns
+ * where this screen lives and that they may open it whenever they like.
  */
 
-/** Long enough that the tick is watched, short enough to feel prompt. */
-const TICK_MS = 160;
-/** How long the kept file takes to reach the meter it counted toward. */
-const FLY_MS = 480;
-/** How long the fed meter stays lit after it lands. */
-const GLOW_MS = 1000;
-/** How long the page takes to shrink into the header strip. */
-const STOW_MS = 620;
+/** How long the arriving file is held, on the page, before it is filed. */
+const HOLD_MS = 300;
+/** How long it takes to reach the row it counts toward. */
+const FLY_MS = 720;
+/** How long the fed row stays lit once it has it. */
+const GLOW_MS = 1100;
+/** How long the page takes to pack itself down before it leaves. */
+const PACK_MS = 420;
+/** How long the packed page takes to reach the header strip. */
+const STOW_MS = 780;
 
 interface Props {
   /** The ledger before this boundary paid out. */
@@ -72,17 +82,25 @@ export function IncentiveSummary({
     typeof window !== "undefined" &&
     (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false);
 
+  /**
+   * Where the arriving file has got to.
+   *
+   * `held` — on the page, where the card left it. `flying` — on its way to
+   * the row. `landed` — in, with the row lit and counting. `done` — an
+   * ordinary page.
+   */
+  const [arrival, setArrival] = useState<"held" | "flying" | "landed" | "done">(
+    reduced ? "done" : "held",
+  );
   const [shown, setShown] = useState(reduced ? to : from);
-  /** True while the kept file is on its way to the meter. */
-  const [flying, setFlying] = useState(!reduced);
-  /** Where that file is headed, measured once the bars are on screen. */
+  /** Where the file is headed, measured once the rows are on screen. */
   const [drop, setDrop] = useState<{ x: number; y: number } | null>(null);
-  /** True for a beat after it lands, which is when the meter is lit. */
-  const [fed, setFed] = useState(false);
+
+  /** `packing` compresses the page; `flying` sends it at the header strip. */
+  const [exit, setExit] = useState<"open" | "packing" | "flying">("open");
   const [flight, setFlight] = useState<{ x: number; y: number; s: number } | null>(
     null,
   );
-  const [stowing, setStowing] = useState(false);
 
   const now = categoryProgress(shown);
   const final = categoryProgress(to);
@@ -103,102 +121,109 @@ export function IncentiveSummary({
    * has no business making.
    */
   const rows = final.filter((c) => c.have > 0);
-  const gained = new Set(
-    rows.filter((c) => c.have > (had.get(c.category) ?? 0)).map((c) => c.category),
+  const gained = new Map(
+    rows
+      .map((c) => [c.category, c.have - (had.get(c.category) ?? 0)] as const)
+      .filter(([, n]) => n > 0),
   );
+  /** The row the file is aimed at, and the one that lights when it lands. */
+  const target = rows.find((c) => gained.has(c.category))?.category ?? null;
   const kept = final.reduce((n, c) => n + c.have, 0) -
     start.reduce((n, c) => n + c.have, 0);
 
   const page = useRef<HTMLDivElement | null>(null);
+  /** The page's size before anything was done to it, for the stow. */
+  const natural = useRef<DOMRect | null>(null);
 
   /**
-   * Aim the kept file at the meter it moved, then let the counts tick.
+   * Walk the arriving file into the row it counts toward.
    *
-   * Measured a frame after mount, for the same reason the stow below is:
-   * the bars have to exist and be laid out before anything can be sent at
-   * one of them. With nothing gained — every category already full, or a
-   * boundary that paid nothing — there is no flight and the counts simply
-   * tick, which is what this screen has always done.
+   * Held first, because the file arrives on the same frame the page does
+   * and a refiner who has just tapped a button is not yet looking at a
+   * shelf. Measured a frame later, because the rows have to exist and be
+   * laid out before anything can be sent at one of them.
    */
   useEffect(() => {
     if (reduced) return;
-    if (!flying) return;
-    const target = rows.find((c) => gained.has(c.category))?.category ?? null;
-    const id = requestAnimationFrame(() => {
-      const host = page.current;
-      const dock = target
-        ? host?.querySelector(`[data-cat-meter="${target}"]`)
-        : null;
-      if (host && dock) {
-        const h = host.getBoundingClientRect();
-        const d = dock.getBoundingClientRect();
-        setDrop({
-          x: d.left + d.width / 2 - (h.left + h.width / 2),
-          y: d.top + d.height / 2 - (h.top + h.height / 2),
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    let raf = 0;
+    timers.push(
+      setTimeout(() => {
+        raf = requestAnimationFrame(() => {
+          const host = page.current;
+          const dock = target
+            ? host?.querySelector(`[data-cat-meter="${target}"]`)
+            : null;
+          if (host && dock) {
+            const h = host.getBoundingClientRect();
+            const d = dock.getBoundingClientRect();
+            setDrop({
+              x: d.left + d.width / 2 - (h.left + h.width / 2),
+              y: d.top + d.height / 2 - (h.top + h.height / 2),
+            });
+          } else {
+            setDrop({ x: 0, y: 0 });
+          }
+          setArrival("flying");
         });
-      } else {
-        setDrop({ x: 0, y: 0 });
-      }
-    });
-    const land = setTimeout(() => {
-      setFlying(false);
-      setShown(to);
-      setFed(true);
-    }, FLY_MS);
-    const dim = setTimeout(() => setFed(false), FLY_MS + GLOW_MS);
+      }, HOLD_MS),
+    );
+    timers.push(
+      setTimeout(() => {
+        setArrival("landed");
+        setShown(to);
+      }, HOLD_MS + FLY_MS),
+    );
+    timers.push(
+      setTimeout(() => setArrival("done"), HOLD_MS + FLY_MS + GLOW_MS),
+    );
     return () => {
-      cancelAnimationFrame(id);
-      clearTimeout(land);
-      clearTimeout(dim);
+      for (const t of timers) clearTimeout(t);
+      cancelAnimationFrame(raf);
     };
     // Runs once for the boundary: the flight belongs to this arrival, and
     // re-running it against a ticked-over ledger would send a second file.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Reduced motion still gets the count, just without the journey. */
-  useEffect(() => {
-    if (reduced || flying) return;
-    const t = setTimeout(() => setShown(to), TICK_MS);
-    return () => clearTimeout(t);
-  }, [to, reduced, flying]);
-
   /**
-   * Aim the page at the header strip and let it go.
+   * Aim the packed page at the header strip and let it go.
    *
    * Measured rather than assumed: the strip's position depends on the
    * viewport, and a hand-tuned offset would send the page to the wrong
-   * place on any phone it was not tuned against. A frame after `stowing`
-   * is set, not in a layout effect — the transform has to land on a
-   * *later* paint than the one that started the transition, or the
-   * browser has nothing to animate from.
+   * place on any phone it was not tuned against. A frame after the packing
+   * beat ends, not in a layout effect — the transform has to land on a
+   * *later* paint than the one that started the transition, or the browser
+   * has nothing to animate from.
    */
   useEffect(() => {
-    if (!stowing) return;
-    const id = requestAnimationFrame(() => {
-      const host = page.current;
-      // Whichever record is going to be *visible* when the scrim lifts. On
-      // a file that ends without a payout the end-of-file panel is behind
-      // this screen and covers the header, and it draws the same box; a
-      // file that ended with one skips that panel entirely and the header
-      // strip is what is waiting.
-      const dock =
-        document.querySelector('[data-record-box="panel"]') ??
-        document.querySelector('[data-record-box="hud"]');
-      if (!host || !dock) return;
-      const p = host.getBoundingClientRect();
-      const d = dock.getBoundingClientRect();
-      setFlight({
-        x: d.left + d.width / 2 - (p.left + p.width / 2),
-        y: d.top + d.height / 2 - (p.top + p.height / 2),
-        // Height, not width. The strip is *wider* than this page and a
-        // tenth of its height, so a width ratio makes the page grow on
-        // its way into the thing it is supposed to be shrinking into.
-        s: Math.min(1, Math.max(0.06, d.height / Math.max(1, p.height))),
+    if (exit !== "packing") return;
+    const t = setTimeout(() => {
+      requestAnimationFrame(() => {
+        // Whichever record is going to be *visible* when the scrim lifts. On
+        // a file that ends without a payout the end-of-file panel is behind
+        // this screen and covers the header, and it draws the same box; a
+        // file that ended with one skips that panel entirely and the header
+        // strip is what is waiting.
+        const dock =
+          document.querySelector('[data-record-box="panel"]') ??
+          document.querySelector('[data-record-box="hud"]');
+        const p = natural.current;
+        if (!p || !dock) return;
+        const d = dock.getBoundingClientRect();
+        setFlight({
+          x: d.left + d.width / 2 - (p.left + p.width / 2),
+          y: d.top + d.height / 2 - (p.top + p.height / 2),
+          // Height, not width. The strip is *wider* than this page and a
+          // tenth of its height, so a width ratio makes the page grow on
+          // its way into the thing it is supposed to be shrinking into.
+          s: Math.min(1, Math.max(0.06, d.height / Math.max(1, p.height))),
+        });
+        setExit("flying");
       });
-    });
-    return () => cancelAnimationFrame(id);
-  }, [stowing]);
+    }, PACK_MS);
+    return () => clearTimeout(t);
+  }, [exit]);
 
   const lanes = forecast(counters(shown));
   const lane = lanes.length
@@ -206,180 +231,238 @@ export function IncentiveSummary({
     : null;
 
   const stow = () => {
-    if (stowing) return;
+    if (exit !== "open") return;
     if (reduced) return onResume();
-    setStowing(true);
-    setTimeout(onResume, STOW_MS);
+    // Taken before anything is scaled: a scaled rect measures the scale,
+    // and the flight needs the size the page really is.
+    natural.current = page.current?.getBoundingClientRect() ?? null;
+    setExit("packing");
+    setTimeout(onResume, PACK_MS + STOW_MS);
   };
+
+  const leaving = exit !== "open";
+  /** Everything but the title dims as the page packs itself down. */
+  const bodyDim = leaving ? 0.18 : 1;
 
   return (
     <div
-      className="absolute inset-0 z-70 flex flex-col items-center justify-center overflow-hidden px-7"
+      className="absolute inset-0 z-70 flex flex-col items-center justify-center overflow-hidden"
       style={{
-        // The scrim lifts as the page leaves, so the strip it is flying
-        // into is visible before it gets there. Flying at an opaque wall
-        // is a page that vanishes; flying at a lit box is a page that
-        // lands.
-        background: stowing ? "rgba(1,7,4,0)" : "rgba(1,7,4,0.97)",
-        transition: stowing ? `background ${STOW_MS}ms ease-in` : undefined,
-        animation: reduced
-          ? undefined
-          : "crt-open 300ms cubic-bezier(.2,.7,.3,1) 1",
+        // Opaque from the first frame, and deliberately *not* animated: the
+        // scrim used to unfurl along with its contents, so for two frames
+        // the board flashed through between the card folding away and this
+        // page arriving — which read as a glitch at the exact moment the
+        // handover was supposed to be seamless.
+        background: exit === "flying" ? "rgba(1,7,4,0)" : "rgba(1,7,4,0.97)",
+        transition: exit === "flying" ? `background ${STOW_MS}ms ease-in` : undefined,
       }}
     >
       <div
         ref={page}
         data-incentive-summary
-        className="relative flex w-full max-w-[286px] flex-col items-center text-center"
+        className="relative flex w-full max-w-[286px] flex-col items-center px-7 text-center"
         style={{
-          transition: stowing
-            ? `transform ${STOW_MS}ms cubic-bezier(.5,0,.25,1), opacity ${STOW_MS}ms ease-in`
-            : undefined,
+          animation: reduced
+            ? undefined
+            : "crt-open 300ms cubic-bezier(.2,.7,.3,1) 1",
+          transition:
+            exit === "packing"
+              ? `transform ${PACK_MS}ms cubic-bezier(.3,0,.2,1)`
+              : exit === "flying"
+                ? `transform ${STOW_MS}ms cubic-bezier(.45,0,.25,1), opacity ${STOW_MS}ms ease-in`
+                : undefined,
           transform: flight
             ? `translate(${flight.x}px, ${flight.y}px) scale(${flight.s})`
-            : undefined,
-          opacity: flight ? 0.08 : 1,
+            : exit === "packing"
+              ? "scale(0.62)"
+              : undefined,
+          opacity: flight ? 0.1 : 1,
         }}
       >
-        {/* 1. The name of the place. Same words as the header strip. */}
-        <h1 className="crt-text-glow text-[13px] font-bold tracking-[0.18em] text-phos-200">
+        {/* The frame that makes the page one object rather than a column of
+            things. It is drawn only on the way out, which is the moment the
+            page has to read as something that can be picked up and put
+            somewhere. */}
+        <div
+          className="pointer-events-none absolute -inset-x-4 -inset-y-3 rounded-[4px] border border-phos-400"
+          style={{
+            opacity: leaving ? 1 : 0,
+            transition: `opacity ${PACK_MS}ms ease-out`,
+            boxShadow: leaving ? "0 0 18px rgba(154,247,201,0.35)" : undefined,
+          }}
+        />
+
+        {/* 1. The name of the place. The same words as the header strip,
+               and the one thing that stays lit while the page flies into
+               it — a refiner has to see the label leave and see the label
+               arrive, or the landing teaches nothing about where it went. */}
+        <h1 className="crt-text-glow relative text-[13px] font-bold tracking-[0.18em] text-phos-200">
           {RECORD_TITLE}
         </h1>
         <div className="mt-2 h-px w-24 bg-phos-600" />
 
-        {/* 2. What was kept, said plainly and named. */}
-        <p className="mt-3 text-[9px] tracking-[0.3em] text-phos-600">
-          {keptLabel(Math.max(1, kept))}
-        </p>
-        {names.length > 0 ? (
-          <p className="crt-text-glow mt-1.5 text-[11px] leading-relaxed text-phos-200">
-            {names.join(" · ")}
+        <div
+          className="flex w-full flex-col items-center"
+          style={{
+            opacity: bodyDim,
+            transition: `opacity ${PACK_MS}ms ease-out`,
+          }}
+        >
+          {/* 2. What was kept, said plainly and named. */}
+          <p className="mt-3 text-[9px] tracking-[0.3em] text-phos-600">
+            {keptLabel(Math.max(1, kept))}
           </p>
-        ) : null}
-        {filed.length > 0 ? (
-          <p className="mt-1.5 text-[8px] leading-snug tracking-[0.14em] text-phos-600">
-            {filed.map((n) => `${n} ISSUED AGAIN`).join(" · ")} · KEPT
-          </p>
-        ) : null}
+          {names.length > 0 ? (
+            <p className="crt-text-glow mt-1.5 text-[11px] leading-relaxed text-phos-200">
+              {names.join(" · ")}
+            </p>
+          ) : null}
+          {filed.length > 0 ? (
+            <p className="mt-1.5 text-[8px] leading-snug tracking-[0.14em] text-phos-600">
+              {filed.map((n) => `${n} ISSUED AGAIN`).join(" · ")} · KEPT
+            </p>
+          ) : null}
 
-        {/* 3. What each of those counts toward, and the one that just
-               moved lit as it takes the file. */}
-        <div className="mt-4 w-full space-y-2">
-          {rows.map((row) => {
-            const c = live.get(row.category) ?? row;
-            const lit = fed && gained.has(row.category);
-            return (
-              <div key={row.category} className="w-full text-left">
-                <div className="flex items-baseline justify-between gap-2 text-[8px] tracking-[0.2em]">
-                  <span className={lit ? "text-phos-200" : "text-phos-400"}>
-                    {row.label}
-                  </span>
-                  <span className="tabular-nums text-phos-500">
-                    {c.have} OF {row.total}
-                  </span>
-                </div>
-                <div
-                  data-cat-meter={row.category}
-                  className="mt-1 h-[3px] w-full overflow-hidden rounded-sm bg-phos-800"
-                  style={
-                    lit ? { animation: `meter-take ${GLOW_MS}ms ease-out 1` } : undefined
-                  }
-                >
+          {/* 3. What each of those counts toward, and the one that just
+                 moved lit as it takes the file. */}
+          <div className="mt-4 w-full space-y-2">
+            {rows.map((row) => {
+              const c = live.get(row.category) ?? row;
+              const aimed = target === row.category;
+              const lit = aimed && (arrival === "landed" || arrival === "flying");
+              const took = aimed && arrival === "landed";
+              const bump = gained.get(row.category) ?? 0;
+              return (
+                <div key={row.category} className="relative w-full text-left">
+                  <div className="flex items-baseline justify-between gap-2 text-[8px] tracking-[0.2em]">
+                    <span
+                      className="transition-colors duration-300"
+                      style={{ color: lit ? "var(--color-phos-200)" : undefined }}
+                    >
+                      <span className={lit ? "" : "text-phos-400"}>{row.label}</span>
+                    </span>
+                    <span className="tabular-nums text-phos-500">
+                      {c.have} OF {row.total}
+                    </span>
+                  </div>
+                  {/* The increment, said as a number. The bar growing is
+                      the proof; this is the claim. */}
+                  {took && bump > 0 ? (
+                    <span
+                      className="crt-text-glow pointer-events-none absolute right-0 top-0 text-[10px] font-bold tabular-nums text-phos-100"
+                      style={{ animation: "count-bump 900ms ease-out 1 forwards" }}
+                    >
+                      +{bump}
+                    </span>
+                  ) : null}
                   <div
-                    className="h-full bg-phos-400 transition-[width] duration-500 ease-out"
+                    data-cat-meter={row.category}
+                    className="mt-1 h-[3px] w-full overflow-hidden rounded-sm bg-phos-800"
+                    style={
+                      took
+                        ? { animation: `meter-take ${GLOW_MS}ms ease-out 1` }
+                        : undefined
+                    }
+                  >
+                    <div
+                      className="h-full bg-phos-400 ease-out"
+                      style={{
+                        width: `${Math.round((c.have / row.total) * 100)}%`,
+                        boxShadow: "0 0 6px var(--color-phos-400)",
+                        transition: "width 620ms cubic-bezier(.2,.7,.3,1)",
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* 4. The way in to everything kept so far. */}
+          <button
+            type="button"
+            data-view-record
+            onClick={onOpenRecord}
+            className="mt-3 inline-flex items-center gap-1 text-[9px] tracking-[0.2em] text-phos-500 underline-offset-4 active:text-phos-300"
+          >
+            VIEW ALL INCENTIVES
+            <ChevronRight size={10} strokeWidth={2.4} aria-hidden />
+          </button>
+
+          {/* 5. What earns the next one — never what it is. Last on the page
+                 and the brightest thing on it: everything above is a receipt
+                 for work already done, and this is the only line that is
+                 about the work still to do. */}
+          {lane ? (
+            <div className="mt-4 w-full rounded-[3px] border border-phos-500 bg-phos-900/60 px-3 py-3 text-left">
+              <p className="crt-text-glow text-[9px] font-bold tracking-[0.22em] text-phos-300">
+                ANOTHER INCENTIVE IS COMING
+              </p>
+              <p className="crt-text-glow mt-2 text-[13px] font-bold leading-tight tracking-[0.14em] text-phos-100">
+                {lane.action.replace(/\.$/, "").toUpperCase()}
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <div className="h-[5px] flex-1 overflow-hidden rounded-sm bg-phos-800">
+                  <div
+                    className="h-full bg-phos-300 transition-[width] duration-500 ease-out"
                     style={{
-                      width: `${Math.round((c.have / row.total) * 100)}%`,
-                      boxShadow: "0 0 6px var(--color-phos-400)",
+                      width: `${Math.min(100, Math.round((lane.current / lane.target) * 100))}%`,
+                      boxShadow: "0 0 8px var(--color-phos-300)",
                     }}
                   />
                 </div>
+                <span className="shrink-0 text-[9px] tabular-nums tracking-[0.14em] text-phos-400">
+                  {lane.current}/{lane.target}
+                </span>
               </div>
-            );
-          })}
+              <p className="mt-2 text-[8px] tracking-[0.2em] text-phos-500">
+                {`${lane.remaining} TO GO · CONTENTS CLASSIFIED`}
+              </p>
+              {lane.also ? (
+                <p className="mt-1.5 text-[8px] tracking-[0.16em] text-phos-600">
+                  {`ALSO ${lane.also.current}/${lane.also.target} ${lane.also.label} · BOTH REQUIRED`}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+
+          {/* Inside the page it dismisses, so the whole thing leaves as one
+              object. Left outside, it sat where it was while everything
+              above it flew away, which reads as the page breaking rather
+              than as the page being put somewhere. */}
+          <button
+            type="button"
+            data-record-landing
+            onClick={stow}
+            className="crt-text-glow mt-5 inline-flex items-center gap-2 rounded-[3px] border border-phos-400 bg-phos-600/25 px-5 py-2.5 text-[11px] font-bold tracking-[0.2em] text-phos-200 active:bg-phos-600/50"
+            style={
+              leaving || reduced
+                ? undefined
+                : { animation: "crt-throb 1.9s ease-in-out infinite" }
+            }
+          >
+            RESUME REFINEMENT
+            <ChevronRight size={12} strokeWidth={2.6} />
+          </button>
         </div>
 
-        {/* 4. The way in to everything kept so far. */}
-        <button
-          type="button"
-          data-view-record
-          onClick={onOpenRecord}
-          className="mt-3 inline-flex items-center gap-1 text-[9px] tracking-[0.2em] text-phos-500 underline-offset-4 active:text-phos-300"
-        >
-          VIEW ALL INCENTIVES
-          <ChevronRight size={10} strokeWidth={2.4} aria-hidden />
-        </button>
-
-        {/* 5. What earns the next one — never what it is. Last on the page
-               and the brightest thing on it: everything above is a receipt
-               for work already done, and this is the only line that is
-               about the work still to do. */}
-        {lane ? (
-          <div className="mt-4 w-full rounded-[3px] border border-phos-500 bg-phos-900/60 px-3 py-3 text-left">
-            <p className="crt-text-glow text-[9px] font-bold tracking-[0.22em] text-phos-300">
-              ANOTHER INCENTIVE IS COMING
-            </p>
-            <p className="crt-text-glow mt-2 text-[13px] font-bold leading-tight tracking-[0.14em] text-phos-100">
-              {lane.action.replace(/\.$/, "").toUpperCase()}
-            </p>
-            <div className="mt-2 flex items-center gap-2">
-              <div className="h-[5px] flex-1 overflow-hidden rounded-sm bg-phos-800">
-                <div
-                  className="h-full bg-phos-300 transition-[width] duration-500 ease-out"
-                  style={{
-                    width: `${Math.min(100, Math.round((lane.current / lane.target) * 100))}%`,
-                    boxShadow: "0 0 8px var(--color-phos-300)",
-                  }}
-                />
-              </div>
-              <span className="shrink-0 text-[9px] tabular-nums tracking-[0.14em] text-phos-400">
-                {lane.current}/{lane.target}
-              </span>
-            </div>
-            <p className="mt-2 text-[8px] tracking-[0.2em] text-phos-500">
-              {`${lane.remaining} TO GO · CONTENTS CLASSIFIED`}
-            </p>
-            {lane.also ? (
-              <p className="mt-1.5 text-[8px] tracking-[0.16em] text-phos-600">
-                {`ALSO ${lane.also.current}/${lane.also.target} ${lane.also.label} · BOTH REQUIRED`}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-
-        {/* Inside the page it dismisses, so the whole thing leaves as one
-            object. Left outside, it sat where it was while everything
-            above it flew away, which reads as the page breaking rather
-            than as the page being put somewhere. */}
-        <button
-          type="button"
-          data-record-landing
-          onClick={stow}
-          className="crt-text-glow mt-5 inline-flex items-center gap-2 rounded-[3px] border border-phos-400 bg-phos-600/25 px-5 py-2.5 text-[11px] font-bold tracking-[0.2em] text-phos-200 active:bg-phos-600/50"
-          style={
-            stowing || reduced
-              ? undefined
-              : { animation: "crt-throb 1.9s ease-in-out infinite" }
-          }
-        >
-          RESUME REFINEMENT
-          <ChevronRight size={12} strokeWidth={2.6} />
-        </button>
-
         {/* The file the card folded itself into, arriving. It starts in the
-            middle of the page — where the card was — and goes into the bar
-            it moved, which is the whole of the explanation this screen
-            gives for why that bar then changes. */}
-        {flying ? (
+            middle of the page — at the size and place the card left it, so
+            the handover is one object and not two — is held there long
+            enough to be seen, and then goes into the row it moved. */}
+        {arrival === "held" || arrival === "flying" ? (
           <div
             className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
             style={{
-              transition: drop
-                ? `transform ${FLY_MS}ms cubic-bezier(.45,0,.25,1), opacity ${FLY_MS}ms ease-in`
-                : undefined,
-              transform: drop
-                ? `translate(${drop.x}px, ${drop.y}px) scale(0.16)`
-                : undefined,
-              opacity: drop ? 0.15 : 1,
+              transition:
+                arrival === "flying"
+                  ? `transform ${FLY_MS}ms cubic-bezier(.5,0,.3,1), opacity ${FLY_MS}ms ease-in`
+                  : undefined,
+              transform:
+                arrival === "flying" && drop
+                  ? `translate(${drop.x}px, ${drop.y}px) scale(0.14)`
+                  : undefined,
+              opacity: arrival === "flying" && drop ? 0.1 : 1,
             }}
           >
             <FileGlyph size={38} />

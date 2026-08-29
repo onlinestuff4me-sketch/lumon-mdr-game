@@ -294,9 +294,17 @@ function orientationScreens(): LevelDef[] {
         stage: [sIdx + 1, st.screens],
         focus: OR_FOCUS[stage],
         tapToSelect: true,
-        // Only where a single bin is on the deck, so the arrows point at
-        // the one place a packet can go and give nothing away.
-        binHint: binCount === 1,
+        // Every orientation screen, not only the single-bin ones.
+        //
+        // The arrows do name the right bin on a four-bin deck, and outside
+        // orientation that would be the answer handed over. Inside it,
+        // nothing is hidden by design: these screens exist to teach the
+        // gesture — box it, carry it, drop it — and a refiner who has just
+        // lifted their first packet on a wide deck and cannot see where it
+        // is meant to go is being tested on a rule nobody has told them.
+        // The arrows stop at the end of orientation, which is where the
+        // testing starts.
+        binHint: true,
         seed: (0x0b1e + i * 0x1d37) >>> 0,
         quota: st.groupsPerTemper,
         spare: 0,
@@ -345,6 +353,7 @@ export const LEVELS: readonly LevelDef[] = [
     focus: "mid",
     tapToSelect: true,
     binHint: true,
+    teachProbe: true,
     seed: 0x2f11,
     quota: 1,
     spare: 0,

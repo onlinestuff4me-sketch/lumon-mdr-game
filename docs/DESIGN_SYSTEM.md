@@ -177,6 +177,7 @@ The keyframes live in `src/index.css`:
 | `crt-throb` | 1.9s breath on a control's glow | The waiting control |
 | `seal-part-*` / `seal-seam` | A lid splits on a bright seam and retracts | The sealed incentive |
 | `crt-caret` | A block cursor blinking under the character being written | Text being typed over |
+| `count-bump` | A number rising off the row it changed and fading | `+1` on a fed meter |
 | `meter-full` | One brightness pulse on arrival at 100% | Every meter |
 | `meter-take` | Brighten and bloom outward — a meter being *fed* | The category bar an incentive just moved |
 | `record-dock` | A single bright bloom on a box that has just caught something | The incentives record |
@@ -233,6 +234,21 @@ target is read with `getBoundingClientRect` at animation time, never from a
 tuned offset — an offset is correct on exactly one phone. Scale is derived
 from the *height* ratio when flying into a wide short target, or the page
 grows on its way into the thing it is shrinking into.
+
+### A teaching animation is a sequence of statements
+
+Where an animation exists to teach — where something went, what it counted
+toward, where it lives now — it is built as separated beats, each one
+carrying a single statement, and it is paced so each beat can be *read*.
+Two seconds is not slow for a sequence that says three things. Half a
+second is not fast; it is illegible, and an illegible animation has taught
+nobody and cost the time anyway.
+
+Two supports for that. **Hold before you move**: an object that arrives on
+the same frame as the screen it arrived on needs a beat sitting still
+before it travels, because nobody was looking at it yet. And **say the
+number as well as drawing it**: a bar growing is the proof, a `+1` rising
+off the row is the claim, and a refiner reads a claim faster than a bar.
 
 ### One object, handed from screen to screen
 

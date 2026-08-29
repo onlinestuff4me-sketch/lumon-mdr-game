@@ -475,12 +475,46 @@ full record is where the scale of what is left is admitted.
 
 ### The incentive is followed the whole way
 
-`KEEP INCENTIVE` does not cut. The card folds down into a **file**, the
-summary catches that same file and walks it into the category bar it moved,
-and the bar lights as it takes it (`meter-take`). Then the summary itself
-shrinks into the incentives record, and the record blooms once
-(`record-dock`) *after* it lands — a box glowing while the page is still in
-flight has answered a question nobody has asked yet.
+Both ends of this screen are teaching, and a teaching animation that plays
+in a third of a second has taught nobody. Each one is a sequence of
+separated beats rather than one blur, and each beat is one statement.
+
+**Coming in — the incentive is put away.** Four beats, about two seconds:
+
+| | Beat | What it says |
+| --- | --- | --- |
+| 1 | The card folds down into a **file** (460 ms) | It went into a folder |
+| 2 | The summary catches that same file and *holds* it (300 ms) | The folder is on this shelf now |
+| 3 | The file walks into the category row it moved (720 ms) | This is the shelf it belongs on |
+| 4 | `+1` rises off the row, the count ticks, the bar grows, the row lights (`meter-take`) | The shelf is one fuller |
+
+The hold in beat 2 exists because the file arrives on the same frame the
+page does, and a refiner who has just tapped a button is not yet looking at
+a shelf. The `+1` exists because the bar growing is the *proof* and a
+refiner reads a claim faster than they read a bar.
+
+The scrim behind this page is opaque from its first frame and deliberately
+not animated. It used to unfurl along with its contents, so for two frames
+the board flashed through between the card folding away and the page
+arriving — a glitch at the exact moment the handover had to be seamless.
+
+**Going out — the record is put away.** Three beats, about two seconds:
+
+| | Beat | What it says |
+| --- | --- | --- |
+| 1 | The page packs itself down: a frame draws around it, it compresses, and everything but the title dims (420 ms) | This screen is one object |
+| 2 | It flies into the strip in the header and shrinks the rest of the way, scrim lifting as it goes (780 ms) | And it lives *there* |
+| 3 | The strip blooms once (`record-dock`) and its kept count ticks up | Which is where you go to open it again |
+
+The one thing left bright while it flies is the words `INCENTIVES RECORD`,
+which are also the first words on the box it lands in. That is the whole
+teaching: a refiner has to see the label leave and see the label arrive, or
+the landing says nothing about where the screen went.
+
+The header strip is held at the **pre-payout** ledger for as long as the
+summary is on screen, so its count ticks up on the frame the page lands in
+it rather than silently behind the scrim. The box is covered for all of
+that time; the one frame it is not is the frame it changes.
 
 The file is one component (`FileGlyph`) drawn at every stage on purpose.
 Two similar rectangles read as two objects, and the whole point of the
@@ -509,7 +543,13 @@ hardest.
 
 ### The full record
 
-One tap from the strip, from the summary, or from the handbook. Four
+One tap from the strip, from the summary, or from the handbook. It opens
+**above every other overlay** (`z-80`) and its header is pinned: it shared
+`z-70` with the summary and lost on document order, so `VIEW ALL
+INCENTIVES` opened the record *behind* the page that offered it and
+appeared to do nothing at all — and because the drawer opens scrolled to
+the shelf, the only way out was three screens above the refiner. A way back
+has to be on the screen it is needed on. Four
 sections, one per category, each with its own meter; every payout kept is a
 named row, and every payout still to come is a row reading
 `CLASSIFIED · NOT YET ISSUED`.

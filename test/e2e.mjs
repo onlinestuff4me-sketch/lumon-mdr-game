@@ -1191,7 +1191,9 @@ section("incentives");
   /** Clear the landing screen that follows the last card of a stack. */
   const resume = async () => {
     await landing().click({ timeout: 4000 });
-    await page.waitForTimeout(200);
+    // The page packs itself down and then flies into the record; the board
+    // is not back until both beats are over.
+    await page.waitForTimeout(1400);
   };
   /**
    * Refine a whole file and stop the instant its last stage reads 100%,
@@ -1268,7 +1270,9 @@ section("incentives");
     (await action().innerText()).includes("KEEP INCENTIVE"));
 
   await action().click();
-  await page.waitForTimeout(900);
+  // The card folds into a file, the summary catches it, holds it, and walks
+  // it into the row it counts toward. The row is not told until it lands.
+  await page.waitForTimeout(2000);
   eq("filing claims it", (await ledger()).rewardState.S01, "claimed");
   eq("and empties the queue", (await ledger()).rewardQueue.length, 0);
 
@@ -1291,7 +1295,7 @@ section("incentives");
     await page.evaluate(() => window.__mdr.levelIndex), 2);
 
   await resume();
-  await page.waitForTimeout(1600);
+  await page.waitForTimeout(1400);
   // A file that pays out ends on the summary and nowhere else. FILE
   // REFINED says what the summary already said, so showing both made the
   // refiner dismiss two screens in a row for one file.
@@ -1342,7 +1346,7 @@ section("incentives");
   eq("the second is still owed", mid.rewardState.B040, "earned_pending");
 
   await action().click();
-  await page.waitForTimeout(900);
+  await page.waitForTimeout(2000);
   const done = await ledger();
   eq("both end up claimed", [done.rewardState.S02, done.rewardState.B040], ["claimed", "claimed"]);
   eq("with nothing left in the queue", done.rewardQueue.length, 0);
@@ -1408,7 +1412,7 @@ section("incentives");
   for (let i = 0; i < 8 && (await landing().count()) === 0; i++) {
     if ((await action().count()) === 0) break;
     await action().first().click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(1700);
   }
   await page.waitForTimeout(300);
   const refiled = await ledger();

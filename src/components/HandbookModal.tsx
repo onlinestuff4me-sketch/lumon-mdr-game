@@ -127,7 +127,7 @@ export function HandbookModal({
       role="dialog"
       aria-modal="true"
       aria-label="Lumon employee handbook"
-      className="absolute inset-0 z-70 flex flex-col justify-end bg-black/70 backdrop-blur-[1px]"
+      className="absolute inset-0 z-80 flex flex-col justify-end bg-black/70 backdrop-blur-[1px]"
       onPointerDown={(ev) => {
         ev.stopPropagation();
         if (ev.target === ev.currentTarget) onClose();
@@ -135,9 +135,13 @@ export function HandbookModal({
     >
       <div
         style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
-        className="max-h-[82%] overflow-y-auto rounded-t-[6px] border-t-2 border-phos-500 bg-phos-950/97 px-4 pb-5 pt-3 shadow-[0_-8px_40px_rgba(23,168,102,0.25)]"
+        className="max-h-[82%] overflow-y-auto rounded-t-[6px] border-t-2 border-phos-500 bg-phos-950/97 px-4 pb-5 shadow-[0_-8px_40px_rgba(23,168,102,0.25)]"
       >
-        <div className="mb-3 flex items-start justify-between gap-3">
+        {/* Pinned, because the drawer opens scrolled: VIEW ALL INCENTIVES
+            lands the refiner on the shelf, three screens down, with the
+            only way out somewhere above them. A way back has to be on the
+            screen it is needed on. */}
+        <div className="sticky top-0 z-10 -mx-4 mb-3 flex items-start justify-between gap-3 border-b border-phos-800 bg-phos-950 px-4 pb-2.5 pt-3">
           <div>
             <h2 className="crt-text-glow text-[13px] font-bold tracking-[0.2em] text-phos-200">
               MACRODATA REFINEMENT
@@ -149,10 +153,12 @@ export function HandbookModal({
           <button
             type="button"
             aria-label="Close handbook"
+            data-close-handbook
             onClick={onClose}
-            className="rounded-[3px] border border-phos-600 p-1.5 text-phos-400"
+            className="crt-text-glow inline-flex shrink-0 items-center gap-1.5 rounded-[3px] border border-phos-500 bg-phos-900/60 px-2 py-1.5 text-[9px] font-bold tracking-[0.2em] text-phos-200 active:bg-phos-600/40"
           >
-            <X size={14} />
+            <X size={12} strokeWidth={2.6} />
+            CLOSE
           </button>
         </div>
 
@@ -253,7 +259,7 @@ export function HandbookModal({
           </>
         ) : null}
 
-        <div ref={shelfRef}>
+        <div ref={shelfRef} className="scroll-mt-14">
           <IncentiveShelf progress={progress} onInspect={onInspect} />
         </div>
         <WellnessRecord progress={progress} />
@@ -312,7 +318,7 @@ export function HandbookModal({
 
         <h3
           ref={settingsRef}
-          className="crt-text-glow mb-2 mt-4 scroll-mt-2 text-[10px] font-bold tracking-[0.2em] text-phos-300"
+          className="crt-text-glow mb-2 mt-4 scroll-mt-14 text-[10px] font-bold tracking-[0.2em] text-phos-300"
         >
           TERMINAL SETTINGS
         </h3>
