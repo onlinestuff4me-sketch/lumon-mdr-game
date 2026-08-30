@@ -270,10 +270,31 @@ before it travels, because nobody was looking at it yet. And **say the
 number as well as drawing it**: a bar growing is the proof, a `+1` rising
 off the row is the claim, and a refiner reads a claim faster than a bar.
 
+### Progress lives together, under the thumb
+
+The playing screen stacks its meters in one place, in the order a single
+act moves them: the **bin** the packet went into, the **file** that bin
+advanced, the **incentives record** that file advanced. Three readings of
+one action at increasing grain, in the footer — because the refiner's eyes
+are on the bin at the moment all three move, and a meter at the top of the
+screen changes where nobody is looking.
+
+So the file card is a footer, not a header, and the coach line is the first
+thing on the screen instead of the third: it is what the refiner is being
+asked to do, and the board under it is the doing of it.
+
+```text
+ticker · grid · bins · file card · incentives record
+```
+
+The file card and the record sit on a *tighter* gap than the rest of the
+stack, because they are one object at two grains rather than two bands that
+happen to be adjacent.
+
 ### One object, handed from screen to screen
 
 A kept incentive is followed the whole way. The card folds into a file
-(`FileGlyph`, 340ms); the summary catches **that same shape** and walks it
+(`FileGlyph`, 460ms); the summary catches **that same shape** and walks it
 into the category bar it moved, which lights with `meter-take` as it takes
 it; the summary itself then shrinks into the incentives record, which
 blooms once with `record-dock` *after* it lands.
@@ -283,6 +304,35 @@ at every stage** — two similar rectangles read as two things, and the
 handoff is lost. And **the receiving glow fires after the arrival, never
 during it**: a box already glowing while the page is still in flight has
 answered a question nobody has asked yet.
+
+**An object in transit gets its own ground.** A small bright rectangle
+released over a fully drawn page is lost among a dozen bright rectangles,
+and the eye has nothing to follow. Three things fix that, and all three are
+needed: the object carries a **radial dark plate** that travels with it and
+pushes back whatever it crosses; the page it is crossing is **held down**
+until the object lands; and the one thing it is aimed at **stays lit**, so
+the flight has a visible destination rather than a fog. Note that opacity
+nests — a row set to full inside a container at 0.3 is still at 0.3 — so
+the veil goes on each element the object is *not* going to, never on a
+wrapper around all of them.
+
+### An arrival is the reverse of a departure
+
+The same two beats that put the incentives record away also bring the file
+card in. Tapping CONTINUE used to cut straight to a wall of digits, and the
+refiner arrived on a screen without having been told what the screen was:
+
+1. **This is your file** — its name, its stage, its meter — held on an
+   empty scrim long enough to read (950ms).
+2. **And this is where it lives** — that same card shrinks into the file
+   card in the footer (780ms), with the board loading underneath it and the
+   scrim lifting as it goes.
+
+The card shown is visually the card it becomes: same border, same two
+lines, same meter, same two doors out — inert copies included. A card that
+morphed into a *different* card on landing would teach the wrong thing.
+`FileLaunch` owns both beats, and every way into the board from the
+briefing goes through it.
 
 ---
 

@@ -33,6 +33,7 @@ import { CRTOverlay } from "./CRTOverlay";
 import { HandbookModal } from "./HandbookModal";
 import { HUD } from "./HUD";
 import { IncentiveRecordBox } from "./IncentiveRecordBox";
+import { FileLaunch } from "./FileLaunch";
 import { PhaseOverlay } from "./PhaseOverlay";
 import { Viewport } from "./Viewport";
 
@@ -625,6 +626,25 @@ export function GameStage() {
     [engine],
   );
 
+  /**
+   * The file about to be loaded, while it is still being shown.
+   *
+   * Every way into the board from the briefing goes through here rather
+   * than straight to `play`: the file is named and its meter shown, and
+   * only then does the board load underneath and the card shrink into its
+   * place in the footer. A refiner who has watched that happen knows what
+   * the strip above the incentives record is, and never has to be told.
+   */
+  const [launching, setLaunching] = useState<number | null>(null);
+  const launch = useCallback(
+    (index: number) => {
+      void getAudio().unlock();
+      haptics.markActivated();
+      setLaunching(index);
+    },
+    [],
+  );
+
   // Handle for the test harness to assert on real state.
   //
   // Present in dev, and in a build made with VITE_MDR_TEST=1 — which is a
@@ -654,12 +674,14 @@ export function GameStage() {
             hit-tests it and the gaps between the three bands are the one
             number `layout.gap` says they are. */}
         <div className="relative flex h-full w-full flex-col">
-          <HUD
-            hud={hud}
-            height={layout.hudH}
-            onHandbook={() => openHandbook("top")}
-            onSettings={() => openHandbook("settings")}
-          />
+          {layout.hudAt === "top" ? (
+            <HUD
+              hud={hud}
+              height={layout.hudH}
+              onHandbook={() => openHandbook("top")}
+              onSettings={() => openHandbook("settings")}
+            />
+          ) : null}
           {/* Variant `b` reserves a band for the record under the header. */}
           {layout.recordAt === "top" ? (
             <div
@@ -667,15 +689,32 @@ export function GameStage() {
               style={{ height: layout.gap + layout.recordH }}
             />
           ) : null}
-          {/* The coach line sits directly under the header. At the bottom
-              of the screen it was underneath the hand holding the phone —
-              unreadable exactly while the player was doing the thing it
-              describes. In variant `c` it is drawn over the board's top
-              edge instead of taking a band of its own. */}
+          {/* The instruction is the first thing on the screen: it is what
+              the refiner is being asked to do, and the board underneath is
+              the doing of it. In variant `c` it is drawn over the board's
+              top edge instead of taking a band of its own. */}
           {layout.tickerOverGrid ? null : (
             <StatusTicker hud={hud} height={layout.tickerH} />
           )}
         </div>
+
+        {/* The file card, directly above the incentives record and directly
+            below the bins — the middle reading of three, in the one place
+            a refiner is already looking when all three move. */}
+        {layout.hudAt === "footer" ? (
+          <div
+            className="absolute inset-x-0 z-40 px-3"
+            style={{ top: layout.hudTop, height: layout.hudH }}
+          >
+            <HUD
+              hud={hud}
+              height={layout.hudH}
+              card
+              onHandbook={() => openHandbook("top")}
+              onSettings={() => openHandbook("settings")}
+            />
+          </div>
+        ) : null}
 
         {/* Under the bins in `a` and `c`, where a thumb already is and
             where it sits beside the things it counts; under the header in
@@ -793,7 +832,7 @@ export function GameStage() {
               setArchive(loadArchive());
               setProgress(loadProgress());
             }
-            play(0);
+            launch(0);
           }}
           onNext={() => engine.nextLevel()}
           onRestart={() => engine.restart()}
@@ -806,7 +845,7 @@ export function GameStage() {
           }}
           onHandbook={() => openHandbook("top")}
           runStore={runStore}
-          onPlay={play}
+          onPlay={launch}
           onNewSave={() => {
             // A new save is new. The archive and the ledger are scoped to
             // the run, so both come back empty — which is the point, and
@@ -814,7 +853,7 @@ export function GameStage() {
             setRunStore(startNewRun());
             setArchive(loadArchive());
             setProgress(loadProgress());
-            play(0);
+            launch(0);
           }}
           onLoadRun={(id) => {
             const st = selectRun(id);
@@ -823,7 +862,7 @@ export function GameStage() {
             setArchive(loadArchive());
             setProgress(loadProgress());
             const run = st.runs.find((r) => r.id === id);
-            play(run ? continueIndex(run, LEVELS.length) : 0);
+            launch(run ? continueIndex(run, LEVELS.length) : 0);
           }}
         />
 
@@ -904,6 +943,16 @@ export function GameStage() {
               // ends the quarter rather than continuing it.
               if (ceremonyHandled) engine.nextLevel();
             }}
+          />
+        ) : null}
+
+        {/* Above the briefing it covers, below the handbook. */}
+        {launching !== null ? (
+          <FileLaunch
+            key={launching}
+            index={launching}
+            onDock={() => play(launching)}
+            onDone={() => setLaunching(null)}
           />
         ) : null}
 

@@ -8,15 +8,15 @@ function clock(seconds: number): string {
 }
 
 /**
- * The header: which file this is, how far through it the refiner is, and
- * the two doors out of the game.
+ * The file card: which file this is, how far through it the refiner is,
+ * and the two doors out of the game.
  *
  * Two lines and nothing else. It used to carry a version string, the
  * clock, the file name, the meter, the percentage and the incentives
  * record, stacked into a band deep enough to notice, above a coach line,
  * above a control deck — three bands of chrome before the numbers.
  *
- * The meter is the *file's*, not this stage's: a header that names
+ * The meter is the *file's*, not this stage's: a card that names
  * ORIENTATION #0001 and shows a bar that fills and resets three times
  * inside it is measuring something nobody was told about.
  *
@@ -24,15 +24,26 @@ function clock(seconds: number): string {
  * deck of their own. They are things you leave the game to read, not
  * controls you use while playing, and the meter can spare the width more
  * cheaply than the board can spare a band.
+ *
+ * **It is a footer, not a header.** A refiner drags a packet into a bin
+ * and their eyes are on the bin; the bin's meter moves, and so does this
+ * one, and so does the incentives record under it — three readings of the
+ * same act at increasing grain, stacked where the hand and the eye already
+ * are. At the top of the screen this meter moved where nobody was looking.
+ * It also gives the first-run animation somewhere to land: the file card
+ * shown on the way in is *this* card, shrunk into place.
  */
 export function HUD({
   hud,
   height,
+  card = false,
   onHandbook,
   onSettings,
 }: {
   hud: HudSnapshot;
   height: number;
+  /** Footer card with a border of its own, rather than a full-bleed header. */
+  card?: boolean;
   onHandbook: () => void;
   onSettings: () => void;
 }) {
@@ -47,7 +58,12 @@ export function HUD({
   // not put down.
   return (
     <header
-      className="pointer-events-none relative z-40 flex shrink-0 flex-col justify-center gap-1 border-b border-phos-700/70 bg-phos-950/90 px-3"
+      data-file-card
+      className={`pointer-events-none relative z-40 flex shrink-0 flex-col justify-center gap-1 ${
+        card
+          ? "w-full rounded-[3px] border border-phos-700 bg-phos-900/40 px-2.5"
+          : "border-b border-phos-700/70 bg-phos-950/90 px-3"
+      }`}
       style={{ height }}
     >
       <div className="flex items-baseline justify-between gap-2 text-[10px] tracking-[0.16em]">

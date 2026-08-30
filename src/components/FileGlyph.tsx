@@ -19,15 +19,23 @@ export function FileGlyph({ size = 36 }: { size?: number }) {
   return (
     <div
       className="relative"
-      style={{ width: w, height: size, filter: "drop-shadow(0 0 8px rgba(154,247,201,0.55))" }}
+      style={{
+        width: w,
+        height: size,
+        // Two shadows, not one: a tight bright rim so the outline survives
+        // a busy background, and a wide soft one so the object still reads
+        // as a single mass when it is small and moving.
+        filter:
+          "drop-shadow(0 0 3px rgba(217,255,236,0.95)) drop-shadow(0 0 16px rgba(47,214,138,0.6))",
+      }}
       aria-hidden
     >
       <div
-        className="absolute left-0 top-0 rounded-t-[2px] border border-b-0 border-phos-300 bg-phos-600/50"
+        className="absolute left-0 top-0 rounded-t-[2px] border-2 border-b-0 border-phos-100 bg-phos-400/70"
         style={{ width: Math.round(w * 0.52), height: tab }}
       />
       <div
-        className="absolute inset-x-0 bottom-0 rounded-[2px] border border-phos-300 bg-phos-700/60"
+        className="absolute inset-x-0 bottom-0 rounded-[2px] border-2 border-phos-100 bg-phos-600/75"
         style={{ top: tab - 1 }}
       />
     </div>
