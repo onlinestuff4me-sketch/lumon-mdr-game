@@ -229,6 +229,8 @@ export function IncentiveSummary({
   const lane = lanes.length
     ? [...lanes].sort((a, b) => a.remaining - b.remaining)[0]
     : null;
+  const laneSpan = lane ? Math.max(1, lane.target - lane.from) : 1;
+  const laneDone = lane ? Math.max(0, lane.current - lane.from) : 0;
 
   const stow = () => {
     if (exit !== "open") return;
@@ -401,18 +403,21 @@ export function IncentiveSummary({
               <p className="crt-text-glow mt-2 text-[13px] font-bold leading-tight tracking-[0.14em] text-phos-100">
                 {lane.action.replace(/\.$/, "").toUpperCase()}
               </p>
+              {/* The stretch from the last incentive to the next, like
+                  every other incentive meter in the game — never the
+                  running total against a target that moves. */}
               <div className="mt-2 flex items-center gap-2">
                 <div className="h-[5px] flex-1 overflow-hidden rounded-sm bg-phos-800">
                   <div
                     className="h-full bg-phos-300 transition-[width] duration-500 ease-out"
                     style={{
-                      width: `${Math.min(100, Math.round((lane.current / lane.target) * 100))}%`,
+                      width: `${Math.min(100, Math.round((laneDone / laneSpan) * 100))}%`,
                       boxShadow: "0 0 8px var(--color-phos-300)",
                     }}
                   />
                 </div>
                 <span className="shrink-0 text-[9px] tabular-nums tracking-[0.14em] text-phos-400">
-                  {lane.current}/{lane.target}
+                  {laneDone}/{laneSpan}
                 </span>
               </div>
               <p className="mt-2 text-[8px] tracking-[0.2em] text-phos-500">

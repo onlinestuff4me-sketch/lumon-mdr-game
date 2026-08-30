@@ -1113,6 +1113,21 @@ section("saves");
   await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });
   eq("a new save starts at the beginning",
     await page.evaluate(() => window.__mdr.levelIndex), 0);
+  {
+    // And the terminal has to *say* so. The "already refined" notice is
+    // snapshotted on arrival — it has to be, or it would fire about the
+    // file just finished — and the snapshot was keyed on the level alone.
+    // A new save begun from the briefing swaps the ledger underneath a
+    // level index that was already 0 and stayed 0, so the answer computed
+    // against the previous save survived, and a brand-new terminal opened
+    // orientation file one reading THIS FILE IS ALREADY REFINED.
+    await page.waitForTimeout(300);
+    const strip = await page.evaluate(
+      () => document.querySelector('[data-record-box="hud"]')?.innerText ?? "");
+    check("and says nothing about a file this save has never seen",
+      !/ALREADY REFINED/.test(strip) && /NONE KEPT/.test(strip),
+      strip.replace(/\n/g, " | "));
+  }
   await boot();
   check("both attempts are now listed",
     (await page.getByText("LOAD A PREVIOUS SAVE (2)").count()) === 1);
@@ -1467,6 +1482,45 @@ section("incentives");
       after.w > before.w, JSON.stringify([before, after]));
     check("while the whole-file count stays honest",
       after.text.includes("0/1"), after.text);
+
+    // The meter measures the stretch between thresholds, not the running
+    // total against a target that moves — so it may never fall while the
+    // refiner is succeeding. Drawn the obvious way it did exactly that:
+    // 0/1 at 75% became 1/2 at 50% on the frame the file completed.
+    const seen = [before.w, after.w];
+    for (let n = 0; n < 16; n++) {
+      const st = await state(page);
+      if (!st.stage) break;
+      // Stage cleared: either the file is finished, or the board advances
+      // itself to the next screen of it.
+      if (st.progress >= 100) {
+        if (st.stage[0] >= st.stage[1]) break;
+        await page
+          .waitForFunction((i) => window.__mdr.levelIndex === i, st.level + 1,
+            { timeout: 8000 }).catch(() => {});
+        await page.waitForFunction(() => window.__mdr.settled, null,
+          { timeout: 15000 }).catch(() => {});
+        await page.waitForTimeout(150);
+        continue;
+      }
+      const g = await findGroup(page);
+      if (!g) break;
+      await tap(page, origin, await touchFor(page, g.one, "marquee"));
+      if (!(await state(page)).carrying) break;
+      await carryToBin(page, origin, g);
+      await page.waitForTimeout(250);
+      seen.push((await bar()).w);
+    }
+    await settled(page);
+    await page.waitForTimeout(300);
+    const done = await bar();
+    seen.push(done.w);
+    const fell = seen.findIndex((w, i) => i > 0 && w < seen[i - 1]);
+    check("and never falls back while the refiner is succeeding",
+      fell < 0, JSON.stringify(seen));
+    check("reaching the threshold fills it rather than moving the goalposts",
+      /INCENTIVE EARNED/.test(done.text) && done.text.includes("1/1"),
+      done.text);
   }
 
   // A save that has already credited these files earns nothing by

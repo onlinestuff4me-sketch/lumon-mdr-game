@@ -82,7 +82,13 @@ export function IncentiveRecordBox({
   const kept = heldRewards(progress).length;
   // The nearest goal, because one instruction is worth more than two. The
   // rest are one tap away in the full record.
-  const lanes = forecast(counters(progress));
+  //
+  // Owed-aware, unlike the forward-looking pages: this strip describes the
+  // moment the refiner is in. Reaching a threshold used to step the row
+  // straight on to the next promise, so the bar fell on the frame they
+  // succeeded; holding the earned rung until it is actually kept means the
+  // bar fills, stays full through the payout, and resets behind it.
+  const lanes = forecast(counters(progress), new Set(progress.rewardQueue));
   const lane = lanes.length
     ? [...lanes].sort((a, b) => a.remaining - b.remaining)[0]
     : null;
@@ -95,18 +101,29 @@ export function IncentiveRecordBox({
       ? Math.max(0, Math.min(1, filePartial))
       : 0;
   /**
+   * The stretch the refiner is actually walking, not the whole game.
+   *
+   * `current / target` counts from the first file against a target that
+   * moves, so crossing a threshold made the bar *shrink*: three quarters
+   * of the way to one file became one of the two files the next rung
+   * wants. Counting from the last rung passed, the bar fills as the
+   * stretch is walked and resets only once what it paid for is collected.
+   */
+  const span = lane ? Math.max(1, lane.target - lane.from) : 1;
+  const done = lane ? Math.max(0, lane.current - lane.from) : 0;
+  /**
    * A bar reads full only when the count does.
    *
    * The part-file is an honest hint that the current screen is buying
    * something, but it must never finish the last whole step — a meter at
-   * 100% next to `2/3` is the terminal contradicting itself, and the
+   * 100% next to `0/1` is the terminal contradicting itself, and the
    * refiner believes the bar.
    */
   const meterPct = !lane
     ? 0
-    : lane.current >= lane.target
+    : done >= span
       ? 100
-      : Math.min(99, ((lane.current + partial) / lane.target) * 100);
+      : Math.min(99, ((done + partial) / span) * 100);
 
   return (
     <button
@@ -166,7 +183,11 @@ export function IncentiveRecordBox({
                 hud ? "text-[8px]" : "text-[10px]"
               }`}
             >
-              {alreadyRefined ? "THIS FILE IS ALREADY REFINED" : shout(lane)}
+              {alreadyRefined
+                ? "THIS FILE IS ALREADY REFINED"
+                : lane.remaining === 0
+                  ? "INCENTIVE EARNED"
+                  : shout(lane)}
             </span>
             <div className="h-[3px] flex-1 overflow-hidden rounded-sm bg-phos-800">
               <div
@@ -177,12 +198,15 @@ export function IncentiveRecordBox({
                 }}
               />
             </div>
+            {/* The stretch, not the running total. `4/5` beside the words
+                REFINE 1 MORE FILE is two different quantities on one line;
+                `1/2` is the same one said twice. */}
             <span
               className={`shrink-0 tabular-nums tracking-[0.14em] text-phos-600 ${
                 hud ? "text-[8px]" : "text-[8px]"
               }`}
             >
-              {lane.current}/{lane.target}
+              {done}/{span}
             </span>
           </div>
           {lane.also && !hud ? (

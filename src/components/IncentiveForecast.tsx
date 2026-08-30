@@ -30,8 +30,17 @@ function Meter({ pct }: { pct: number }) {
   );
 }
 
+/**
+ * Every incentive meter in the game measures the same thing: the stretch
+ * between the last threshold passed and the next one, never the running
+ * total against a target that moves. The lifetime figure is printed
+ * separately, because it is a different quantity and putting the two on
+ * one line is what made these rows unreadable.
+ */
+const span = (lane: LaneForecast) => Math.max(1, lane.target - lane.from);
+const done = (lane: LaneForecast) => Math.max(0, lane.current - lane.from);
 const pctOf = (lane: LaneForecast) =>
-  Math.min(100, Math.round((lane.current / lane.target) * 100));
+  Math.min(100, Math.round((done(lane) / span(lane)) * 100));
 
 function FullLane({ lane }: { lane: LaneForecast }) {
   return (
@@ -39,13 +48,18 @@ function FullLane({ lane }: { lane: LaneForecast }) {
       <div className="flex items-baseline justify-between gap-2 text-[8px] tracking-[0.2em] text-phos-600">
         <span>{lane.label}</span>
         <span className="tabular-nums text-phos-400">
-          {lane.current} / {lane.target}
+          {done(lane)} / {span(lane)}
         </span>
       </div>
       <div className="mt-1">
         <Meter pct={pctOf(lane)} />
       </div>
       <p className="mt-1 text-[9px] leading-snug text-phos-400">{lane.action}</p>
+      {lane.from > 0 ? (
+        <p className="mt-0.5 text-[8px] tracking-[0.16em] text-phos-700">
+          {`${lane.current} IN ALL · LAST INCENTIVE AT ${lane.from}`}
+        </p>
+      ) : null}
       {/* A compound reward is the one case where two counters show at once.
           Both numbers, and the sentence that stops the second one reading
           as a second reward. */}

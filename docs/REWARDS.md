@@ -435,7 +435,35 @@ file visibly buys something even though the *number* only moves on whole
 files. Two rules keep that honest: the part-file is zero once the file has
 been credited — it is already inside the whole count, and adding it again
 filled the bar while the number beside it still said `2/3` — and the bar
-may never read 100% unless the count does. It sits above the input surface
+may never read 100% unless the count does.
+
+### The meter measures the stretch, and resets only after it fills
+
+Every incentive meter in the game draws `(current − from) / (target −
+from)`, where `from` is the last threshold the refiner is already past.
+
+Drawn the obvious way — the running total against the next target — the
+bar *falls* at the exact moment of success. Watch the first incentive, due
+after one file: three quarters of the way through that file the strip read
+`0/1` at 75%; the last packet landed, `filesCompleted` ticked to 1, the
+forecast stepped to the two-file rung, and the bar dropped to 50% while
+saying `1/2`. The refiner had just succeeded and the meter went backwards.
+
+Measured against the stretch, the same moment reads `0/1 → 1/1`, full.
+
+The second half of the rule is that the strip is **owed-aware**: while a
+rung sits earned-but-unkept in the queue, the row shows *that* rung rather
+than the next promise, and says `INCENTIVE EARNED`. So the meter fills,
+holds at full through the card and the summary, and resets to an empty
+stretch only once the page has docked in the record — behind the ceremony,
+next to the glow, reading as a fresh goal rather than as lost progress.
+`forecast(counters, owed)` takes the queue; the forward-looking pages, which
+are about what comes next rather than about this moment, do not pass it.
+
+Both numbers beside the bar are now the same quantity as the instruction:
+`1/2` next to REFINE 1 MORE FILE. The lifetime total is a different
+measurement and gets its own line in the full record — `44 IN ALL · LAST
+INCENTIVE AT 40` — rather than sharing the line with the target. It sits above the input surface
 so it can be tapped over a live board, and the header around it is
 `pointer-events-none` so a packet dragged to the top edge stays grabbable.
 
@@ -549,7 +577,16 @@ One tap from the strip, from the summary, or from the handbook. It opens
 INCENTIVES` opened the record *behind* the page that offered it and
 appeared to do nothing at all — and because the drawer opens scrolled to
 the shelf, the only way out was three screens above the refiner. A way back
-has to be on the screen it is needed on. Four
+has to be on the screen it is needed on.
+
+Under that header is a pinned row of section tabs — REFINE · TEMPERS ·
+INCENTIVES · ARCHIVE · SETTINGS — because the handbook is long, it opens
+scrolled to whichever section was asked for, and every other section was
+otherwise a blind scroll away. The lit tab follows the *scroll position*
+rather than the last tap: a nav that only updates when you use it is a nav
+you stop trusting. The sheet itself is 94% of the screen; at 82% a third of
+the page was scrim above a drawer whose own content ran off the bottom,
+which is dead space paid for twice. Four
 sections, one per category, each with its own meter; every payout kept is a
 named row, and every payout still to come is a row reading
 `CLASSIFIED · NOT YET ISSUED`.
@@ -627,7 +664,19 @@ unscoped key holds, which is why `GameStage` initializes the run store
 
 A save written before slots existed is **adopted** by the first run to ask
 for it and the legacy key is then removed, so exactly one save inherits that
-history and every later one starts empty.
+history and every later one starts empty. "The first run to ask for it" is
+literal: `startNewRun` passes `inherit` only when the slot it is creating is
+the terminal's first, because a refiner who asks for a new save and is
+handed the old one's history has been given the opposite of what they asked
+for.
+
+The "this file is already refined" notice is snapshotted on arrival — it has
+to be, or it would fire about the file the refiner has this second finished
+— and the snapshot is keyed on **the save as well as the level**. Starting a
+new save from the briefing swaps the ledger underneath a `levelIndex` that
+was already 0 and stayed 0, so the answer computed against the previous save
+survived, and a brand-new terminal opened orientation file one reading THIS
+FILE IS ALREADY REFINED.
 
 ---
 

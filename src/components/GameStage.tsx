@@ -212,7 +212,13 @@ export function GameStage() {
    * orientation watched REFINE 2 MORE FILES sit unchanged for a dozen
    * screens, because every one of those files was already in the ledger.
    */
-  const [arrived, setArrived] = useState({ level: -1, credited: false });
+  const [arrived, setArrived] = useState({ save: "", level: -1, credited: false });
+  // Keyed on the save as well as the level. Starting a new save from the
+  // briefing swaps the ledger underneath a `levelIndex` that was already 0
+  // and stayed 0, so the answer computed against the *previous* save
+  // survived — and a brand-new terminal opened orientation file one
+  // reading THIS FILE IS ALREADY REFINED.
+  const arrivalKey = `${runStore.active ?? ""}:${hud.levelIndex}`;
   useEffect(() => {
     // Asked on arrival, not continuously. By the time the completion panel
     // is drawn the file has just been credited, so a live check would
@@ -220,11 +226,16 @@ export function GameStage() {
     // finished — the question is whether it was done *before* they got
     // here.
     setArrived({
+      save: runStore.active ?? "",
       level: hud.levelIndex,
       credited: fileCredited(hud.levelIndex, progressRef.current),
     });
-  }, [hud.levelIndex]);
-  const replaying = arrived.level === hud.levelIndex && arrived.credited;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [arrivalKey]);
+  const replaying =
+    arrived.save === (runStore.active ?? "") &&
+    arrived.level === hud.levelIndex &&
+    arrived.credited;
 
   const boundary = `${hud.levelIndex}:${progress.filesCompleted}`;
   const [accepted, setAccepted] = useState<{

@@ -3,12 +3,30 @@ import type { ReactNode } from "react";
 import { TemperSample } from "./TemperSample";
 import type { Pace } from "../game/constants";
 import { LEVELS, PACE } from "../game/constants";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MIN_CAPTURE, PROBE_RADIUS, TEMPERS, TEMPER_DEFS } from "../game/constants";
 import type { Progress } from "../game/progress";
 import type { RewardId } from "../game/rewards";
 import { IncentiveForecast } from "./IncentiveForecast";
 import { IncentiveShelf, WellnessRecord } from "./IncentiveShelf";
+
+/**
+ * The handbook is long — five sections and a full incentive record — and
+ * it opens scrolled to whichever one the refiner asked for. Without a way
+ * across it, every other section is a blind scroll away.
+ */
+const SECTIONS = [
+  { id: "refine", label: "REFINE" },
+  { id: "tempers", label: "TEMPERS" },
+  { id: "incentives", label: "INCENTIVES" },
+  { id: "archive", label: "ARCHIVE" },
+  { id: "settings", label: "SETTINGS" },
+] as const;
+
+type SectionId = (typeof SECTIONS)[number]["id"];
+
+/** Height of the pinned header and tab row, which anchors have to clear. */
+const NAV_H = 88;
 
 interface Props {
   onClose: () => void;
@@ -96,8 +114,25 @@ export function HandbookModal({
   archive,
   levelIndex,
 }: Props) {
-  const shelfRef = useRef<HTMLDivElement | null>(null);
-  const settingsRef = useRef<HTMLHeadingElement | null>(null);
+  const scroller = useRef<HTMLDivElement | null>(null);
+  /**
+   * Which tab is lit. Seeded from wherever the drawer was asked to open
+   * and followed from the scroll thereafter, never set by the tap.
+   */
+  const [at, setAt] = useState<SectionId>(
+    startAt === "shelf"
+      ? "incentives"
+      : startAt === "settings"
+        ? "settings"
+        : "refine",
+  );
+
+  const go = (id: SectionId) => {
+    scroller.current
+      ?.querySelector(`[data-section="${id}"]`)
+      ?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+
   // One scroll, on open. The drawer is unmounted between openings, so
   // there is no stale position to correct later.
   //
@@ -106,11 +141,43 @@ export function HandbookModal({
   // for the toggles beats two that can disagree, and a refiner who taps
   // the gear lands on them either way.
   useEffect(() => {
-    if (startAt === "shelf") shelfRef.current?.scrollIntoView({ block: "start" });
-    if (startAt === "settings") {
-      settingsRef.current?.scrollIntoView({ block: "start" });
-    }
+    const id =
+      startAt === "shelf" ? "incentives" : startAt === "settings" ? "settings" : null;
+    if (!id) return;
+    scroller.current
+      ?.querySelector(`[data-section="${id}"]`)
+      ?.scrollIntoView({ block: "start" });
   }, [startAt]);
+
+  /**
+   * Which section the refiner is looking at.
+   *
+   * Read off the scroll position rather than tracked by the taps, so the
+   * row stays honest when they scroll by hand — a nav that only updates
+   * when you use it is a nav you stop trusting.
+   */
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const onScroll = () => {
+      const top = el.getBoundingClientRect().top + NAV_H;
+      let seen: SectionId = SECTIONS[0].id;
+      for (const s of SECTIONS) {
+        const node = el.querySelector(`[data-section="${s.id}"]`);
+        if (!node) continue;
+        if (node.getBoundingClientRect().top - 8 <= top) seen = s.id;
+      }
+      setAt(seen);
+    };
+    // A frame later, so the open-at scroll above has landed and this reads
+    // where the drawer actually is rather than where it started.
+    const id = requestAnimationFrame(onScroll);
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      cancelAnimationFrame(id);
+      el.removeEventListener("scroll", onScroll);
+    };
+  }, []);
 
   // The orientation screens are one sequence, not 21 files: only the last
   // of them carries an archive row, so the list stays a set of secrets
@@ -134,14 +201,19 @@ export function HandbookModal({
       }}
     >
       <div
+        ref={scroller}
         style={{ touchAction: "pan-y", overscrollBehavior: "contain" }}
-        className="max-h-[82%] overflow-y-auto rounded-t-[6px] border-t-2 border-phos-500 bg-phos-950/97 px-4 pb-5 shadow-[0_-8px_40px_rgba(23,168,102,0.25)]"
+        // Nearly the full screen. At 82% a third of the page was scrim
+        // above a drawer whose own content ran off the bottom, which is
+        // dead space paid for twice. The strip that is left is what makes
+        // it read as a drawer, and tapping it still closes.
+        className="h-[94%] overflow-y-auto rounded-t-[6px] border-t-2 border-phos-500 bg-phos-950/97 px-4 pb-5 shadow-[0_-8px_40px_rgba(23,168,102,0.25)]"
       >
         {/* Pinned, because the drawer opens scrolled: VIEW ALL INCENTIVES
             lands the refiner on the shelf, three screens down, with the
             only way out somewhere above them. A way back has to be on the
             screen it is needed on. */}
-        <div className="sticky top-0 z-10 -mx-4 mb-3 flex items-start justify-between gap-3 border-b border-phos-800 bg-phos-950 px-4 pb-2.5 pt-3">
+        <div className="sticky top-0 z-10 -mx-4 flex items-start justify-between gap-3 bg-phos-950 px-4 pb-2.5 pt-3">
           <div>
             <h2 className="crt-text-glow text-[13px] font-bold tracking-[0.2em] text-phos-200">
               MACRODATA REFINEMENT
@@ -162,6 +234,32 @@ export function HandbookModal({
           </button>
         </div>
 
+        {/* Pinned directly under the header, so every section of a long
+            document is one tap away from every other. Lit from the scroll
+            position rather than from the tap: a nav that only updates when
+            you use it is a nav you stop trusting. */}
+        <div
+          className="sticky top-[52px] z-10 -mx-4 mb-3 flex gap-1 overflow-x-auto border-b border-phos-800 bg-phos-950 px-4 pb-2"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {SECTIONS.map((sec) => (
+            <button
+              key={sec.id}
+              type="button"
+              data-section-tab={sec.id}
+              aria-current={at === sec.id ? "true" : undefined}
+              onClick={() => go(sec.id)}
+              className={`shrink-0 rounded-[3px] border px-2 py-1 text-[8px] font-bold tracking-[0.18em] transition-colors ${
+                at === sec.id
+                  ? "crt-text-glow border-phos-400 bg-phos-600/30 text-phos-200"
+                  : "border-phos-800 text-phos-500"
+              }`}
+            >
+              {sec.label}
+            </button>
+          ))}
+        </div>
+
         <p className="mb-4 text-[10px] leading-relaxed text-phos-400">
           The numbers on your screen are frightening, and you are the only one
           who can feel it. Probe the file, find the clusters that stir, and
@@ -169,7 +267,10 @@ export function HandbookModal({
           equally.
         </p>
 
-        <h3 className="crt-text-glow mb-2 text-[10px] font-bold tracking-[0.2em] text-phos-300">
+        <h3
+          data-section="refine"
+          className="crt-text-glow mb-2 scroll-mt-[88px] text-[10px] font-bold tracking-[0.2em] text-phos-300"
+        >
           HOW TO REFINE MACRODATA
         </h3>
         <p className="mb-3 text-[10px] leading-relaxed text-phos-400">
@@ -204,7 +305,10 @@ export function HandbookModal({
           </li>
         </ol>
 
-        <h3 className="crt-text-glow mb-2 text-[10px] font-bold tracking-[0.2em] text-phos-300">
+        <h3
+          data-section="tempers"
+          className="crt-text-glow mb-2 scroll-mt-[88px] text-[10px] font-bold tracking-[0.2em] text-phos-300"
+        >
           THE FOUR TEMPERS
         </h3>
         <ul className="space-y-2">
@@ -239,6 +343,7 @@ export function HandbookModal({
         {/* The forecast is reachable mid-file from here — the clock is
             paused while the drawer is open, so checking how far the next
             incentive is costs nothing but the reading. */}
+        <div data-section="incentives" className="scroll-mt-[88px]" />
         {progress.filesCompleted > 0 ? (
           <>
             <h3 className="crt-text-glow mb-1 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300">
@@ -259,12 +364,13 @@ export function HandbookModal({
           </>
         ) : null}
 
-        <div ref={shelfRef} className="scroll-mt-14">
-          <IncentiveShelf progress={progress} onInspect={onInspect} />
-        </div>
+        <IncentiveShelf progress={progress} onInspect={onInspect} />
         <WellnessRecord progress={progress} />
 
-        <h3 className="crt-text-glow mb-1 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300">
+        <h3
+          data-section="archive"
+          className="crt-text-glow mb-1 mt-4 scroll-mt-[88px] text-[10px] font-bold tracking-[0.2em] text-phos-300"
+        >
           PERPETUITY WING · ARCHIVE
         </h3>
         <p className="mb-2 text-[9px] leading-snug text-phos-600">
@@ -317,8 +423,8 @@ export function HandbookModal({
         </ol>
 
         <h3
-          ref={settingsRef}
-          className="crt-text-glow mb-2 mt-4 scroll-mt-14 text-[10px] font-bold tracking-[0.2em] text-phos-300"
+          data-section="settings"
+          className="crt-text-glow mb-2 mt-4 scroll-mt-[88px] text-[10px] font-bold tracking-[0.2em] text-phos-300"
         >
           TERMINAL SETTINGS
         </h3>

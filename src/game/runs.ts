@@ -57,9 +57,17 @@ function write(store: RunStore): void {
  * no caller has to remember to do it and no read can happen against the
  * wrong slot.
  */
-function scopeTo(id: string | null): void {
+/**
+ * Point the archive and the ledger at a run.
+ *
+ * `inherit` decides whether a save written before slots existed is taken
+ * into this one. Only the *first* slot on a terminal may take it: a
+ * refiner who asks for a new save and is handed the old one's history has
+ * been given the opposite of what they asked for.
+ */
+function scopeTo(id: string | null, inherit = true): void {
   setRunScope(id);
-  if (id === null) return;
+  if (id === null || !inherit) return;
   adopt(ARCHIVE_KEY, id);
   adopt(PROGRESS_KEY, id);
 }
@@ -140,8 +148,11 @@ export function startNewRun(): RunStore {
   // A fresh slot, before anything can read from it. Nothing is adopted
   // into a run that did not exist a moment ago — only the *first* run a
   // legacy save meets takes that data, and this one is not it unless it
-  // is also the first.
-  scopeTo(run.id);
+  // is also the first. That sentence was true of the intent and false of
+  // the code: `scopeTo` adopted unconditionally, so BEGIN A NEW SAVE on a
+  // terminal still holding an unscoped ledger handed the new slot every
+  // incentive the old one had.
+  scopeTo(run.id, store.runs.length === 1);
   // Trim the oldest once over the cap — by last touch, not creation, so an
   // attempt someone keeps returning to is never the one that falls off.
   if (store.runs.length > MAX_RUNS) {
