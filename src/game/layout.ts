@@ -17,9 +17,16 @@ export interface Rect {
  * three put the handbook beside the meter instead of giving it a third
  * of a band of its own.
  *
- * - `a` header · ticker · grid · bins · record
+ * - `a` ticker · grid · bins · file card · record
  * - `b` header · record · ticker · grid · bins
  * - `c` header · grid (ticker overlaid on its top edge) · bins · record
+ *
+ * `a` ships, and its file card is a *footer*, not a header. Everything a
+ * refiner's action moves is now in one stack under their thumb: the bin
+ * they just dropped into, the file that bin advanced, and the incentive
+ * that file advanced — three meters at increasing grain, in the place the
+ * eye already is at the moment they all move. A file meter at the top of
+ * the screen moved where nobody was looking.
  */
 export type LayoutVariant = "a" | "b" | "c";
 
@@ -30,6 +37,10 @@ export interface StageLayout {
   w: number;
   h: number;
   hudH: number;
+  /** Top edge of the file card, in stage coordinates. */
+  hudTop: number;
+  /** Header at the top of the screen, or a card in the footer stack. */
+  hudAt: "top" | "footer";
   tickerH: number;
   /** True when the ticker is drawn over the grid rather than above it. */
   tickerOverGrid: boolean;
@@ -109,6 +120,15 @@ export const GAP_MIN = 9;
 export const DEFAULT_VARIANT: LayoutVariant = "a";
 
 /**
+ * The space between the file card and the incentives record.
+ *
+ * Deliberately tighter than `gap`. They are two readings of the same
+ * action at two grains and they have to read as one stack, not as two
+ * unrelated bands that happen to be adjacent.
+ */
+const TIGHT_FRAC = 0.55;
+
+/**
  * Resolved once, at first use, and shared.
  *
  * The engine hit-tests against `computeLayout` and the DOM chrome is
@@ -140,26 +160,38 @@ export function computeLayout(
   const cols = Math.max(1, activeTempers.length);
 
   const hudH = Math.max(HUD_MIN, Math.round(h * HUD_FRAC));
-  const tickerH = Math.round(h * TICKER_FRAC);
   const recordH = Math.max(RECORD_MIN, Math.round(h * RECORD_FRAC));
   const binsH = Math.max(BINS_MIN, Math.round(h * BINS_FRAC));
   const gap = Math.max(GAP_MIN, Math.round(h * GAP_FRAC));
 
   const recordAt = variant === "b" ? "top" : "bottom";
+  const hudAt = variant === "a" ? "footer" : "top";
+  // With the file card in the footer the coach line is the first thing on
+  // the screen, so its band carries the margin the header used to.
+  const tickerH = Math.round(h * TICKER_FRAC) + (hudAt === "footer" ? gap : 0);
   // In `c` the coach line is drawn over the top edge of the board instead
   // of above it. The band is still reserved — the matrix never reflows —
   // but it is reserved inside the grid rather than out of it, which buys
   // the board a whole band back.
   const tickerOverGrid = variant === "c";
   const above =
-    hudH +
+    (hudAt === "top" ? hudH : 0) +
     (recordAt === "top" ? gap + recordH : 0) +
     (tickerOverGrid ? 0 : tickerH);
   // Everything below the board, in order from the bottom edge up: a
-  // margin, the record (when it is down here), a gap, the bins, a gap.
+  // margin, the record, the file card sitting tight against it, a gap,
+  // the bins, a gap.
   const recordTop = recordAt === "bottom" ? h - gap - recordH : hudH + gap;
+  const tight = Math.max(4, Math.round(gap * TIGHT_FRAC));
+  const hudTop = hudAt === "footer" ? recordTop - tight - hudH : 0;
   const binsTop =
-    (recordAt === "bottom" ? recordTop : h) - gap - binsH;
+    (hudAt === "footer"
+      ? hudTop
+      : recordAt === "bottom"
+        ? recordTop
+        : h) -
+    gap -
+    binsH;
   const below = h - binsTop + gap;
 
   const grid: Rect = {
@@ -198,6 +230,8 @@ export function computeLayout(
     w,
     h,
     hudH,
+    hudTop,
+    hudAt,
     tickerH,
     tickerOverGrid,
     recordH,

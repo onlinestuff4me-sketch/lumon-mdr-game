@@ -481,7 +481,20 @@ export function RewardReveal({
           className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
           style={{ animation: `crt-resolve ${KEEP_MS}ms ease-out 1 forwards` }}
         >
-          <FileGlyph size={38} />
+          {/* Same size, same ground, same place on screen as the one the
+              summary catches. Two glyphs that differ by a few pixels read
+              as two objects and the handover is lost. */}
+          <div
+            aria-hidden
+            className="absolute h-[190px] w-[190px]"
+            style={{
+              background:
+                "radial-gradient(circle, rgba(1,7,4,0.96) 0%, rgba(1,7,4,0.88) 38%, rgba(1,7,4,0) 72%)",
+            }}
+          />
+          <div className="relative">
+            <FileGlyph size={54} />
+          </div>
         </div>
       ) : null}
     </div>

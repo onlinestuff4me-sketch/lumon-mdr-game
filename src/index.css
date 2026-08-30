@@ -149,8 +149,16 @@
   }
   @keyframes crt-caret { 0%, 100% { opacity: 0; } }
   @keyframes count-bump  { 0%, 100% { opacity: 0; transform: none; } }
+  @keyframes file-lift   { 0%, 100% { transform: none; } }
   @keyframes meter-take  { 0%, 100% { filter: brightness(1.2); box-shadow: none; } }
   @keyframes record-dock { 0%, 100% { filter: brightness(1.2); box-shadow: none; } }
+}
+
+/* A held object, breathing. Only ever on something in transit between two
+   screens: it says "this is the thing to watch" without saying it. */
+@keyframes file-lift {
+  0%, 100% { transform: translateY(0)     scale(1); }
+  50%      { transform: translateY(-4px)  scale(1.04); }
 }
 
 /* The number that says what just changed, rising off the row it changed.

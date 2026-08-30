@@ -133,6 +133,9 @@ section("reachability");
       recordTop: Math.round(L.recordTop),
       binsH: L.binsH,
       recordAt: L.recordAt,
+      hudTop: Math.round(L.hudTop),
+      hudH: L.hudH,
+      hudAt: L.hudAt,
     };
   });
   check("there is no mode switch to press", !bands.modes);
@@ -189,10 +192,22 @@ section("reachability");
     await load(page, 0);
   }
 
-  check("and so are the bins and the incentives record",
+  // The footer stack, in the order a single act moves it: the bin the
+  // packet went into, the file that bin advanced, the incentives record
+  // that file advanced. Three readings at increasing grain in the one
+  // place a refiner is already looking — and the last two on a tighter
+  // gap than the rest, because they are one object at two grains.
+  check("and so are the bins, the file card and the incentives record",
     bands.recordAt === "top"
       ? bands.recordTop < bands.gridBottom
-      : bands.recordTop - (bands.binsTop + bands.binsH) === bands.gap,
+      : bands.hudAt === "footer"
+        ? bands.hudTop - (bands.binsTop + bands.binsH) === bands.gap &&
+          bands.recordTop - (bands.hudTop + bands.hudH) < bands.gap &&
+          bands.recordTop > bands.hudTop
+        : bands.recordTop - (bands.binsTop + bands.binsH) === bands.gap,
+    JSON.stringify(bands));
+  check("with the coach line above the board rather than below the header",
+    bands.hudAt !== "footer" || bands.hudTop > bands.gridBottom,
     JSON.stringify(bands));
 
   // A deck can show more bins than the file can fill (the orientation rung

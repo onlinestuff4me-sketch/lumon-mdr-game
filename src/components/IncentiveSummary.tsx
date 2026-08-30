@@ -243,8 +243,27 @@ export function IncentiveSummary({
   };
 
   const leaving = exit !== "open";
-  /** Everything but the title dims as the page packs itself down. */
+  /**
+   * How bright the page is under the arriving file.
+   *
+   * Held down while the file is in the air. The file used to be released
+   * over a fully drawn record page and was immediately lost in it — a
+   * small bright rectangle among a dozen bright rectangles, and the eye
+   * had nothing to follow. The page comes up as the file lands, which is
+   * also the moment there is anything on it worth reading.
+   */
+  const inFlight = arrival === "held" || arrival === "flying";
   const bodyDim = leaving ? 0.18 : 1;
+  /**
+   * Applied per element rather than to the whole body, because opacity
+   * nests: a row set to full inside a container at 0.3 is still at 0.3,
+   * and the destination has to stay lit or the file is a shape crossing a
+   * fog. Everything the file is *not* going to wears this.
+   */
+  const veil = {
+    opacity: inFlight ? 0.26 : 1,
+    transition: "opacity 320ms ease-out",
+  };
 
   return (
     <div
@@ -310,20 +329,26 @@ export function IncentiveSummary({
             transition: `opacity ${PACK_MS}ms ease-out`,
           }}
         >
+          {/* The arriving file is held back from nothing above this line:
+              INCENTIVES RECORD is the name of the place it is going into,
+              and it stays lit for the same reason it stays lit on the way
+              out. */}
           {/* 2. What was kept, said plainly and named. */}
-          <p className="mt-3 text-[9px] tracking-[0.3em] text-phos-600">
-            {keptLabel(Math.max(1, kept))}
-          </p>
-          {names.length > 0 ? (
-            <p className="crt-text-glow mt-1.5 text-[11px] leading-relaxed text-phos-200">
-              {names.join(" · ")}
+          <div className="flex w-full flex-col items-center" style={veil}>
+            <p className="mt-3 text-[9px] tracking-[0.3em] text-phos-600">
+              {keptLabel(Math.max(1, kept))}
             </p>
-          ) : null}
-          {filed.length > 0 ? (
-            <p className="mt-1.5 text-[8px] leading-snug tracking-[0.14em] text-phos-600">
-              {filed.map((n) => `${n} ISSUED AGAIN`).join(" · ")} · KEPT
-            </p>
-          ) : null}
+            {names.length > 0 ? (
+              <p className="crt-text-glow mt-1.5 text-[11px] leading-relaxed text-phos-200">
+                {names.join(" · ")}
+              </p>
+            ) : null}
+            {filed.length > 0 ? (
+              <p className="mt-1.5 text-[8px] leading-snug tracking-[0.14em] text-phos-600">
+                {filed.map((n) => `${n} ISSUED AGAIN`).join(" · ")} · KEPT
+              </p>
+            ) : null}
+          </div>
 
           {/* 3. What each of those counts toward, and the one that just
                  moved lit as it takes the file. */}
@@ -335,7 +360,14 @@ export function IncentiveSummary({
               const took = aimed && arrival === "landed";
               const bump = gained.get(row.category) ?? 0;
               return (
-                <div key={row.category} className="relative w-full text-left">
+                <div
+                  key={row.category}
+                  className="relative w-full text-left"
+                  // The shelf it is aimed at stays lit while everything
+                  // else is held down: the file has to have a visible
+                  // destination or the flight is a shape crossing a fog.
+                  style={aimed ? undefined : veil}
+                >
                   <div className="flex items-baseline justify-between gap-2 text-[8px] tracking-[0.2em]">
                     <span
                       className="transition-colors duration-300"
@@ -385,6 +417,7 @@ export function IncentiveSummary({
             type="button"
             data-view-record
             onClick={onOpenRecord}
+            style={veil}
             className="mt-3 inline-flex items-center gap-1 text-[9px] tracking-[0.2em] text-phos-500 underline-offset-4 active:text-phos-300"
           >
             VIEW ALL INCENTIVES
@@ -396,7 +429,10 @@ export function IncentiveSummary({
                  for work already done, and this is the only line that is
                  about the work still to do. */}
           {lane ? (
-            <div className="mt-4 w-full rounded-[3px] border border-phos-500 bg-phos-900/60 px-3 py-3 text-left">
+            <div
+              style={veil}
+              className="mt-4 w-full rounded-[3px] border border-phos-500 bg-phos-900/60 px-3 py-3 text-left"
+            >
               <p className="crt-text-glow text-[9px] font-bold tracking-[0.22em] text-phos-300">
                 ANOTHER INCENTIVE IS COMING
               </p>
@@ -442,8 +478,8 @@ export function IncentiveSummary({
             className="crt-text-glow mt-5 inline-flex items-center gap-2 rounded-[3px] border border-phos-400 bg-phos-600/25 px-5 py-2.5 text-[11px] font-bold tracking-[0.2em] text-phos-200 active:bg-phos-600/50"
             style={
               leaving || reduced
-                ? undefined
-                : { animation: "crt-throb 1.9s ease-in-out infinite" }
+                ? veil
+                : { ...veil, animation: "crt-throb 1.9s ease-in-out infinite" }
             }
           >
             RESUME REFINEMENT
@@ -455,9 +491,9 @@ export function IncentiveSummary({
             middle of the page — at the size and place the card left it, so
             the handover is one object and not two — is held there long
             enough to be seen, and then goes into the row it moved. */}
-        {arrival === "held" || arrival === "flying" ? (
+        {inFlight ? (
           <div
-            className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center"
+            className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
             style={{
               transition:
                 arrival === "flying"
@@ -465,12 +501,29 @@ export function IncentiveSummary({
                   : undefined,
               transform:
                 arrival === "flying" && drop
-                  ? `translate(${drop.x}px, ${drop.y}px) scale(0.14)`
+                  ? `translate(${drop.x}px, ${drop.y}px) scale(0.12)`
                   : undefined,
               opacity: arrival === "flying" && drop ? 0.1 : 1,
             }}
           >
-            <FileGlyph size={38} />
+            {/* Its own dark ground, travelling with it. Whatever the file
+                passes over is pushed back under this, so the thing the eye
+                is following never has to compete with the page it is
+                crossing. */}
+            <div
+              aria-hidden
+              className="absolute h-[190px] w-[190px]"
+              style={{
+                background:
+                  "radial-gradient(circle, rgba(1,7,4,0.96) 0%, rgba(1,7,4,0.88) 38%, rgba(1,7,4,0) 72%)",
+              }}
+            />
+            <div
+              className="relative"
+              style={{ animation: reduced ? undefined : "file-lift 1.1s ease-in-out infinite" }}
+            >
+              <FileGlyph size={54} />
+            </div>
           </div>
         ) : null}
       </div>

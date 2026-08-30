@@ -548,6 +548,16 @@ The file is one component (`FileGlyph`) drawn at every stage on purpose.
 Two similar rectangles read as two objects, and the whole point of the
 chain is that it is one.
 
+It is also drawn to be **followable**. Released over a fully drawn record
+page it was lost immediately — a small bright rectangle among a dozen
+bright rectangles. It now travels on a radial dark plate of its own, at
+54px with a doubled rim-and-bloom shadow, breathing; the page behind it is
+held at a quarter brightness until it lands; and the two things it concerns
+— the words INCENTIVES RECORD and the shelf row it is aimed at — stay lit
+while everything else is held down. Opacity nests, so that veil is applied
+to each element the file is *not* going to, never to a wrapper around all
+of them.
+
 **A file that pays out ends on this screen, and only this screen.** The
 `FILE REFINED` panel is suppressed for that boundary and `RESUME
 REFINEMENT` goes straight to the next file. The panel says what the summary

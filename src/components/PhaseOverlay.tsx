@@ -130,9 +130,9 @@ export function PhaseOverlay({
               paragraph to be skimmed; stacked, each line is an instruction
               the refiner can hold onto. */}
           <div className="mt-4 flex flex-col gap-1.5 text-[10px] leading-snug text-phos-400">
-            <p>Welcome refiner</p>
-            <p>Probe files for numbers that feel wrong</p>
-            <p>Bin them by the temper they evoke</p>
+            <p>Welcome refiner.</p>
+            <p>Probe files for numbers that feel wrong.</p>
+            <p>Bin them by the temper they evoke.</p>
           </div>
           <div className="mt-4 flex flex-col gap-1.5 text-[9px] leading-snug tracking-[0.1em] text-phos-600">
             <p>THE WORK IS MYSTERIOUS AND IMPORTANT</p>
