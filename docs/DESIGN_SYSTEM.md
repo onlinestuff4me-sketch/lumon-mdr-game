@@ -134,8 +134,28 @@ without its numerator is a mood, not a measurement.
 the part-file the refiner is currently working on, so every screen visibly
 buys something — but that hint must never finish the last whole step, and
 it must be zero once the file is credited or the same file is counted twice.
-A meter at 100% beside the words `2/3` is the terminal contradicting itself,
+A meter at 100% beside the words `0/1` is the terminal contradicting itself,
 and the refiner believes the bar.
+
+**A bar measures the stretch being walked, not the whole game.** Every
+incentive meter — the header strip, the summary, the full record — draws
+`(current − from) / (target − from)`, where `from` is the last threshold
+already passed. Drawn as `current / target` against a target that *moves*,
+a bar falls at the exact instant a threshold is crossed: three quarters of
+the way to one file became one of the two files the next rung wants, and
+the meter shrank on the frame the refiner succeeded. Two consequences
+follow, and both are load-bearing:
+
+- **The number beside it is the same quantity as the instruction.** `1/2`
+  next to REFINE 1 MORE FILE is one thing said twice; `4/5` next to it is
+  two different things on one line, and that is what made these rows
+  unreadable. A lifetime total is a *different* measurement and gets its
+  own line where there is room for one.
+- **A meter resets only after it has filled.** Reaching a threshold holds
+  the row at 100% until the thing it paid for has actually been collected —
+  the strip keeps showing the earned rung while the payout ceremony runs —
+  so the reset happens behind the ceremony and reads as a fresh goal rather
+  than as lost progress.
 
 ### Control
 

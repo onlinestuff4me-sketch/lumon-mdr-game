@@ -325,6 +325,20 @@ export interface LaneForecast {
   readonly label: string;
   readonly current: number;
   readonly target: number;
+  /**
+   * The threshold this stretch started from — the last rung of this lane
+   * already behind the refiner, or 0.
+   *
+   * A meter drawn as `current / target` counts from the beginning of the
+   * game against a target that moves, so at the instant a threshold is
+   * crossed the target jumps and the bar *falls*: 0.75 of the way to one
+   * file became 1 of the 2 files needed for the next, and the bar shrank
+   * on the frame the refiner succeeded. Drawn as `(current - from) /
+   * (target - from)` it measures the stretch actually being walked, fills
+   * as the refiner walks it, and only ever resets — behind the payout
+   * ceremony — when the thing at the end of it has been collected.
+   */
+  readonly from: number;
   readonly remaining: number;
   readonly action: string;
   /** The second counter of a compound reward, when there is one. */
@@ -341,10 +355,11 @@ export interface LaneForecast {
  * nothing beyond it.
  *
  * A lane whose rungs are all earned returns nothing and is not rendered —
- * an empty counter is worse than no counter. Claimed state is deliberately
- * not consulted for *which* threshold to show: a reward waiting in the
- * queue has already been earned, so the forecast moves on to the next
- * promise rather than stalling on a celebration that has not run yet.
+ * an empty counter is worse than no counter.
+ *
+ * Pass `owed` where the row has to describe *this moment* rather than the
+ * next promise — the strip in the header does, the forward-looking pages
+ * do not.
  */
 /**
  * Which lanes a refiner can see yet.
@@ -360,27 +375,68 @@ export function laneVisible(lane: Lane, c: Counters): boolean {
   return true;
 }
 
-export function forecast(counters: Counters): LaneForecast[] {
+/**
+ * Where the stretch leading to `rung` began.
+ *
+ * The highest rung of the same shape — same lane, same temper — that the
+ * refiner is already past. Zero if there is none, which is the start of
+ * the game. The perfect lane's counter resets when a streak breaks, and so
+ * does this: the stretch genuinely starts again.
+ */
+function segmentStart(counters: Counters, rung: Rung): number {
+  let from = 0;
+  for (const r of LADDER) {
+    if (r.lane !== rung.lane) continue;
+    if (r.temper !== rung.temper) continue;
+    if (!!r.allTempers !== !!rung.allTempers) continue;
+    if (r.at >= rung.at) continue;
+    if (valueFor(counters, r) < r.at) continue;
+    if (r.at > from) from = r.at;
+  }
+  return from;
+}
+
+/**
+ * @param owed Rung ids earned but not yet kept. A lane holding one shows
+ *   *that* rung rather than the next promise, so the strip reads full for
+ *   the beat between reaching a threshold and collecting what it paid.
+ *   Without it the forecast steps to the next rung the instant the counter
+ *   ticks, and the one moment the refiner earned a full bar is the one
+ *   moment it is never drawn.
+ */
+export function forecast(
+  counters: Counters,
+  owed?: ReadonlySet<string>,
+): LaneForecast[] {
   const out: LaneForecast[] = [];
   for (const lane of ["screens", "bins", "temper", "perfect"] as const) {
     if (!laneVisible(lane, counters)) continue;
-    // The nearest unmet rung in this lane. For tempers that means the
-    // temper closest to its next threshold, so the forecast shows one row
-    // rather than four counters at once.
-    const rung = LADDER.filter((r) => r.lane === lane)
-      .filter((r) => {
-        const met =
-          valueFor(counters, r) >= r.at &&
-          (!r.also ||
-            (r.also.lane === "screens" ? counters.screens : counters.bins) >=
-              r.also.at);
-        return !met;
-      })
-      .sort((a, b) => {
-        const ra = a.at - valueFor(counters, a);
-        const rb = b.at - valueFor(counters, b);
-        return ra - rb || a.at - b.at;
-      })[0];
+    // A rung of this lane already earned and still waiting to be kept
+    // outranks any promise: it is what the refiner just did.
+    const held = owed
+      ? LADDER.filter((r) => r.lane === lane && owed.has(r.id)).sort(
+          (a, b) => b.at - a.at,
+        )[0]
+      : undefined;
+    // Otherwise the nearest unmet rung in this lane. For tempers that means
+    // the temper closest to its next threshold, so the forecast shows one
+    // row rather than four counters at once.
+    const rung =
+      held ??
+      LADDER.filter((r) => r.lane === lane)
+        .filter((r) => {
+          const met =
+            valueFor(counters, r) >= r.at &&
+            (!r.also ||
+              (r.also.lane === "screens" ? counters.screens : counters.bins) >=
+                r.also.at);
+          return !met;
+        })
+        .sort((a, b) => {
+          const ra = a.at - valueFor(counters, a);
+          const rb = b.at - valueFor(counters, b);
+          return ra - rb || a.at - b.at;
+        })[0];
     if (!rung) continue;
     const current = valueFor(counters, rung);
     const remaining = Math.max(0, rung.at - current);
@@ -389,6 +445,7 @@ export function forecast(counters: Counters): LaneForecast[] {
       label: laneLabel(rung),
       current,
       target: rung.at,
+      from: segmentStart(counters, rung),
       remaining,
       action: actionFor(rung.lane, remaining, rung.temper),
       ...(rung.also
