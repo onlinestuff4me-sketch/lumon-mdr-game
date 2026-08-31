@@ -509,8 +509,23 @@ console.log(`\n── outie facts ${"─".repeat(46)}`);
   const doctrine = FACTS.filter((f) => f.id.startsWith("DOC_"));
   const canon = bank.filter((f) => f.label === "CANON_WELLNESS_CLAIM");
   const original = bank.filter((f) => f.label === "ORIGINAL_APOCRYPHA");
-  if (canon.length !== 25) fail(`${canon.length} show-derived facts, not 25`);
-  if (original.length !== 24) fail(`${original.length} original facts, not 24`);
+  // An audit of the canon pool removed one invention outright — an outie
+  // photographed in a newspaper beside a trophy, which is in no episode —
+  // and moved six more that read like canon but could not be tied to a
+  // line. What is left is 18 claims the show actually makes.
+  if (canon.length !== 18) fail(`${canon.length} show-derived facts, not 18`);
+  if (original.length !== 30) fail(`${original.length} original facts, not 30`);
+  // Ids are written rather than derived from position now, precisely so a
+  // fact can move pools without renumbering its neighbours — which makes a
+  // collision possible for the first time, and a collision would silently
+  // shadow a fact in every save that stored the id.
+  {
+    const seen = new Set<string>();
+    for (const f of FACTS) {
+      if (seen.has(f.id)) fail(`${f.id} is used by two facts`);
+      seen.add(f.id);
+    }
+  }
   if (new Set(FACTS.map((f) => f.id)).size !== FACTS.length) fail("duplicate fact ids");
   if (new Set(FACTS.map((f) => f.text)).size !== FACTS.length) fail("duplicate fact text");
   for (const f of FACTS) {

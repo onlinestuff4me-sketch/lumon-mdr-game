@@ -260,6 +260,25 @@ export function actionFor(lane: Lane, remaining: number, temper?: string): strin
   return `Refine ${n} more bin${s}.`;
 }
 
+/**
+ * The same requirement, short enough to sit on one line of the file card.
+ *
+ * `Refine 1 more file without error.` is a sentence; the card has room for
+ * a noun phrase and then the words FOR YOUR NEXT INCENTIVE, and a line
+ * that truncates mid-word says nothing at all. Shouted, like everything
+ * else on that card.
+ */
+export function shortFor(lane: Lane, remaining: number, temper?: string): string {
+  const n = Math.max(1, remaining);
+  const s = n === 1 ? "" : "S";
+  if (lane === "screens") return `${n} MORE FILE${s}`;
+  if (lane === "perfect") return `${n} CLEAN FILE${s}`;
+  if (lane === "temper") {
+    return temper ? `${n} MORE ${temper}` : `${n} MORE OF EVERY TEMPER`;
+  }
+  return `${n} MORE BIN${s}`;
+}
+
 /** The counters the ladder reads. Everything else in the save is noise. */
 export interface Counters {
   readonly screens: number;
@@ -341,6 +360,8 @@ export interface LaneForecast {
   readonly from: number;
   readonly remaining: number;
   readonly action: string;
+  /** The requirement as a noun phrase, for the file card's one line. */
+  readonly short: string;
   /** The second counter of a compound reward, when there is one. */
   readonly also?: {
     readonly lane: Lane;
@@ -448,6 +469,7 @@ export function forecast(
       from: segmentStart(counters, rung),
       remaining,
       action: actionFor(rung.lane, remaining, rung.temper),
+      short: shortFor(rung.lane, remaining, rung.temper),
       ...(rung.also
         ? {
             also: {

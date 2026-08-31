@@ -17,16 +17,20 @@ export interface Rect {
  * three put the handbook beside the meter instead of giving it a third
  * of a band of its own.
  *
- * - `a` ticker · grid · bins · file card · record
+ * - `a` ticker · grid · bins · file card
  * - `b` header · record · ticker · grid · bins
  * - `c` header · grid (ticker overlaid on its top edge) · bins · record
  *
  * `a` ships, and its file card is a *footer*, not a header. Everything a
- * refiner's action moves is now in one stack under their thumb: the bin
- * they just dropped into, the file that bin advanced, and the incentive
- * that file advanced — three meters at increasing grain, in the place the
- * eye already is at the moment they all move. A file meter at the top of
- * the screen moved where nobody was looking.
+ * refiner's action moves is now under their thumb: the bin they just
+ * dropped into, and the file that bin advanced. A file meter at the top
+ * of the screen moved where nobody was looking.
+ *
+ * There is no separate incentives band in `a` at all. Two bordered boxes
+ * with two bars and two sets of numbers, stacked, was one progress widget
+ * too many — the incentive is a *line inside the file card* now, saying
+ * what reaching 100% will buy, so there is one bar to watch. The band it
+ * used to occupy goes back to the board.
  */
 export type LayoutVariant = "a" | "b" | "c";
 
@@ -47,8 +51,9 @@ export interface StageLayout {
   recordH: number;
   /** Top edge of the incentives record band, in stage coordinates. */
   recordTop: number;
-  /** Where the incentives record sits relative to the board. */
-  recordAt: "top" | "bottom";
+  /** Where the incentives record sits, or `none` when it has no band of
+   *  its own and lives as a line inside the file card. */
+  recordAt: "top" | "bottom" | "none";
   binsH: number;
   /** Top edge of the bin deck, in stage coordinates. */
   binsTop: number;
@@ -71,9 +76,13 @@ export interface StageLayout {
  * and so is the record's berth inside the header — it has a band of its
  * own, above or below the board depending on the variant.
  */
-export const HUD_FRAC = 0.072;
-/** Two lines of 11px plus the meter, at any stage height. */
-export const HUD_MIN = 56;
+export const HUD_FRAC = 0.125;
+/**
+ * Four lines: the file's name and clock, the meter with its two doors, a
+ * rule, and what the meter is buying. The incentive line is what grew this
+ * from 56px — and it is still smaller than the two boxes it replaced.
+ */
+export const HUD_MIN = 86;
 /** Band reserved for the coach line. Reserved permanently rather than
  *  only while a message shows, so the matrix never reflows and never sits
  *  underneath the text describing it. */
@@ -119,14 +128,6 @@ export const GAP_MIN = 9;
  */
 export const DEFAULT_VARIANT: LayoutVariant = "a";
 
-/**
- * The space between the file card and the incentives record.
- *
- * Deliberately tighter than `gap`. They are two readings of the same
- * action at two grains and they have to read as one stack, not as two
- * unrelated bands that happen to be adjacent.
- */
-const TIGHT_FRAC = 0.55;
 
 /**
  * Resolved once, at first use, and shared.
@@ -164,7 +165,8 @@ export function computeLayout(
   const binsH = Math.max(BINS_MIN, Math.round(h * BINS_FRAC));
   const gap = Math.max(GAP_MIN, Math.round(h * GAP_FRAC));
 
-  const recordAt = variant === "b" ? "top" : "bottom";
+  const recordAt: "top" | "bottom" | "none" =
+    variant === "b" ? "top" : variant === "c" ? "bottom" : "none";
   const hudAt = variant === "a" ? "footer" : "top";
   // With the file card in the footer the coach line is the first thing on
   // the screen, so its band carries the margin the header used to.
@@ -179,11 +181,10 @@ export function computeLayout(
     (recordAt === "top" ? gap + recordH : 0) +
     (tickerOverGrid ? 0 : tickerH);
   // Everything below the board, in order from the bottom edge up: a
-  // margin, the record, the file card sitting tight against it, a gap,
-  // the bins, a gap.
-  const recordTop = recordAt === "bottom" ? h - gap - recordH : hudH + gap;
-  const tight = Math.max(4, Math.round(gap * TIGHT_FRAC));
-  const hudTop = hudAt === "footer" ? recordTop - tight - hudH : 0;
+  // margin, then the file card, then a gap, then the bins.
+  const recordTop =
+    recordAt === "bottom" ? h - gap - recordH : recordAt === "top" ? hudH + gap : h;
+  const hudTop = hudAt === "footer" ? h - gap - hudH : 0;
   const binsTop =
     (hudAt === "footer"
       ? hudTop

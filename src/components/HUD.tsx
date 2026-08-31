@@ -1,5 +1,9 @@
-import { CircleHelp, Settings } from "lucide-react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { ChevronRight, CircleHelp, Settings } from "lucide-react";
 import type { HudSnapshot } from "../game/engine";
+import { categoryProgress } from "../game/held";
+import { counters, type Progress } from "../game/progress";
+import { forecast } from "../game/rewards";
 
 function clock(seconds: number): string {
   const s = Math.max(0, Math.ceil(seconds));
@@ -9,34 +13,57 @@ function clock(seconds: number): string {
 
 /**
  * The file card: which file this is, how far through it the refiner is,
- * and the two doors out of the game.
+ * what that progress is buying, and the two doors out of the game.
  *
- * Two lines and nothing else. It used to carry a version string, the
- * clock, the file name, the meter, the percentage and the incentives
- * record, stacked into a band deep enough to notice, above a coach line,
- * above a control deck — three bands of chrome before the numbers.
+ * **One meter, not two.** The incentives record used to be a bordered box
+ * of its own directly under this one, with a second bar and a second set
+ * of numbers — two progress widgets stacked, competing, and only one of
+ * them describing anything the refiner was doing right then. It is a line
+ * *inside* this card now: the file meter is the bar to watch, and the line
+ * under it says what reaching 100% will buy. The full record is one tap
+ * away on the link beside it.
  *
- * The meter is the *file's*, not this stage's: a card that names
- * ORIENTATION #0001 and shows a bar that fills and resets three times
- * inside it is measuring something nobody was told about.
- *
- * The handbook and the settings sit on the meter's line rather than in a
- * deck of their own. They are things you leave the game to read, not
- * controls you use while playing, and the meter can spare the width more
- * cheaply than the board can spare a band.
+ * **And it is not there until it means something.** A refiner who has
+ * never been issued an incentive is not told one is coming — the first two
+ * arrive unannounced, and the ladder introduces itself once it has already
+ * paid out. Until then this is a file card and nothing else, which is also
+ * what gives the launch animation a simple object to land on.
  *
  * **It is a footer, not a header.** A refiner drags a packet into a bin
  * and their eyes are on the bin; the bin's meter moves, and so does this
- * one, and so does the incentives record under it — three readings of the
- * same act at increasing grain, stacked where the hand and the eye already
- * are. At the top of the screen this meter moved where nobody was looking.
- * It also gives the first-run animation somewhere to land: the file card
- * shown on the way in is *this* card, shrunk into place.
+ * one. At the top of the screen this meter moved where nobody was looking.
+ *
+ * **A file leaves and the next one arrives.** Finishing a file used to
+ * mean watching every bar on the screen snap back to zero at once. The
+ * card marks the completion first — REFINED, the border blooming — and
+ * then slides out to the left while the next file slides in from the
+ * right at 0%, so the reset is a *change of file* rather than a loss of
+ * progress.
  */
+
+/** How long the finished file takes to leave and the next one to arrive. */
+const SLIDE_MS = 560;
+
+/** Everything the card draws about one file, frozen so a leaving file can
+ *  keep showing what it was when it left. */
+interface Face {
+  id: string;
+  name: string;
+  code: string;
+  stage: readonly [number, number] | null;
+  pct: number;
+  clockText: string;
+  urgent: boolean;
+}
+
 export function HUD({
   hud,
   height,
   card = false,
+  progress,
+  landing = false,
+  alreadyRefined = false,
+  onOpenRecord,
   onHandbook,
   onSettings,
 }: {
@@ -44,47 +71,219 @@ export function HUD({
   height: number;
   /** Footer card with a border of its own, rather than a full-bleed header. */
   card?: boolean;
+  /** The incentive ledger, for the line under the meter. */
+  progress: Progress;
+  /** True for a beat after the incentive summary has landed here. */
+  landing?: boolean;
+  /**
+   * True when this file has already been credited and cannot pay again.
+   *
+   * Counters are monotonic and credit once, so a replayed file earns
+   * nothing — and a line that goes on saying 1 MORE FILE FOR YOUR NEXT
+   * INCENTIVE while the refiner does exactly that is an instruction that
+   * cannot work.
+   */
+  alreadyRefined?: boolean;
+  /** Opens the full record. */
+  onOpenRecord: () => void;
   onHandbook: () => void;
   onSettings: () => void;
 }) {
   const urgent = !hud.untimed && hud.timeLeft <= 15 && hud.phase !== "complete";
   const pct = Math.round(hud.fileProgress * 100);
   const done = pct >= 100;
+  const refined = done && hud.phase === "complete";
 
-  // Above the input surface (z-35) so the two buttons take taps, but
-  // transparent to pointers everywhere else: a packet dragged to the very
-  // top of the board sits under this header, and a header that ate
-  // pointers there would leave the refiner holding something they could
-  // not put down.
+  const id = `${hud.levelName}#${hud.fileCode}`;
+  const now: Face = {
+    id,
+    name: hud.levelName,
+    code: hud.fileCode,
+    stage: hud.stage ?? null,
+    pct,
+    clockText: hud.untimed ? "--:--" : clock(hud.timeLeft),
+    urgent,
+  };
+
+  /** The file that has just left, still showing itself finished. */
+  const [out, setOut] = useState<Face | null>(null);
+  /** True for the frame the incoming card is still off to the right. */
+  const [entering, setEntering] = useState(false);
+  const shown = useRef<Face>(now);
+
+  // Declared *before* the sync below, so on the commit that changes files
+  // this still reads the file that is leaving. The order of these two is
+  // the whole mechanism.
+  //
+  // Layout, not passive: it has to run before the browser paints, or the
+  // arriving file is shown at rest for one frame and then jumps off to the
+  // right to begin its slide.
+  useLayoutEffect(() => {
+    const last = shown.current;
+    if (last.id === id) return;
+    setOut({ ...last, pct: 100, clockText: "REFINED", urgent: false });
+    setEntering(true);
+    const raf = requestAnimationFrame(() => setEntering(false));
+    const t = setTimeout(() => setOut(null), SLIDE_MS);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+    };
+  }, [id]);
+
+  useEffect(() => {
+    shown.current = now;
+  });
+
+  /**
+   * What this file's progress is buying, and where the rest of it lives.
+   *
+   * Owed-aware like the box it replaces: reaching a threshold holds the
+   * line at INCENTIVE EARNED until the thing it paid for has been
+   * collected, rather than stepping straight on to the next promise.
+   */
+  const cats = categoryProgress(progress);
+  const kept = cats.reduce((n, c) => n + c.have, 0);
+  const allTotal = cats.reduce((n, c) => n + c.total, 0);
+  const lanes = forecast(counters(progress), new Set(progress.rewardQueue));
+  const lane = lanes.length
+    ? [...lanes].sort((a, b) => a.remaining - b.remaining)[0]
+    : null;
+  // Nothing is promised before the first incentive exists. The ladder
+  // introduces itself once it has already paid out.
+  const showIncentive = card && kept > 0;
+
   return (
-    <header
+    <div
       data-file-card
-      className={`pointer-events-none relative z-40 flex shrink-0 flex-col justify-center gap-1 ${
+      className={`pointer-events-none relative z-40 flex shrink-0 flex-col justify-center ${
         card
-          ? "w-full rounded-[3px] border border-phos-700 bg-phos-900/40 px-2.5"
+          ? `w-full overflow-hidden rounded-[3px] border bg-phos-900/40 px-2.5 ${
+              refined ? "border-phos-300" : "border-phos-700"
+            }`
           : "border-b border-phos-700/70 bg-phos-950/90 px-3"
       }`}
-      style={{ height }}
+      style={{
+        height,
+        // One bloom when the file is finished, and one when the incentive
+        // summary lands in here. Both say "this object just received
+        // something", which is the same sentence twice.
+        animation: landing
+          ? "record-dock 900ms ease-out 1"
+          : refined
+            ? "record-dock 900ms ease-out 1"
+            : undefined,
+      }}
     >
+      {/* The file that has just been refined, on its way out. It leaves at
+          100% and stamped REFINED, so the reset the refiner sees is one
+          file being replaced by another rather than their progress being
+          taken back. */}
+      {out ? (
+        <div
+          className="pointer-events-none absolute inset-0 flex flex-col justify-center px-2.5"
+          style={{
+            transform: entering ? "translateX(0)" : "translateX(-108%)",
+            opacity: entering ? 1 : 0,
+            transition: entering
+              ? undefined
+              : `transform ${SLIDE_MS}ms cubic-bezier(.4,0,.2,1), opacity ${SLIDE_MS}ms ease-in`,
+          }}
+        >
+          <FileLines face={out} refined onHandbook={onHandbook} onSettings={onSettings} inert />
+        </div>
+      ) : null}
+
+      <div
+        className="flex flex-col justify-center gap-1"
+        style={
+          out || entering
+            ? {
+                transform: entering ? "translateX(108%)" : "translateX(0)",
+                transition: entering
+                  ? undefined
+                  : `transform ${SLIDE_MS}ms cubic-bezier(.4,0,.2,1)`,
+              }
+            : undefined
+        }
+      >
+        <FileLines
+          face={now}
+          refined={refined}
+          onHandbook={onHandbook}
+          onSettings={onSettings}
+        />
+
+        {/* What the meter above is buying. Bold, because it is the reason
+            to watch the bar; one line, because two would be a second
+            widget again. */}
+        {showIncentive ? (
+          <div className="mt-0.5 flex items-baseline justify-between gap-2 border-t border-phos-800 pt-1">
+            <span className="crt-text-glow truncate text-[8px] font-bold tracking-[0.12em] text-phos-300">
+              {alreadyRefined
+                ? "THIS FILE HAS ALREADY BEEN REFINED"
+                : lane
+                  ? lane.remaining === 0
+                    ? "INCENTIVE EARNED — COLLECT IT"
+                    : `${lane.short} FOR YOUR NEXT INCENTIVE`
+                  : "ALL INCENTIVES ISSUED"}
+            </span>
+            <button
+              type="button"
+              data-record-box="hud"
+              data-view-record
+              onPointerDown={(ev) => ev.stopPropagation()}
+              onClick={onOpenRecord}
+              className="pointer-events-auto inline-flex shrink-0 items-center gap-0.5 text-[8px] tracking-[0.12em] text-phos-500 active:text-phos-200"
+            >
+              SEE ALL
+              <span className="tabular-nums text-phos-400">{` ${kept}/${allTotal}`}</span>
+              <ChevronRight size={9} strokeWidth={2.4} aria-hidden />
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/** The two lines every file card has, current or leaving. */
+function FileLines({
+  face,
+  refined,
+  onHandbook,
+  onSettings,
+  inert = false,
+}: {
+  face: Face;
+  refined: boolean;
+  onHandbook: () => void;
+  onSettings: () => void;
+  inert?: boolean;
+}) {
+  const done = face.pct >= 100;
+  return (
+    <>
       <div className="flex items-baseline justify-between gap-2 text-[10px] tracking-[0.16em]">
         <span className="crt-text-glow truncate text-phos-400">
           <span className="text-phos-600">FILE: </span>
-          {hud.levelName} #{hud.fileCode}
-          {hud.stage && hud.stage[1] > 1 ? (
+          {face.name} #{face.code}
+          {face.stage && face.stage[1] > 1 ? (
             <span className="text-phos-600">
-              {" "}
-              {hud.stage[0]}/{hud.stage[1]}
+              {` ${face.stage[0]}/${face.stage[1]}`}
             </span>
           ) : null}
         </span>
         <span
           className={
-            urgent
+            face.urgent
               ? "crt-text-glow shrink-0 font-bold text-alarm"
-              : "crt-text-glow shrink-0 text-phos-600"
+              : refined
+                ? "crt-text-glow shrink-0 font-bold tracking-[0.2em] text-phos-200"
+                : "crt-text-glow shrink-0 text-phos-600"
           }
         >
-          {hud.untimed ? "--:--" : clock(hud.timeLeft)}
+          {refined ? "REFINED" : face.clockText}
         </span>
       </div>
 
@@ -93,7 +292,7 @@ export function HUD({
           <div
             className="h-full bg-phos-400 transition-[width] duration-300 ease-out"
             style={{
-              width: `${pct}%`,
+              width: `${face.pct}%`,
               boxShadow: done
                 ? "0 0 10px 1px var(--color-phos-200)"
                 : "0 0 6px var(--color-phos-400)",
@@ -109,31 +308,39 @@ export function HUD({
             done ? "text-phos-200" : "text-phos-300"
           }`}
         >
-          {pct}%
+          {face.pct}%
         </span>
 
         {/* Labelled, because a lone question mark is a guess. */}
         <button
           type="button"
-          data-handbook
+          data-handbook={inert ? undefined : true}
+          aria-hidden={inert || undefined}
+          tabIndex={inert ? -1 : undefined}
           onPointerDown={(ev) => ev.stopPropagation()}
-          onClick={onHandbook}
-          className="pointer-events-auto inline-flex h-[26px] shrink-0 items-center gap-1 rounded-[3px] border border-phos-700 bg-phos-900/60 px-1.5 text-[8px] tracking-[0.06em] text-phos-400 active:bg-phos-600/40"
+          onClick={inert ? undefined : onHandbook}
+          className={`inline-flex h-[26px] shrink-0 items-center gap-1 rounded-[3px] border border-phos-700 bg-phos-900/60 px-1.5 text-[8px] tracking-[0.06em] text-phos-400 active:bg-phos-600/40 ${
+            inert ? "" : "pointer-events-auto"
+          }`}
         >
           HANDBOOK
           <CircleHelp size={10} strokeWidth={2.2} aria-hidden />
         </button>
         <button
           type="button"
-          data-settings
+          data-settings={inert ? undefined : true}
           aria-label="Terminal settings"
+          aria-hidden={inert || undefined}
+          tabIndex={inert ? -1 : undefined}
           onPointerDown={(ev) => ev.stopPropagation()}
-          onClick={onSettings}
-          className="pointer-events-auto flex h-[26px] w-[24px] shrink-0 items-center justify-center rounded-[3px] border border-phos-700 bg-phos-900/60 text-phos-500 active:bg-phos-600/40"
+          onClick={inert ? undefined : onSettings}
+          className={`flex h-[26px] w-[24px] shrink-0 items-center justify-center rounded-[3px] border border-phos-700 bg-phos-900/60 text-phos-500 active:bg-phos-600/40 ${
+            inert ? "" : "pointer-events-auto"
+          }`}
         >
           <Settings size={12} strokeWidth={2.2} />
         </button>
       </div>
-    </header>
+    </>
   );
 }

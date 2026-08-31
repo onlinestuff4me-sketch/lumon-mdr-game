@@ -678,6 +678,8 @@ export function GameStage() {
             <HUD
               hud={hud}
               height={layout.hudH}
+              progress={progress}
+              onOpenRecord={() => openHandbook("shelf")}
               onHandbook={() => openHandbook("top")}
               onSettings={() => openHandbook("settings")}
             />
@@ -698,9 +700,10 @@ export function GameStage() {
           )}
         </div>
 
-        {/* The file card, directly above the incentives record and directly
-            below the bins — the middle reading of three, in the one place
-            a refiner is already looking when all three move. */}
+        {/* The file card: directly under the bins, carrying the file's own
+            meter and — once there is one to promise — the line saying what
+            reaching 100% will buy. The one place a refiner is already
+            looking when their drop lands. */}
         {layout.hudAt === "footer" ? (
           <div
             className="absolute inset-x-0 z-40 px-3"
@@ -710,40 +713,44 @@ export function GameStage() {
               hud={hud}
               height={layout.hudH}
               card
+              // Held at the pre-payout ledger while the summary is on
+              // screen, so the line and the count change at the moment the
+              // page lands here rather than silently behind the scrim.
+              progress={
+                landing && before.boundary === boundary
+                  ? before.progress
+                  : progress
+              }
+              landing={docked}
+              alreadyRefined={replaying}
+              onOpenRecord={() => openHandbook("shelf")}
               onHandbook={() => openHandbook("top")}
               onSettings={() => openHandbook("settings")}
             />
           </div>
         ) : null}
 
-        {/* Under the bins in `a` and `c`, where a thumb already is and
-            where it sits beside the things it counts; under the header in
-            `b`, where it is read on the way in. */}
-        <div
-          className="absolute inset-x-0 z-40 flex items-center px-3"
-          style={{ top: layout.recordTop, height: layout.recordH }}
-        >
-          <IncentiveRecordBox
-            // Held at the pre-payout ledger while the summary is on screen,
-            // so the count ticks up at the moment the page lands in the box
-            // rather than silently behind the scrim. The box is covered for
-            // all of that time; the one frame it is not is the frame it
-            // changes.
-            progress={
-              landing && before.boundary === boundary ? before.progress : progress
-            }
-            onOpen={() => openHandbook("shelf")}
-            variant="hud"
-            landing={docked}
-            // Zero once this file is in the ledger — it is already inside
-            // the lane's whole count, and adding it again as a part-file
-            // filled the bar while the number beside it said 2 of 3.
-            filePartial={
-              fileCredited(hud.levelIndex, progress) ? 0 : hud.fileProgress
-            }
-            alreadyRefined={replaying}
-          />
-        </div>
+        {/* Variants `b` and `c` keep the incentives record as a band of
+            its own. `a` — the one that ships — folds it into the file
+            card as a single line, because two bordered boxes with two
+            bars was one progress widget too many. */}
+        {layout.recordAt === "none" ? null : (
+          <div
+            className="absolute inset-x-0 z-40 flex items-center px-3"
+            style={{ top: layout.recordTop, height: layout.recordH }}
+          >
+            <IncentiveRecordBox
+              progress={progress}
+              onOpen={() => openHandbook("shelf")}
+              variant="hud"
+              landing={docked}
+              filePartial={
+                fileCredited(hud.levelIndex, progress) ? 0 : hud.fileProgress
+              }
+              alreadyRefined={replaying}
+            />
+          </div>
+        )}
 
         {/* Variant `c`: the coach line floats on the board's top edge. The
             band is still reserved, but inside the grid rather than out of
