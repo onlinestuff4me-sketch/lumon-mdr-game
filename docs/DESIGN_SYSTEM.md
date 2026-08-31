@@ -270,26 +270,59 @@ before it travels, because nobody was looking at it yet. And **say the
 number as well as drawing it**: a bar growing is the proof, a `+1` rising
 off the row is the claim, and a refiner reads a claim faster than a bar.
 
-### Progress lives together, under the thumb
+### One bar to watch
 
-The playing screen stacks its meters in one place, in the order a single
-act moves them: the **bin** the packet went into, the **file** that bin
-advanced, the **incentives record** that file advanced. Three readings of
-one action at increasing grain, in the footer — because the refiner's eyes
-are on the bin at the moment all three move, and a meter at the top of the
-screen changes where nobody is looking.
+The playing screen has exactly **one** progress widget for the refiner's
+own advancement, and it is the file meter. There were two — the file card
+and, directly under it, a bordered incentives record with a second bar and
+a second set of numbers — and two bars stacked is not twice the
+information, it is a question about which one matters.
 
-So the file card is a footer, not a header, and the coach line is the first
-thing on the screen instead of the third: it is what the refiner is being
-asked to do, and the board under it is the doing of it.
+The incentive is a **line inside the file card** now: bold, one sentence,
+saying what reaching 100% will buy, with a link to the full record and a
+count beside it.
 
 ```text
-ticker · grid · bins · file card · incentives record
+FILE: ORIENTATION #0001 1/3                        --:--
+▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░  33%  [HANDBOOK ?] [⚙]
+1 MORE FILE FOR YOUR NEXT INCENTIVE      SEE ALL 3/28 ›
 ```
 
-The file card and the record sit on a *tighter* gap than the rest of the
-stack, because they are one object at two grains rather than two bands that
-happen to be adjacent.
+Three rules hold it:
+
+- **The line is not there until it means something.** A refiner who has
+  never been issued an incentive is not told one is coming; the first two
+  arrive unannounced and the ladder introduces itself once it has already
+  paid out. Until then this is a file card and nothing else — which is also
+  what gives the launch animation one simple object to land on.
+- **The requirement is a noun phrase, not a sentence.** `1 MORE FILE`, not
+  `Refine 1 more file without error.` — a line that truncates mid-word has
+  said nothing, and `shortFor()` exists for exactly this one place.
+- **An empty track has to look empty.** A `bg-phos-800` track at 5px reads
+  as a *filled* bar; an empty one was reported as "the progress bar looked
+  complete" beside the words `0/1`. Empty tracks are `bg-phos-950` with a
+  `border-phos-800`, like the file meter.
+
+The card is a footer, not a header, and the coach line is the first thing
+on the screen instead of the third: it is what the refiner is being asked
+to do, and the board under it is the doing of it.
+
+```text
+ticker · grid · bins · file card
+```
+
+### A file leaves; the next one arrives
+
+Finishing a file used to mean watching every bar on the screen snap back to
+zero at once, which reads as progress being taken away. The file card marks
+the completion first — `REFINED`, the border blooming — and then **slides
+out to the left while the next file slides in from the right** at 0%. The
+reset is a change of file, not a loss.
+
+Two mechanics worth keeping: the outgoing card is a *frozen snapshot* shown
+at 100%, so it leaves finished; and the swap is triggered in a **layout**
+effect, because a passive one shows the arriving card at rest for one frame
+before it jumps off-screen to begin its slide.
 
 ### One object, handed from screen to screen
 
@@ -322,11 +355,17 @@ The same two beats that put the incentives record away also bring the file
 card in. Tapping CONTINUE used to cut straight to a wall of digits, and the
 refiner arrived on a screen without having been told what the screen was:
 
-1. **This is your file** — its name, its stage, its meter — held on an
-   empty scrim long enough to read (950ms).
+1. **This is your file** — its name, its stage, its meter, and what the
+   file is *for*, on an empty scrim. It waits for a hand, like every other
+   card in this game: it used to advance itself after 950ms, which is long
+   enough to notice a screen and not long enough to read one, and this is
+   the screen that explains the job.
 2. **And this is where it lives** — that same card shrinks into the file
    card in the footer (780ms), with the board loading underneath it and the
-   scrim lifting as it goes.
+   scrim lifting as it goes. The briefing around it does *not* travel: it
+   clears, so the one object with a destination is the only thing moving,
+   and the scale it lands at is the ratio of two file cards rather than of
+   a whole page to one.
 
 The card shown is visually the card it becomes: same border, same two
 lines, same meter, same two doors out — inert copies included. A card that

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { CircleHelp, Settings } from "lucide-react";
+import { ChevronRight, CircleHelp, Settings } from "lucide-react";
 import { LEVELS } from "../game/constants";
 
 /**
@@ -11,20 +11,22 @@ import { LEVELS } from "../game/constants";
  * summary uses on its way out:
  *
  * 1. **This is your file.** Its name, its stage, and a meter reading how
- *    far through it you are — held long enough to be read, on a scrim with
- *    nothing else on it.
+ *    far through it you are — with the briefing that goes with it, on a
+ *    scrim with nothing else on it, waiting for a hand.
  * 2. **And this is where it lives.** That same card shrinks into the file
- *    card in the footer of the board, which is now sitting between the
- *    bins and the incentives record. A refiner who watches it land knows
- *    what the strip above the record is for, and never has to be told.
+ *    card in the footer of the board. A refiner who watches it land knows
+ *    what the strip under the bins is for, and never has to be told.
+ *
+ * Beat one **waits**, like every other card in this game. It used to
+ * advance itself after 950ms, which is long enough to notice a screen and
+ * not long enough to read one — and this is the one screen that explains
+ * the job.
  *
  * The board loads *underneath* at the start of beat two, so the card is
  * flying at a real destination rather than at a placeholder, and the scrim
  * lifts as it goes — flying at an opaque wall is a card that vanishes.
  */
 
-/** How long the assignment is held before it is filed. */
-const HOLD_MS = 950;
 /** How long it takes to reach the footer of the board. */
 const FLY_MS = 780;
 
@@ -52,26 +54,19 @@ export function FileLaunch({ index, onDock, onDone }: Props) {
 
   const level = LEVELS[index];
 
-  useEffect(() => {
+  /** Beat two: load the board and send the card at its footer. */
+  const begin = () => {
+    if (flying) return;
     if (reduced) {
       onDock();
-      const t = setTimeout(onDone, 40);
-      return () => clearTimeout(t);
+      onDone();
+      return;
     }
-    const t1 = setTimeout(() => {
-      natural.current = card.current?.getBoundingClientRect() ?? null;
-      onDock();
-      setFlying(true);
-    }, HOLD_MS);
-    const t2 = setTimeout(onDone, HOLD_MS + FLY_MS);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
-    // One assignment, one animation. Re-running it against a board that has
-    // already loaded would send a second card at a card already there.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    natural.current = card.current?.getBoundingClientRect() ?? null;
+    onDock();
+    setFlying(true);
+    setTimeout(onDone, FLY_MS);
+  };
 
   /**
    * Aim at the footer card and let go.
@@ -106,40 +101,60 @@ export function FileLaunch({ index, onDock, onDone }: Props) {
     <div
       className="absolute inset-0 z-70 flex flex-col items-center justify-center overflow-hidden px-6"
       style={{
-        background: flying ? "rgba(1,7,4,0)" : "rgba(1,7,4,0.97)",
+        background: flying ? "rgba(1,7,4,0)" : "rgba(1,7,4,0.985)",
         transition: flying ? `background ${FLY_MS}ms ease-in` : undefined,
       }}
     >
       <div
-        ref={card}
         data-file-launch
         className="flex w-full max-w-[300px] flex-col items-center"
         style={{
           animation: reduced
             ? undefined
             : "crt-open 320ms cubic-bezier(.2,.7,.3,1) 1",
-          transition: flying
-            ? `transform ${FLY_MS}ms cubic-bezier(.45,0,.25,1), opacity ${FLY_MS}ms ease-in`
-            : undefined,
-          transform: flight
-            ? `translate(${flight.x}px, ${flight.y}px) scale(${flight.s})`
-            : undefined,
-          opacity: flight ? 0.15 : 1,
         }}
       >
-        <p className="text-[9px] tracking-[0.3em] text-phos-600">
-          LUMON INDUSTRIES
-        </p>
-        <h1 className="crt-text-glow mt-2 text-[13px] font-bold tracking-[0.22em] text-phos-200">
-          FILE ASSIGNED
-        </h1>
-        <div className="mt-2 h-px w-24 bg-phos-600" />
+        {/* Everything except the card itself is the *briefing*, and the
+            briefing does not travel: it clears out of the way so the one
+            object that has a destination is the only thing still moving. */}
+        <div
+          className="flex w-full flex-col items-center"
+          style={{
+            opacity: flying ? 0 : 1,
+            transition: `opacity ${Math.round(FLY_MS * 0.35)}ms ease-out`,
+          }}
+        >
+          <p className="text-[9px] tracking-[0.3em] text-phos-600">
+            LUMON INDUSTRIES
+          </p>
+          <h1 className="crt-text-glow mt-2 text-[13px] font-bold tracking-[0.22em] text-phos-200">
+            FILE ASSIGNED
+          </h1>
+          <div className="mt-2 h-px w-24 bg-phos-600" />
+        </div>
 
         {/* The same object it is about to become: same border, same two
             lines, same meter, same two doors out. A card that morphed into
-            a *different* card on landing would teach the wrong thing. */}
-        <div className="mt-4 flex w-full flex-col justify-center gap-2 rounded-[3px] border border-phos-500 bg-phos-900/50 px-3 py-3">
-          <div className="flex items-baseline justify-between gap-2 text-[11px] tracking-[0.16em]">
+            a *different* card on landing would teach the wrong thing.
+            Measured and flown on its own, so the scale it lands at is the
+            ratio of two file cards rather than of a whole page to one. */}
+        <div
+          ref={card}
+          className="mt-4 flex w-full flex-col justify-center gap-2 rounded-[3px] border border-phos-500 bg-phos-900/50 px-3 py-3"
+          style={{
+            transition: flying
+              ? `transform ${FLY_MS}ms cubic-bezier(.45,0,.25,1), opacity ${FLY_MS}ms ease-in`
+              : undefined,
+            transform: flight
+              ? `translate(${flight.x}px, ${flight.y}px) scale(${flight.s})`
+              : undefined,
+            opacity: flight ? 0.15 : 1,
+          }}
+        >
+          {/* 10px, like the card it becomes — the two have to be the same
+              object, and a line that truncates here and not there is two
+              objects. */}
+          <div className="flex items-baseline justify-between gap-2 text-[10px] tracking-[0.16em]">
             <span className="crt-text-glow truncate text-phos-300">
               <span className="text-phos-600">FILE: </span>
               {level.name} #{level.fileCode}
@@ -176,9 +191,44 @@ export function FileLaunch({ index, onDock, onDone }: Props) {
           </div>
         </div>
 
-        <p className="mt-3 text-[8px] tracking-[0.22em] text-phos-600">
-          REFINEMENT AT 0% · PLEASE ENJOY EACH NUMBER EQUALLY
+        <div
+          className="flex w-full flex-col items-center"
+          style={{
+            opacity: flying ? 0 : 1,
+            transition: `opacity ${Math.round(FLY_MS * 0.35)}ms ease-out`,
+          }}
+        >
+        {/* What the file is for, said the way Lumon would say it. The
+            orientation files get the version that explains the job,
+            because they are the job being explained. */}
+        <p className="mt-4 max-w-[280px] text-[10px] leading-relaxed text-phos-400">
+          {level.training
+            ? "This file is an orientation to your role as a Macrodata Refiner. Find the numbers that feel wrong and consign each to the temper bin it evokes."
+            : "This file has been prepared for you. Find the numbers that feel wrong and consign each to the temper bin it evokes."}
         </p>
+
+        <p className="crt-text-glow mt-3 text-[10px] font-bold tracking-[0.16em] text-phos-300">
+          PLEASE ENJOY EACH NUMBER EQUALLY
+        </p>
+
+        {/* It waits. This is the one screen that explains the job, and a
+            screen that advances itself has explained nothing to anyone who
+            blinked. */}
+        <button
+          type="button"
+          data-begin-refining
+          onClick={begin}
+          className="crt-text-glow mt-5 inline-flex items-center gap-2 rounded-[3px] border border-phos-400 bg-phos-600/25 px-5 py-2.5 text-[11px] font-bold tracking-[0.2em] text-phos-200 active:bg-phos-600/50"
+          style={
+            flying || reduced
+              ? undefined
+              : { animation: "crt-throb 1.9s ease-in-out infinite" }
+          }
+        >
+          BEGIN REFINING
+          <ChevronRight size={12} strokeWidth={2.6} />
+        </button>
+        </div>
       </div>
     </div>
   );

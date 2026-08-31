@@ -426,13 +426,25 @@ INCENTIVES RECORD                        4 KEPT ›
 REFINE 1 MORE FILE   ▓▓▓▓▓▓░░░░░░░░░░      1/2
 ```
 
-It is furniture. It is there before the first incentive exists, reading
-`NONE KEPT`, because furniture that materializes halfway through a session
-reads as a glitch rather than as a place.
+It is not furniture any more, and it is not a box. Two bordered progress
+widgets stacked in the footer — the file's and the incentives record's —
+was one too many, and the second one was answering a question the refiner
+had not asked while they were mid-file. The record is now a **line inside
+the file card**: what reaching 100% will buy, and a link to the rest.
 
-The bar adds the part-file in progress, so every screen of a multi-stage
-file visibly buys something even though the *number* only moves on whole
-files. Two rules keep that honest: the part-file is zero once the file has
+It appears only once the first incentive has been kept. A refiner who has
+never been issued one is not told one is coming — the first two arrive
+unannounced, which was always the design, and the ladder introduces itself
+once it has already paid out.
+
+The old box survives as `IncentiveRecordBox`, drawn on the end-of-file
+panel and in the comparison layouts, where it is the only progress object
+on screen and has nothing to compete with.
+
+(The rest of this section describes that box, which still ships on the
+end-of-file panel and in the comparison layouts.) The bar adds the
+part-file in progress, so every screen of a multi-stage file visibly buys
+something even though the *number* only moves on whole files. Two rules keep that honest: the part-file is zero once the file has
 been credited — it is already inside the whole count, and adding it again
 filled the bar while the number beside it still said `2/3` — and the bar
 may never read 100% unless the count does.
@@ -689,6 +701,37 @@ survived, and a brand-new terminal opened orientation file one reading THIS
 FILE IS ALREADY REFINED.
 
 ---
+
+### The Outie fact bank, audited
+
+Two pools, kept apart on purpose: `CANON_WELLNESS_CLAIM` for claims the
+show actually makes, paraphrased, and `ORIGINAL_APOCRYPHA` for everything
+written here. An audit against the show found the line had blurred:
+
+- **One invention was sitting in the canon pool** — an outie photographed
+  in a newspaper beside a trophy, which is in no episode — and is gone.
+- **Six more read like canon but could not be tied to a line** (music
+  received with appreciation, dances, swimming, a game recently won, the
+  value of water, making time for people). They moved to the apocrypha,
+  which is what that pool is for. The audit was run against what could be
+  corroborated from outside sources; the fan wikis were unreachable, so it
+  is a *floor* on the pool's honesty rather than a proof of it, and any
+  further line that cannot be sourced should move rather than stay.
+- **Eighteen remain**, each corresponding to a wellness fact spoken on
+  screen: kindness, brightening a day by smiling, the tent in under three
+  minutes, the beautiful rock, parallel parking, roller skates, the gas and
+  electric bills, music while shaving, two scoops of one flavor, the
+  butterfly, the friend to children and the elderly and the insane,
+  generosity, muggers and knaves, the machine that plays films, splendid,
+  the heavy object, radar, and the mature one.
+
+Ids are **written, not derived from position**, because they are stored in
+saves: a fact that changes pools or a neighbour that is deleted must not
+silently renumber the rest. A data invariant checks for collisions.
+
+The Outie card's own caption lost its second sentence. "It is not a matter
+for discussion" was Lumon telling the refiner off for something they had
+not done.
 
 ## Part 7 — Media
 

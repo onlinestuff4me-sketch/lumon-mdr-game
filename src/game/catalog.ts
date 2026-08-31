@@ -102,7 +102,7 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
     kind: "fact",
     name: "A FACT ABOUT YOUR OUTIE",
     earned: "WELLNESS HAS A FACT ABOUT YOUR OUTIE",
-    line: "Wellness has prepared a statement concerning the person you are outside. It is not a matter for discussion.",
+    line: "Wellness has prepared a statement concerning the person you are outside.",
     poster: asset("r03_outie_fact_card.webp"),
   },
   R04: {

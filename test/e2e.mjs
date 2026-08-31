@@ -14,7 +14,7 @@ import {
   open, state, findGroup, touchFor, drag, tap, touchTap, load, setMode,
   boxAndBin, carryToBin, byName, section, check, eq, summary, settleIncentives,
   lastTrainingIndex, orientationIndices, refineFile, readLedger, writeLedger,
-  settled,
+  settled, beginRefining,
 } from "./harness.mjs";
 
 const { browser, page, origin, errors, cdp } = await open();
@@ -136,6 +136,7 @@ section("reachability");
       hudTop: Math.round(L.hudTop),
       hudH: L.hudH,
       hudAt: L.hudAt,
+      h: L.h,
     };
   });
   check("there is no mode switch to press", !bands.modes);
@@ -197,14 +198,19 @@ section("reachability");
   // that file advanced. Three readings at increasing grain in the one
   // place a refiner is already looking — and the last two on a tighter
   // gap than the rest, because they are one object at two grains.
-  check("and so are the bins, the file card and the incentives record",
+  check("and so are the bins and the file card under them",
     bands.recordAt === "top"
       ? bands.recordTop < bands.gridBottom
       : bands.hudAt === "footer"
         ? bands.hudTop - (bands.binsTop + bands.binsH) === bands.gap &&
-          bands.recordTop - (bands.hudTop + bands.hudH) < bands.gap &&
-          bands.recordTop > bands.hudTop
+          bands.hudTop + bands.hudH < bands.h
         : bands.recordTop - (bands.binsTop + bands.binsH) === bands.gap,
+    JSON.stringify(bands));
+  // The incentives record has no band of its own in the shipping layout:
+  // two bordered boxes with two bars was one progress widget too many, so
+  // it is a line inside the file card and the band went back to the board.
+  check("and the incentives record has no band of its own to compete with",
+    bands.hudAt !== "footer" || bands.recordAt === "none",
     JSON.stringify(bands));
   check("with the coach line above the board rather than below the header",
     bands.hudAt !== "footer" || bands.hudTop > bands.gridBottom,
@@ -1118,6 +1124,7 @@ section("saves");
 
   // Continue resumes one past the furthest completed file.
   await page.getByText("CONTINUE —").click();
+  await beginRefining(page);
   await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });
   eq("continue lands on the next file",
     await page.evaluate(() => window.__mdr.levelIndex), 1);
@@ -1125,6 +1132,7 @@ section("saves");
   // A new save starts from nothing — and the old attempt survives it.
   await boot();
   await page.getByText("BEGIN A NEW SAVE").click();
+  await beginRefining(page);
   await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });
   eq("a new save starts at the beginning",
     await page.evaluate(() => window.__mdr.levelIndex), 0);
@@ -1137,11 +1145,14 @@ section("saves");
     // against the previous save survived, and a brand-new terminal opened
     // orientation file one reading THIS FILE IS ALREADY REFINED.
     await page.waitForTimeout(300);
-    const strip = await page.evaluate(
-      () => document.querySelector('[data-record-box="hud"]')?.innerText ?? "");
-    check("and says nothing about a file this save has never seen",
-      !/ALREADY REFINED/.test(strip) && /NONE KEPT/.test(strip),
-      strip.replace(/\n/g, " | "));
+    const card = await page.evaluate(
+      () => document.querySelector("[data-file-card]")?.innerText ?? "");
+    // Nothing is promised before the first incentive exists: a brand-new
+    // save is a file card and nothing else, which is also what keeps the
+    // launch animation landing on one simple object.
+    check("a save that has kept nothing is promised nothing",
+      !/ALREADY REFINED/.test(card) && !/NEXT INCENTIVE/.test(card),
+      card.replace(/\n/g, " | "));
   }
   await boot();
   check("both attempts are now listed",
@@ -1151,6 +1162,7 @@ section("saves");
   await page.getByText("LOAD A PREVIOUS SAVE (2)").click();
   const totalFiles = await page.evaluate(() => window.__mdr.levels.length);
   await page.getByText(`1/${totalFiles} FILES`).click();
+  await beginRefining(page);
   await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });
   eq("loading the older save resumes its own place",
     await page.evaluate(() => window.__mdr.levelIndex), 1);
@@ -1467,9 +1479,12 @@ section("incentives");
   await page.reload({ waitUntil: "networkidle" });
   await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
   {
+    // One meter, not two. The incentives record used to be a bordered box
+    // of its own with a second bar; it is a line inside the file card now,
+    // and the *file* meter is the bar to watch.
     const bar = () =>
       page.evaluate(() => {
-        const box = document.querySelector('[data-record-box="hud"]');
+        const box = document.querySelector("[data-file-card]");
         const fill = box?.querySelector(".bg-phos-400");
         return {
           text: box?.innerText.replace(/\n/g, " | ") ?? "",
@@ -1493,10 +1508,10 @@ section("incentives");
     }
     await page.waitForTimeout(500);
     const after = await bar();
-    check("a stage of a file moves the record's meter",
+    check("a stage of a file moves the file's meter",
       after.w > before.w, JSON.stringify([before, after]));
-    check("while the whole-file count stays honest",
-      after.text.includes("0/1"), after.text);
+    check("and the card names the file it is measuring",
+      /ORIENTATION/.test(after.text), after.text);
 
     // The meter measures the stretch between thresholds, not the running
     // total against a target that moves — so it may never fall while the
@@ -1534,8 +1549,7 @@ section("incentives");
     check("and never falls back while the refiner is succeeding",
       fell < 0, JSON.stringify(seen));
     check("reaching the threshold fills it rather than moving the goalposts",
-      /INCENTIVE EARNED/.test(done.text) && done.text.includes("1/1"),
-      done.text);
+      done.text.includes("100%"), done.text);
   }
 
   // A save that has already credited these files earns nothing by
@@ -1560,16 +1574,16 @@ section("incentives");
     await load(page, 0);
     await page.waitForTimeout(300);
     const text = await page.evaluate(
-      () => document.querySelector('[data-record-box="hud"]')?.innerText ?? "");
+      () => document.querySelector("[data-file-card]")?.innerText ?? "");
     check("a file already in the ledger says it will not count again",
-      /ALREADY REFINED/.test(text), text.replace(/\n/g, " | "));
+      /ALREADY BEEN REFINED/.test(text), text.replace(/\n/g, " | "));
     // And a fresh file says nothing of the kind.
     await load(page, await byName(page, "DRANESVILLE"));
     await page.waitForTimeout(300);
     const fresh = await page.evaluate(
-      () => document.querySelector('[data-record-box="hud"]')?.innerText ?? "");
+      () => document.querySelector("[data-file-card]")?.innerText ?? "");
     check("a file that has not been refined does not",
-      !/ALREADY REFINED/.test(fresh), fresh.replace(/\n/g, " | "));
+      !/ALREADY BEEN REFINED/.test(fresh), fresh.replace(/\n/g, " | "));
   }
 
   // ── the full record: categories, counts, and concealed slots ─────

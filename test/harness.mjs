@@ -301,6 +301,24 @@ export async function settleIncentives(page) {
  * says when it has settled, which keeps these waits correct if either
  * timing changes.
  */
+/**
+ * Press through the FILE ASSIGNED screen, if one is up.
+ *
+ * Every way into the board from the briefing now shows the file being
+ * assigned and waits for a hand — it is the one screen that explains the
+ * job, and a screen that advances itself has explained nothing. A test
+ * that clicks CONTINUE and then waits for the board will otherwise wait
+ * forever on a card nobody pressed.
+ */
+export const beginRefining = async (page) => {
+  const cta = page.locator("[data-begin-refining]");
+  if ((await cta.count()) === 0) return false;
+  await cta.click({ timeout: 4000 }).catch(() => {});
+  // The card flies into the footer while the board loads behind it.
+  await page.waitForTimeout(1000);
+  return true;
+};
+
 export const load = async (page, index) => {
   await page.evaluate((i) => window.__mdr.startLevel(i), index);
   await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });

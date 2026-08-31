@@ -132,6 +132,16 @@ export function IncentiveSummary({
     start.reduce((n, c) => n + c.have, 0);
 
   const page = useRef<HTMLDivElement | null>(null);
+  /**
+   * The scrim, which is what the arriving file is positioned against.
+   *
+   * Not the page: the page plays `crt-open`, and a file parented to it
+   * inherited that unfurl — so the object handed over from the reward card
+   * jumped in size and position on the frame this screen mounted, which is
+   * the flicker that made it impossible to follow. The scrim does not
+   * animate, and it is centred on the same point the outgoing file was.
+   */
+  const scrim = useRef<HTMLDivElement | null>(null);
   /** The page's size before anything was done to it, for the stow. */
   const natural = useRef<DOMRect | null>(null);
 
@@ -150,9 +160,9 @@ export function IncentiveSummary({
     timers.push(
       setTimeout(() => {
         raf = requestAnimationFrame(() => {
-          const host = page.current;
+          const host = scrim.current;
           const dock = target
-            ? host?.querySelector(`[data-cat-meter="${target}"]`)
+            ? page.current?.querySelector(`[data-cat-meter="${target}"]`)
             : null;
           if (host && dock) {
             const h = host.getBoundingClientRect();
@@ -207,7 +217,7 @@ export function IncentiveSummary({
         // strip is what is waiting.
         const dock =
           document.querySelector('[data-record-box="panel"]') ??
-          document.querySelector('[data-record-box="hud"]');
+          document.querySelector("[data-file-card]");
         const p = natural.current;
         if (!p || !dock) return;
         const d = dock.getBoundingClientRect();
@@ -267,6 +277,7 @@ export function IncentiveSummary({
 
   return (
     <div
+      ref={scrim}
       className="absolute inset-0 z-70 flex flex-col items-center justify-center overflow-hidden"
       style={{
         // Opaque from the first frame, and deliberately *not* animated: the
@@ -381,10 +392,13 @@ export function IncentiveSummary({
                   </div>
                   {/* The increment, said as a number. The bar growing is
                       the proof; this is the claim. */}
+                  {/* The claim, said as a number. Big and slow on purpose:
+                      this is the payoff of the whole filing sequence, and
+                      at 10px in 900ms it was a detail nobody caught. */}
                   {took && bump > 0 ? (
                     <span
-                      className="crt-text-glow pointer-events-none absolute right-0 top-0 text-[10px] font-bold tabular-nums text-phos-100"
-                      style={{ animation: "count-bump 900ms ease-out 1 forwards" }}
+                      className="crt-text-glow pointer-events-none absolute right-0 top-0 text-[19px] font-bold tabular-nums text-phos-100"
+                      style={{ animation: "count-bump 1600ms cubic-bezier(.2,.8,.3,1) 1 forwards" }}
                     >
                       +{bump}
                     </span>
@@ -443,7 +457,11 @@ export function IncentiveSummary({
                   every other incentive meter in the game — never the
                   running total against a target that moves. */}
               <div className="mt-2 flex items-center gap-2">
-                <div className="h-[5px] flex-1 overflow-hidden rounded-sm bg-phos-800">
+                {/* `bg-phos-800` at this weight reads as a *filled* bar:
+                    an empty 5px track was reported as "the progress bar
+                    looked complete" next to the words 0/1. An empty track
+                    has to look empty. */}
+                <div className="h-[5px] flex-1 overflow-hidden rounded-sm border border-phos-800 bg-phos-950">
                   <div
                     className="h-full bg-phos-300 transition-[width] duration-500 ease-out"
                     style={{
@@ -491,42 +509,49 @@ export function IncentiveSummary({
             middle of the page — at the size and place the card left it, so
             the handover is one object and not two — is held there long
             enough to be seen, and then goes into the row it moved. */}
-        {inFlight ? (
+      </div>
+
+      {/* The file the card folded itself into, arriving — parented to the
+          scrim, not to the page, so it holds the exact size and position
+          the reward card left it at instead of inheriting the page's
+          unfurl. It is held there long enough to be seen and then walks
+          into the row it moved. */}
+      {inFlight ? (
+        <div
+          className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
+          style={{
+            transition:
+              arrival === "flying"
+                ? `transform ${FLY_MS}ms cubic-bezier(.5,0,.3,1), opacity ${FLY_MS}ms ease-in`
+                : undefined,
+            transform:
+              arrival === "flying" && drop
+                ? `translate(${drop.x}px, ${drop.y}px) scale(0.12)`
+                : undefined,
+            opacity: arrival === "flying" && drop ? 0.1 : 1,
+          }}
+        >
+          {/* Its own dark ground, travelling with it. Whatever the file
+              passes over is pushed back under this, so the thing the eye is
+              following never has to compete with the page it is crossing. */}
           <div
-            className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center"
+            aria-hidden
+            className="absolute h-[190px] w-[190px]"
             style={{
-              transition:
-                arrival === "flying"
-                  ? `transform ${FLY_MS}ms cubic-bezier(.5,0,.3,1), opacity ${FLY_MS}ms ease-in`
-                  : undefined,
-              transform:
-                arrival === "flying" && drop
-                  ? `translate(${drop.x}px, ${drop.y}px) scale(0.12)`
-                  : undefined,
-              opacity: arrival === "flying" && drop ? 0.1 : 1,
+              background:
+                "radial-gradient(circle, rgba(1,7,4,0.96) 0%, rgba(1,7,4,0.88) 38%, rgba(1,7,4,0) 72%)",
+            }}
+          />
+          <div
+            className="relative"
+            style={{
+              animation: reduced ? undefined : "file-lift 1.1s ease-in-out infinite",
             }}
           >
-            {/* Its own dark ground, travelling with it. Whatever the file
-                passes over is pushed back under this, so the thing the eye
-                is following never has to compete with the page it is
-                crossing. */}
-            <div
-              aria-hidden
-              className="absolute h-[190px] w-[190px]"
-              style={{
-                background:
-                  "radial-gradient(circle, rgba(1,7,4,0.96) 0%, rgba(1,7,4,0.88) 38%, rgba(1,7,4,0) 72%)",
-              }}
-            />
-            <div
-              className="relative"
-              style={{ animation: reduced ? undefined : "file-lift 1.1s ease-in-out infinite" }}
-            >
-              <FileGlyph size={54} />
-            </div>
+            <FileGlyph size={54} />
           </div>
-        ) : null}
-      </div>
+        </div>
+      ) : null}
     </div>
   );
 }
