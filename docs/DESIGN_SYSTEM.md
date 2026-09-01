@@ -245,6 +245,41 @@ in the ambient bed but quieter and on the effects bus, so it reads as *this
 terminal* writing rather than as the room. This is for meaning, not decoration —
 a label that is merely *updating* still just updates.
 
+**The coach band is typed too**, because it is a line that changes meaning
+three times in the first few seconds of a file. An error is the one
+exception and lands whole: a reprimand that takes half a second to spell
+itself out arrives after the refiner has already moved on.
+
+### The coach band walks the refiner through a file
+
+Past orientation every file hides its groups, and the band at the top of
+the board is the only thing on screen that can say so. It is three beats,
+not one line:
+
+| | Beat | When |
+| --- | --- | --- |
+| 1 | `FILE DRANESVILLE #0117 LOADED` | On arrival. It is the object the launch animation just handed them. |
+| 2 | `HOLD DOWN ON THE NUMBERS TO FIND THE STRANGE ONES.` | 1.9s later, typed over the name |
+| 3 | `TEMPER DETECTED — BOX IT AND DRAG IT TO ITS BIN` | When a group actually surfaces |
+
+Said at once, the name is gone before it is read and the instruction is
+one more thing arriving in a frame already full of arriving things. Beat
+two is dropped the moment the refiner is already probing — a coach line
+that arrives after the lesson has been learned is an interruption — and
+beat three names the *whole* of what is left rather than only the next
+half of it.
+
+Only the file that introduces the probe used to get any of this. Every
+file after it said `FILE LOADED` and then nothing, for the twenty-one
+files where the probe is actually required.
+
+**A gesture the game asked for must never be answered with a reprimand.**
+The release that ends a press-and-hold both armed the selection box *and*
+fell through to the tap handler, which reads the agitation the group had
+when the finger landed — before the probe raised it. So holding a group,
+the exact thing beat two asks for, buzzed and said `NO TEMPER DETECTED —
+PROBE FIRST`. A release that armed the box is not also a tap.
+
 ### Two timing rules
 
 1. **The board finishes before anything covers it.** A completed file is
@@ -359,6 +394,31 @@ Two mechanics worth keeping: the outgoing card is a *frozen snapshot* shown
 at 100%, so it leaves finished; and the swap is triggered in a **layout**
 effect, because a passive one shows the arriving card at rest for one frame
 before it jumps off-screen to begin its slide.
+
+### One picture per meaning
+
+Three kinds of plate, drawn by one component (`RewardPlate`) so the card
+that opens and the shelf that keeps it can never disagree:
+
+- **A photograph**, where the identity *is* the picture — the eraser, the
+  finger trap, the melon bar, the office floor.
+- **The blank card**, where the payload is a sentence and the plate is
+  only what it is printed on. The words are typeset over it at runtime,
+  because a generated picture cannot be trusted to spell. Outie facts and
+  Wellness sessions share it, and that is correct: a session *is* several
+  facts read out in turn.
+- **A handbook page**, drawn in CSS rather than photographed, for
+  doctrine. Warm paper, a serif, a rule under the running head, a drop
+  cap, and a gutter shadow down the bound edge. It shared the Outie card
+  for a while, which made a note about Woe and a sentence about the person
+  you are outside the same object — and they are not the same object.
+
+Two rules fall out of this. **A plate that carries the sentence does not
+also caption it** — the reward's own line goes under it instead, or the
+interesting half of the incentive ends up in eight-point italics under a
+picture of a chair. And **the caption band reserves three lines and clips
+in silence past them**, so a data invariant caps every catalog line at 96
+characters rather than trusting anyone to count.
 
 ### One subject at a time
 

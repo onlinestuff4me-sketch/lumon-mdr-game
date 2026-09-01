@@ -1842,6 +1842,73 @@ section("music dance experience");
   eq("only the multiplier resets", missed.multiplier, 1);
 }
 
+// ═══ the coach band walks a file ═════════════════════════════════════
+//
+// Past orientation every file hides its groups, and the band is the only
+// thing on screen that can say so. It used to name the file and then go
+// quiet for the whole of the twenty-one files where the probe is actually
+// required — the one file that taught it was BELLINGHAM, and after that a
+// refiner was on their own.
+section("the coach band");
+{
+  const say = () => page.evaluate(() => window.__mdr.getSnapshot().message ?? "");
+
+  const named = await byName(page, "DRANESVILLE");
+  await load(page, named);
+  check("beat one names the file",
+    /FILE DRANESVILLE #\d+ LOADED/.test(await say()), await say());
+
+  // Beat two arrives on its own, a moment later, and is typed over the
+  // first rather than swapped for it.
+  await page.waitForFunction(
+    () => /HOLD DOWN/.test(window.__mdr.getSnapshot().message ?? ""),
+    null,
+    { timeout: 6000 },
+  ).catch(() => {});
+  check("beat two is the gesture that opens the file",
+    /HOLD DOWN ON THE NUMBERS/.test(await say()), await say());
+  {
+    const band = await page.evaluate(() => {
+      const el = [...document.querySelectorAll("span")].find(
+        (n) => n.className.includes("crt-text-glow") && n.className.includes("bg-phos-950/90"),
+      );
+      return el ? el.innerText.trim() : "";
+    });
+    // Mid-erase or mid-type, the band is a prefix of one line or the
+    // other — never both at once, which is what a swap looks like.
+    check("and the band is writing it rather than swapping it",
+      "HOLD DOWN ON THE NUMBERS TO FIND THE STRANGE ONES.".startsWith(band) ||
+        band === "" ||
+        /^FILE DRANESVILLE/.test(band),
+      JSON.stringify(band));
+  }
+
+  // Beat three lands when a group actually surfaces, and names the whole
+  // of what is left to do rather than half of it.
+  await setMode(page, "probe");
+  {
+    const g = await findGroupToBin(page);
+    const at = await touchFor(page, g.ctr, "probe");
+    await page.mouse.move(origin.x + at.x, origin.y + at.y);
+    await page.waitForTimeout(140);
+    await page.mouse.down();
+    await page.waitForTimeout(900);
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+  }
+  const after = await say();
+  check("beat three says what to do with what was found",
+    /BOX IT AND DRAG IT TO ITS BIN/.test(after), after);
+  // The bug that hid it: the release that armed the box was also read as
+  // a tap on the group, and the tap checked the agitation the group had
+  // *before* the probe raised it — so the gesture the game had just asked
+  // for was answered with a buzz and "PROBE FIRST".
+  check("and holding a group is never answered with PROBE FIRST",
+    !/PROBE FIRST/.test(after), after);
+  eq("the box is armed by the hold, as it always was",
+    (await state(page)).mode, "select");
+}
+
 // ═══ a mistake, and what it costs ════════════════════════════════════
 //
 // The precision incentives are never advertised — "REFINE 1 MORE FILE

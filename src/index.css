@@ -22,6 +22,12 @@
   --color-bezel: #0b100d;
 
   --font-mono: "Courier New", "Courier", ui-monospace, monospace;
+  /* The one thing in this game that is not a terminal: the handbook. A
+     passage from it is printed matter, and printed matter is set in a
+     serif. No webfont — a page that arrives after the plate does is a
+     page that jumps. */
+  --font-book: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia,
+    "Times New Roman", serif;
 
   --animate-crt-flicker: crt-flicker 5.5s steps(1, end) infinite;
   --animate-boot-sweep: boot-sweep 2.2s ease-out forwards;

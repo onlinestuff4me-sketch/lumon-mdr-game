@@ -128,16 +128,38 @@ a refiner counts screens, because a screen is what they just did.
 | 2 | ORIENTATION (2) | **R01 Eraser** | Minor | file 1 |
 | 3 | ORIENTATION (2) | **R03 Outie Fact** I | Minor | file 3 |
 | 4 | ORIENTATION (2) | **R05 Melon Bar** | Minor | file 5 |
+| 5 | ORIENTATION (2) | **R03 Outie Fact** | Minor | — |
 | 6 | ORIENTATION (last) | **R06 Wellness I** — 3 facts | Major | file 9 |
+| 7 | BELLINGHAM | **R03 Outie Fact** | Minor | — |
 | 8 | CALIBRATION | **R07 MDE I** | Major | file 10 |
+| 9 | DRANESVILLE | **R03 Outie Fact** | Minor | — |
 | 10 | SUNSET PARK | **R08 Crystal Portrait Gift** | Major | file 12 |
+| 11 | CAIRNS | **R03 Outie Fact** | Minor | — |
 | 12 | EMINENCE | **R03 Outie Fact** encore | Minor | file 13 |
+| 13 | KINGSPORT | **R03 Outie Fact** | Minor | — |
 | 14 | LE MANS | **R12 Egg Bar** | Minor | file 16 |
+| 15 | LONGBRANCH | **R03 Outie Fact** | Minor | — |
 | 16 | MOONBEAM | **R13 Watermelon Remembrance** | Minor | file 17 |
+| 17 | TUMWATER | **R03 Outie Fact** | Minor | — |
 | 18 | JESUP | **R06 Wellness II** — 4 facts | Major | file 18 |
+| 19 | ALLENTOWN | **R03 Outie Fact** | Minor | — |
 | 20 | NANNING | **R07 MDE II** — abnormal | Major | file 24 |
+| 21 | SIENA | **R03 Outie Fact** | Minor | — |
 | 22 | YAKIMA | **R19 Waffle Party I** — with 90 bins | Major | file 34 + 200 bins |
 | 23 | COLD HARBOR | **R22 Waffle Party II** — with 104 bins, after R19 | Landmark | file 50 + 750 bins |
+
+**Every file pays.** The nine rows marked `—` are not in any source
+document; they were added after a refiner finished ORIENTATION #0005, read
+`INCENTIVE EARNED` on the panel, and was handed nothing at all. The ladder
+stepped 4, 6, 8, 10 and left the odd files empty, and a file that pays
+nothing is a file whose ceremony is a shrug.
+
+An Outie fact is the right thing to fill them with. The bank holds
+forty-eight sentences and the campaign is twenty-three files, so there is
+no scarcity to ration; they are the cheapest thing in the game to give;
+and they are the incentive playtesters actually quote back. A data
+invariant asserts that no file count between 1 and the last is missing a
+rung.
 
 The first incentive is a *file*-completion incentive, which is why the
 first orientation lesson is three stages rather than four: each stage
@@ -385,6 +407,36 @@ does anything, and a refiner who does not know that is a refiner sitting in
 front of a card that appears to have stopped. Every one of these keyframes
 has a `prefers-reduced-motion` variant that flattens it to its end state.
 
+### Three kinds of plate
+
+The picture on an incentive is drawn by one component (`RewardPlate`), in
+both places a refiner sees it — the card that opens, and the shelf in the
+handbook. Two implementations drift, and the drift reads as *the thing on
+my shelf is not the thing I was given*.
+
+| Kind | Plate | Why |
+|---|---|---|
+| Object, experience | A photograph | Its identity **is** its picture: the eraser, the finger trap, the melon bar, the office floor. |
+| Outie fact, Wellness session | The blank card, with the sentence typeset over it at runtime | The sentence is the payload; the card is only the thing it is printed on. A generated picture cannot be trusted to spell. |
+| Doctrine (R04) | A **handbook page**, drawn rather than photographed | A passage from a book should look like a book. |
+
+**A Wellness session is several Outie facts, so it is drawn as several
+Outie facts** — the same card on the same stand, one sentence at a time,
+paged `1/3`. It used to open on a photograph of an empty wellness room
+with the fact in small green italics underneath, which put the whole of
+what a refiner came for in the caption, under a chair.
+
+**Doctrine is not a fact about your outie and no longer looks like one.**
+The temper milestones read a passage from the handbook; that page is CSS,
+not an asset — warm paper, a serif, a rule under the running head, a drop
+cap, and a gutter shadow down the bound edge so it reads as the right-hand
+page of an open book. Drawn rather than photographed, the type is crisp at
+280px and the sentence can be any length.
+
+**The band under a plate reserves three lines**, and clips in silence past
+them. Four catalog lines had drifted over it and were being cut mid-word
+on the card. A data invariant now caps every `line` at 96 characters.
+
 ### When two arrive at once
 
 A screen that also crosses a bin threshold earns two rewards on the same
@@ -413,23 +465,33 @@ Watching someone reach screen 9 and be handed the same photograph three
 times settled these. All four are enforced where the queue is turned into
 a running order, so they hold however the ladder is rearranged later.
 
-1. **One card per reward, per boundary.** Two rungs that both award a fact
-   card are two facts, not two ceremonies — the second waits.
-2. **Never the same picture twice in a row.** Every fact card and every
-   Wellness session is the same plate, so those count as one look and
-   cannot follow each other. Two different objects are two different
-   photographs and sit together fine.
-3. **Never the reward that ended the last boundary**, so the spacing
-   survives across screens rather than only within one.
+1. **A sentence is not a picture.** Anything whose payload is the words on
+   it — a fact card, a Wellness session — is exempt from every rule below.
+   Two of them in a row are two different things said; two melon bars in a
+   row are the same photograph twice.
+2. **Never the same picture twice in a row**, nor the same reward twice in
+   one boundary, nor the reward that ended the last boundary — so the
+   spacing survives across files rather than only within one.
+3. **At most one major event per boundary.** A second waits for the next
+   file rather than running back to back.
 4. **An object already on the shelf is not shown again.** A second finger
    trap is still owed, still counted, and still appears on the shelf as
    `×2` — but a repeat of the same photograph is the game repeating
    itself. It is kept without a card, and the end-of-file panel names it:
    `FINGER TRAP ISSUED AGAIN · KEPT`.
 
-Rewards whose content changes every time — fact cards, Wellness sessions,
-the dance experience — are never repeats in this sense, because the
-sentence or the session is new even when the plate is not.
+And above all of them, the guarantee: **a queue that is not empty always
+hands something over.** Rule 1 exists because rules 2 and 3 did not have
+it. A refiner finished a file, the panel said `INCENTIVE EARNED` because
+one rung was owed, and the spacing rule deferred it for being the same
+*kind of card* as the last one — so the boundary promised an incentive and
+produced none. Whatever the spacing rules would rather do, the first thing
+in the queue is shown rather than nothing.
+
+All of this lives in `src/game/present.ts` rather than inside the screen
+that draws it, because a spacing rule is exactly the sort of thing that
+goes wrong two boundaries later, invisibly, in a way no screenshot of one
+screen can show. It is tested there.
 
 ### Where it goes: the incentives record
 
