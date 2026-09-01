@@ -88,19 +88,36 @@ const SCREEN_LADDER: readonly Rung[] = [
   { id: "S02", lane: "screens", at: 2, reward: "R01", size: "minor" },
   { id: "S03", lane: "screens", at: 3, reward: "R03", size: "minor" },
   { id: "S05", lane: "screens", at: 4, reward: "R05", size: "minor" },
+  // Every file in the gaps pays an Outie fact. The ladder used to step 4,
+  // 6, 8, 10 and leave the odd files with nothing at all — a refiner would
+  // finish a whole file, watch the panel say INCENTIVE EARNED because a
+  // bin threshold was owed and being held back, and be handed nothing. The
+  // bank has forty-eight sentences and this campaign is twenty-three
+  // files: there is no reason for a file to pay nothing, and a sentence
+  // about the person you are outside is the cheapest thing in the game to
+  // give and the one playtesters liked most.
+  { id: "SF05", lane: "screens", at: 5, reward: "R03", size: "minor" },
   { id: "S09", lane: "screens", at: 6, reward: "R06", size: "major" },
+  { id: "SF07", lane: "screens", at: 7, reward: "R03", size: "minor" },
   // Screen 13 is the first screen carrying all four tempers and the last
   // of orientation: the field the refiner has just mastered becomes the
   // dance floor.
   { id: "S13", lane: "screens", at: 8, reward: "R07", size: "major" },
+  { id: "SF09", lane: "screens", at: 9, reward: "R03", size: "minor" },
   // CALIBRATION names the four. The commendation belongs here rather than
   // on 13, so that two major events never share a boundary.
   { id: "S15", lane: "screens", at: 10, reward: "R08", size: "major" },
+  { id: "SF11", lane: "screens", at: 11, reward: "R03", size: "minor" },
   { id: "S17", lane: "screens", at: 12, reward: "R03", size: "minor" },
+  { id: "SF13", lane: "screens", at: 13, reward: "R03", size: "minor" },
   { id: "S20", lane: "screens", at: 14, reward: "R12", size: "minor" },
+  { id: "SF15", lane: "screens", at: 15, reward: "R03", size: "minor" },
   { id: "S23", lane: "screens", at: 16, reward: "R13", size: "minor" },
+  { id: "SF17", lane: "screens", at: 17, reward: "R03", size: "minor" },
   { id: "S24", lane: "screens", at: 18, reward: "R06", size: "major" },
+  { id: "SF19", lane: "screens", at: 19, reward: "R03", size: "minor" },
   { id: "S26", lane: "screens", at: 20, reward: "R07", size: "major" },
+  { id: "SF21", lane: "screens", at: 21, reward: "R03", size: "minor" },
   {
     id: "S28",
     lane: "screens",

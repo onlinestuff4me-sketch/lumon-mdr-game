@@ -296,6 +296,18 @@ export const FACT_PLAN: Record<
   S03: { canon: 1, original: 0 }, // screen 3 — the first fact card
   B010: { canon: 0, original: 1 },
   S09: { canon: 2, original: 1 }, // Wellness I — three facts
+  // One sentence for each file the ladder used to skip. Alternating the
+  // pools so the show's own lines are spread through the campaign rather
+  // than spent in the first third of it.
+  SF05: { canon: 0, original: 1 },
+  SF07: { canon: 1, original: 0 },
+  SF09: { canon: 0, original: 1 },
+  SF11: { canon: 1, original: 0 },
+  SF13: { canon: 0, original: 1 },
+  SF15: { canon: 1, original: 0 },
+  SF17: { canon: 0, original: 1 },
+  SF19: { canon: 1, original: 0 },
+  SF21: { canon: 0, original: 1 },
   S17: { canon: 1, original: 0 },
   B025: { canon: 1, original: 0 },
   S24: { canon: 2, original: 2 }, // Wellness II — four facts

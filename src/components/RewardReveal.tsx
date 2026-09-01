@@ -3,7 +3,9 @@ import { ChevronRight } from "lucide-react";
 import type { RewardDef } from "../game/catalog";
 import type { Fact } from "../game/facts";
 import { keepLabel } from "../game/lexicon";
+import { plateIsPale } from "../game/catalog";
 import { reasonFor, type Rung } from "../game/rewards";
+import { RewardPlate } from "./RewardPlate";
 import { useTypeOver } from "../hooks/useTypeOver";
 import { FileGlyph } from "./FileGlyph";
 
@@ -206,7 +208,20 @@ export function RewardReveal({
    */
   const sealedHead =
     total > 1 ? `YOU'VE EARNED ${total} INCENTIVES` : "YOU'VE EARNED AN INCENTIVE";
-  const caption = fact && reward.kind !== "fact" ? fact.text : reward.line;
+  /**
+   * What goes under the plate.
+   *
+   * A plate that carries the sentence gets the reward's own line here
+   * instead, because the sentence is already the thing being read. That
+   * now includes a Wellness session: it used to show a stock photograph of
+   * an empty chair with the fact in small green italics beneath it, which
+   * put the interesting half of the incentive in the caption.
+   */
+  const onPlate =
+    reward.kind === "fact" ||
+    reward.kind === "session" ||
+    reward.doctrine === true;
+  const caption = fact && !onPlate ? fact.text : reward.line;
 
   const head = useTypeOver(reward.earned, {
     go: open,
@@ -320,27 +335,19 @@ export function RewardReveal({
             move when one becomes the other. */}
         <div
           className={`relative mt-4 aspect-[9/16] w-full overflow-hidden rounded-[3px] border border-phos-600 ${
-            open && reward.kind === "fact" ? "bg-[#e9e5d9]" : "bg-black"
+            open && plateIsPale(reward) ? "bg-[#e9e5d9]" : "bg-black"
           }`}
         >
           {open ? (
-            <>
-              <img
-                className="absolute inset-0 h-full w-full object-cover"
-                src={reward.poster}
-                alt={reward.name}
-              />
-              {/* A generated picture cannot be trusted to spell, so the
-                  sentence is typeset over the plate at runtime. */}
-              {reward.kind === "fact" && fact ? (
-                <p
-                  className="absolute flex items-center justify-center text-center text-[9px] leading-relaxed text-[#2b3a30]"
-                  style={{ left: "27%", right: "25%", top: "26%", bottom: "34%" }}
-                >
-                  {fact.text}
-                </p>
-              ) : null}
-            </>
+            // Sized rather than positioned: the box around it is already
+            // the fixed 9/16 the lid occupies, so the plate simply fills
+            // it and keeps its own positioning context for the sentence
+            // typeset on top.
+            <RewardPlate
+              reward={reward}
+              text={fact?.text ?? null}
+              className="h-full w-full"
+            />
           ) : null}
 
           {/* The lid. Two halves that split on a bright seam and retract,

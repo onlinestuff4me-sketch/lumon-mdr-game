@@ -5,6 +5,7 @@ import { categoryProgress } from "../game/held";
 import { RECORD_TITLE } from "../game/lexicon";
 import type { RewardId } from "../game/rewards";
 import type { Progress } from "../game/progress";
+import { RewardPlate } from "./RewardPlate";
 
 /**
  * The full incentives record: every category, what is kept in each, and
@@ -115,10 +116,14 @@ export function IncentiveShelf({
                     </button>
                     {isOpen ? (
                       <div className="px-2.5 pb-2.5">
-                        <img
-                          className="mx-auto block w-full max-w-[150px] rounded-[2px] border border-phos-700"
-                          src={def.poster}
-                          alt={def.name}
+                        {/* The same plate the card opened on, so the
+                            thing on the shelf is the thing they were
+                            given. A doctrine page is drawn, not
+                            photographed, and would be a broken image
+                            here if this reached for `poster` itself. */}
+                        <RewardPlate
+                          reward={def}
+                          className="mx-auto block aspect-[9/16] w-full max-w-[150px] overflow-hidden rounded-[2px] border border-phos-700"
                         />
                         <p className="mx-auto mt-1.5 max-w-[280px] text-center text-[9px] italic leading-relaxed text-phos-400">
                           {def.line}

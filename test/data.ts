@@ -8,7 +8,14 @@ import { assignMorphs, boardExtras, createBoard } from "../src/game/grid";
 import { LADDER, forecast, newlyEarned } from "../src/game/rewards";
 import { CATALOG } from "../src/game/catalog";
 import { FACTS, FACT_PLAN, factById, factCount, pickFacts } from "../src/game/facts";
-import { applyCompletion, counters, emptyProgress, type Progress } from "../src/game/progress";
+import {
+  applyCompletion,
+  claimReward,
+  counters,
+  emptyProgress,
+  type Progress,
+} from "../src/game/progress";
+import { selectPresentation } from "../src/game/present";
 import { existsSync } from "node:fs";
 
 let bad = 0;
@@ -397,6 +404,98 @@ console.log(`\n── incentive ladder ${"─".repeat(41)}`);
     ok("a screen credits once, however often the boundary fires");
   }
 
+  // ── every file pays something, and the payout is actually shown ────
+  //
+  // Two halves of one complaint: a refiner finished ORIENTATION #0005,
+  // was told INCENTIVE EARNED on the panel, and was handed nothing. The
+  // ladder had no rung for file 5 at all, and the one rung that *was*
+  // owed had been deferred by the spacing rule because the last thing
+  // shown had been the same kind of card.
+  {
+    const files = LEVELS.reduce(
+      (n, l) => n + ((l.stage ? l.stage[0] === l.stage[1] : true) ? 1 : 0),
+      0,
+    );
+    const paid = new Set(
+      LADDER.filter((r) => r.lane === "screens").map((r) => r.at),
+    );
+    const unpaid: number[] = [];
+    for (let n = 1; n <= files; n++) if (!paid.has(n)) unpaid.push(n);
+    if (unpaid.length) fail(`files paying nothing: ${unpaid.join(", ")}`);
+    else ok(`all ${files} files pay an incentive of their own`);
+  }
+
+  // A queue that is not empty always hands something over. This is the
+  // guarantee that makes "INCENTIVE EARNED" on a panel a promise rather
+  // than a hope.
+  {
+    let empty = 0;
+    let p4: Progress = emptyProgress();
+    for (const lv of LEVELS) {
+      const step = applyCompletion(p4, {
+        levelId: lv.id,
+        tempers: lv.tempers,
+        quota: lv.quota,
+        perfect: true,
+        countsForPerfect: !lv.training,
+        fileComplete: lv.stage ? lv.stage[0] === lv.stage[1] : true,
+      });
+      p4 = step.progress;
+      // Walk the boundary the way the screen does: present what is owed,
+      // claim it, and go round again until the queue drains.
+      for (let guard = 0; p4.rewardQueue.length && guard < 12; guard++) {
+        const { owed, toFile } = selectPresentation(p4);
+        if (owed.length === 0 && toFile.length === 0) {
+          empty++;
+          break;
+        }
+        for (const o of owed) {
+          p4 = claimReward(p4, o.rungId, { shown: true, rewardId: o.rewardId });
+        }
+        for (const f of toFile) {
+          p4 = claimReward(p4, f.rungId, { shown: false, rewardId: f.rewardId });
+        }
+      }
+    }
+    if (empty > 0) fail(`${empty} boundaries owed an incentive and showed none`);
+    else ok("no boundary ever owes an incentive and hands over nothing");
+  }
+
+  // The rule that broke it: a sentence is not a picture. Two fact cards
+  // back to back are two different things said, and both are shown.
+  {
+    const p5: Progress = {
+      ...emptyProgress(),
+      filesCompleted: 5,
+      rewardState: { SF05: "earned_pending", B010: "earned_pending" },
+      rewardQueue: ["SF05", "B010"],
+      // The last thing this refiner looked at was also an Outie fact.
+      lastShownRewardId: "R03",
+    };
+    const { owed } = selectPresentation(p5);
+    if (owed.length !== 2) {
+      fail(`two fact cards after a fact card showed ${owed.length}, wanted 2`);
+    } else {
+      ok("a fact card is never held back for following another fact card");
+    }
+  }
+
+  // And the rule it must not break: two of the same photograph in a row.
+  {
+    const p6: Progress = {
+      ...emptyProgress(),
+      filesCompleted: 4,
+      rewardState: { S05: "earned_pending" },
+      rewardQueue: ["S05"],
+      lastShownRewardId: "R05",
+    };
+    const { owed } = selectPresentation(p6);
+    // Held back by the spacing rule — but the guarantee above still hands
+    // it over rather than showing an empty boundary.
+    if (owed.length !== 1) fail("the only thing owed was not shown");
+    else ok("a photograph repeated is still shown when it is all there is");
+  }
+
   // ── a missed precision incentive is rescheduled, not lost ──────────
   //
   // The precision lane is never forecast — a goal that asks for a file
@@ -564,6 +663,21 @@ console.log(`\n── reward media ${"─".repeat(45)}`);
   // the encoder that brings them back lives in tools/. A stray .mp4 in the
   // build directory means someone re-added one by hand.
   ok(`${files} plates, all present`);
+
+  // The band under a plate reserves three lines and clips in silence.
+  // Four of these had drifted past it and were being cut mid-word on the
+  // card — "...Please do not attempt to reci".
+  {
+    const LIMIT = 96;
+    let over = 0;
+    for (const [id, def] of Object.entries(CATALOG)) {
+      if (def.line.length > LIMIT) {
+        over++;
+        fail(`${id}: line is ${def.line.length} chars, over the ${LIMIT} the band reserves`);
+      }
+    }
+    if (!over) ok(`every line fits the three lines the card reserves for it`);
+  }
 
   // Rewards with no record here are later milestones and stay queued. The
   // list is explicit so that a typo in a rung's reward id fails loudly

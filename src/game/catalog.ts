@@ -88,14 +88,14 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
     kind: "object",
     name: "STANDARD REFINER ERASER",
     earned: "YOU HAVE BEEN ISSUED AN ERASER",
-    line: "Issued at ten percent, as the handbook provides. There is nothing on this terminal for you to erase.",
+    line: "Issued at ten percent, as the handbook provides. There is nothing here for you to erase.",
     poster: asset("r01_eraser.webp"),
   },
   R02: {
     kind: "object",
     name: "FINGER TRAP",
     earned: "YOU HAVE BEEN ISSUED A FINGER TRAP",
-    line: "A gift of woven paper. Insert one finger per end. Lumon accepts no responsibility for the consequence.",
+    line: "Woven paper. Insert one finger per end. Lumon accepts no responsibility for the consequence.",
     poster: asset("r02_finger_trap.webp"),
   },
   R03: {
@@ -110,12 +110,14 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
     doctrine: true,
     name: "A NOTE FROM THE HANDBOOK",
     earned: "THE HANDBOOK HAS A NOTE ON THE TEMPERS",
-    line: "A passage concerning the tempers has been made available to you. It concerns the work, not the worker.",
-    // The same blank card the Outie facts use, because it is the same
-    // object: a sentence Lumon has decided you should read. What it is
-    // *not* is a fact about your outie, which is why it has a reward of
-    // its own — the temper milestones were handing out doctrine about
-    // Kier under a headline promising news from home.
+    line: "A passage from the handbook. It concerns the work, not the worker.",
+    // Doctrine is not photographed at all: `RewardPlate` draws it as a
+    // page of the handbook, warm paper and a serif and a rule under the
+    // running head. It shared the Outie card's plate for a while, which
+    // made a note about Woe and a sentence about the person you are
+    // outside the same object — and they are not.
+    //
+    // The poster stays as the fallback the media check counts.
     poster: asset("r03_outie_fact_card.webp"),
   },
   R05: {
@@ -128,9 +130,14 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
   R06: {
     kind: "session",
     name: "WELLNESS SESSION",
-    earned: "YOU ARE OWED A WELLNESS SESSION",
-    line: "You are invited to sit while several facts about your outie are read to you. Please do not attempt to reciprocate.",
-    poster: asset("r06_wellness_session.webp"),
+    // A session is several Outie facts read out in turn, and it is now
+    // presented as exactly that: the same card on the same stand, one
+    // sentence at a time. It used to open on a photograph of an empty
+    // wellness room with the fact in small italics underneath — which put
+    // the whole of what a refiner came for in the caption, under a chair.
+    earned: "WELLNESS HAS A FACT ABOUT YOUR OUTIE",
+    line: "Please sit while facts about your outie are read to you. Do not attempt to reciprocate.",
+    poster: asset("r03_outie_fact_card.webp"),
   },
   R07: {
     kind: "experience",
@@ -158,7 +165,7 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
     kind: "object",
     name: "REMEMBRANCE MELON",
     earned: "YOU HAVE BEEN GIVEN A REMEMBRANCE MELON",
-    line: "Carved in memory of a refiner from this branch. You have not met them, and the archive does not say when they left.",
+    line: "Carved in memory of a refiner from this branch. The archive does not say when they left.",
     poster: asset("r13_watermelon_remembrance.webp"),
   },
   R19: {
@@ -174,7 +181,7 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
     event: true,
     name: "WAFFLE PARTY · SECOND TIER",
     earned: "YOUR WAFFLE PARTY HAS A SECOND TIER",
-    line: "The table is set again, and a mask has been placed beside the plate. Lumon thanks you for your continued refinement.",
+    line: "The table is set again, and a mask has been placed beside the plate. Lumon thanks you.",
     poster: asset("r22_waffle_party_ii.webp"),
   },
 };
@@ -188,6 +195,19 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
  * quietly marked claimed before it was ever shown is a reward the refiner
  * never gets.
  */
+/**
+ * Whether this reward's plate is paper rather than a photograph, so the
+ * frame behind it can be pale instead of showing a black rim in the gap
+ * before the picture paints.
+ */
+export function plateIsPale(reward: RewardDef): boolean {
+  return (
+    reward.doctrine === true ||
+    reward.kind === "fact" ||
+    reward.kind === "session"
+  );
+}
+
 export function presentable(id: RewardId): RewardDef | null {
   return CATALOG[id] ?? null;
 }

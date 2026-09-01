@@ -11,9 +11,7 @@ import {
   loadProgress,
   type Progress,
 } from "../game/progress";
-import { presentable } from "../game/catalog";
-import { factById, type Fact } from "../game/facts";
-import { rungById } from "../game/rewards";
+import { selectPresentation } from "../game/present";
 import { RewardReveal } from "./RewardReveal";
 import { RecordNotice } from "./RecordNotice";
 import { IncentiveSummary } from "./IncentiveSummary";
@@ -28,6 +26,7 @@ import {
 } from "../game/runs";
 import { computeLayout } from "../game/layout";
 import { useEngine } from "../hooks/useEngine";
+import { useTypeOver } from "../hooks/useTypeOver";
 import { BinDeck } from "./BinDeck";
 import { CRTOverlay } from "./CRTOverlay";
 import { HandbookModal } from "./HandbookModal";
@@ -80,105 +79,10 @@ export function GameStage() {
 
   /**
    * What this boundary owes the refiner, in the order it will be shown —
-   * and what it quietly files instead.
-   *
-   * Derived from the ledger rather than stored: the queue in the save is
-   * the truth, and a second copy in React state is a second thing that can
-   * be wrong after a reload.
-   *
-   * Five rules, four of them learned from watching someone play screen 9
-   * and be handed the same picture three times:
-   *
-   * 1. A reward whose presentation is a later milestone stays queued
-   *    rather than being claimed unseen.
-   * 2. At most one major event per boundary. A second waits for the next
-   *    completed screen instead of running back to back.
-   * 3. One card per reward *id* per boundary. Two rungs that both award a
-   *    fact card are two facts, not two ceremonies.
-   * 4. Never two rewards showing the *same picture* in a row, nor the same
-   *    reward that ended the last boundary. Every fact card and every
-   *    Wellness session is the same plate, so those count as one look —
-   *    two of them back to back read as the game stuttering rather than as
-   *    two rewards. Two different objects are two different photographs
-   *    and sit together fine.
-   * 5. An **object** already on the shelf is not shown again. A second
-   *    finger trap is still owed and still counted, but a repeat of the
-   *    same photograph is the game repeating itself. It is filed instead,
-   *    and the record says so.
+   * and what it quietly files instead. The rules, and why each exists,
+   * live with the function in `src/game/present.ts`.
    */
-  const { owed, toFile } = (() => {
-    const queue: {
-      rungId: string;
-      rewardId: string;
-      /** The rung itself, for the line on the sealed card saying why. */
-      rung: NonNullable<ReturnType<typeof rungById>>;
-      reward: NonNullable<ReturnType<typeof presentable>>;
-      major: boolean;
-      facts: Fact[];
-    }[] = [];
-    const toFile: { rungId: string; rewardId: string; name: string }[] = [];
-    const held = new Set<string>();
-    for (const [rungId, state] of Object.entries(progress.rewardState)) {
-      if (state !== "claimed") continue;
-      const r = rungById(rungId);
-      if (r) held.add(r.reward);
-    }
-
-    for (const id of progress.rewardQueue) {
-      const rung = rungById(id);
-      if (!rung) continue;
-      const reward = presentable(rung.reward);
-      if (!reward) continue;
-      // Rule 5: an object the refiner already owns.
-      if (reward.kind === "object" && held.has(rung.reward)) {
-        toFile.push({ rungId: id, rewardId: rung.reward, name: reward.name });
-        continue;
-      }
-      queue.push({
-        rungId: id,
-        rewardId: rung.reward,
-        rung,
-        reward,
-        major: rung.size !== "minor",
-        // Chosen and stored when the reward was earned; looked up here,
-        // never drawn here.
-        facts: (progress.factsByRung[id] ?? [])
-          .map(factById)
-          .filter((f): f is Fact => !!f),
-      });
-    }
-
-    // Greedy pass: take the first candidate that does not repeat the last
-    // one's kind or id. Anything that cannot be spaced out stays queued for
-    // a later boundary rather than being dropped.
-    /** What a refiner would say they had just looked at. */
-    const look = (r: NonNullable<ReturnType<typeof presentable>>) =>
-      r.kind === "fact" || r.kind === "session" ? "WELLNESS" : r.poster;
-
-    const out: typeof queue = [];
-    const usedIds = new Set<string>();
-    let majorShown = false;
-    let lastLook: string | null = null;
-    let lastId: string | null = progress.lastShownRewardId;
-    const rest = [...queue];
-    for (;;) {
-      const i = rest.findIndex(
-        (c) =>
-          !usedIds.has(c.rewardId) &&
-          !(c.major && majorShown) &&
-          look(c.reward) !== lastLook &&
-          c.rewardId !== lastId,
-      );
-      if (i < 0) break;
-      const [pick] = rest.splice(i, 1);
-      out.push(pick);
-      usedIds.add(pick.rewardId);
-      if (pick.major) majorShown = true;
-      lastLook = look(pick.reward);
-      lastId = pick.rewardId;
-    }
-    return { owed: out, toFile };
-  })();
+  const { owed, toFile } = selectPresentation(progress);
 
   /**
    * Only between files, never over a live board — and never over a board
@@ -1043,6 +947,20 @@ export function GameStage() {
   );
 }
 
+/**
+ * The coach band.
+ *
+ * The line is **typed over**, never swapped. The band walks a refiner
+ * through a file — its name, then the gesture that opens it, then what to
+ * do with what they found — and three lines that replace each other
+ * instantly read as one line flickering. Erased and rewritten in place,
+ * they read as a terminal changing its mind, which is what the rest of
+ * this game does everywhere text changes meaning.
+ *
+ * An error is the exception: a reprimand that takes half a second to spell
+ * itself out is a reprimand that arrives after the refiner has moved on,
+ * so those land whole.
+ */
 function StatusTicker({
   hud,
   height,
@@ -1050,9 +968,21 @@ function StatusTicker({
   hud: ReturnType<typeof useEngine>["hud"];
   height: number;
 }) {
+  const instant = hud.messageKind !== "info";
+  const line = useTypeOver(hud.message ?? "", {
+    go: true,
+    initial: "",
+    eraseMs: 9,
+    typeMs: 15,
+    gapMs: 60,
+    instant,
+  });
   // The band is always reserved, so an arriving message never reflows the
-  // matrix underneath it.
-  if (!hud.message) return <div className="shrink-0" style={{ height }} />;
+  // matrix underneath it. Held while the old line is still being erased,
+  // so the band does not close under a message that is still leaving.
+  if (!hud.message && !line.text) {
+    return <div className="shrink-0" style={{ height }} />;
+  }
   const color =
     hud.messageKind === "error"
       ? "text-alarm border-alarm/60"
@@ -1067,7 +997,7 @@ function StatusTicker({
       <span
         className={`crt-text-glow max-w-full rounded-[2px] border bg-phos-950/90 px-2 py-1 text-center text-[9px] leading-snug tracking-[0.14em] ${color}`}
       >
-        {hud.message}
+        {line.text}
       </span>
     </div>
   );

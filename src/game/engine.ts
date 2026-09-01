@@ -229,6 +229,16 @@ const BIN_CATCH_BELOW = 24;
  * reads — and because this runs between all twenty-nine orientation
  * screens, so every frame of it is a frame the refiner is waiting.
  */
+/**
+ * How long the file's name holds the coach band before the gesture
+ * replaces it.
+ *
+ * Long enough to be read on a board that is still wiping in, short enough
+ * that a refiner reaching for the screen is told what to do before they
+ * have guessed wrong.
+ */
+const COACH_AFTER_S = 1.9;
+
 const WIPE_OUT_S = 0.24;
 const WIPE_IN_S = 0.44;
 /**
@@ -314,6 +324,11 @@ export class GameEngine {
   latchedId = -1;
   /** Elapsed time at which a teaching file re-offers its lesson, or -1
    *  when this file has none. Cleared once a packet is lifted. */
+  /**
+   * When the coach band moves off the file's name and on to the gesture,
+   * or -1 where it has nothing further to say.
+   */
+  private coachAt = -1;
   private orientHintAt = -1;
   /** The sentence that re-offer will say, chosen with the file. */
   private hintLine = "";
@@ -742,23 +757,31 @@ export class GameEngine {
     this.applyRedaction(level.redact === "audio");
     this.lastRefined = level.tempers[0];
     assignMorphs(this.board, level);
-    if (level.teachProbe) {
-      // The one file whose whole subject is a gesture nobody has performed
-      // yet. Orientation spent twenty-one screens showing that a group
-      // moves; this file hides the movement and hands over the tool that
-      // finds it, and the coach band is the only place on the screen that
-      // can say so.
-      this.say(
-        "HOLD DOWN ON THE NUMBERS TO FIND THE STRANGE ONES.",
-        "info",
-        "untilAction",
-      );
-    } else if (level.selfAgitate) {
+    if (level.selfAgitate) {
       // The generic "FILE LOADED" line teaches nothing to someone who does
-      // not yet know the matrix hides anything.
+      // not yet know the matrix hides anything. Orientation's groups move
+      // by themselves, so there is only ever one thing to say.
       this.say("ONE GROUP IS ALREADY MOVING. BOX IT.", "info", "untilAction");
+      this.coachAt = -1;
     } else {
+      // Every file past orientation hides its groups, and the band walks
+      // the refiner through it in three beats rather than one.
+      //
+      // Beat one names the file, because that is what a refiner wants to
+      // know on the frame a new board arrives and it is the object the
+      // launch animation just handed them. Beat two, a moment later, is
+      // the gesture: hold down, and the strange ones show themselves.
+      // Beat three lands when a group actually surfaces, and says what to
+      // do with it — see `armSelect`.
+      //
+      // Said at once, the name would be gone before it was read and the
+      // instruction would be one more thing arriving in a frame already
+      // full of arriving things. Only the first file used to get any of
+      // this at all: every file after BELLINGHAM said FILE LOADED and then
+      // nothing, which is the whole of the teaching for the twenty-one
+      // files where the probe is actually required.
       this.say(`FILE ${level.name} #${level.fileCode} LOADED`, "info");
+      this.coachAt = this.elapsed + COACH_AFTER_S;
     }
     getAudio().fileLoaded();
     // The new picture is painted on by the same scan pass that took the old
@@ -1379,6 +1402,20 @@ export class GameEngine {
     // hand — after which the tap-lift branch would see no packet and try to
     // lift whatever sits under the drop point.
     const hadPacket = this.packet !== null;
+    /**
+     * True when this release is what armed the selection box.
+     *
+     * A press-and-hold on a hidden group is a *probe*, and the release
+     * that ends it is not also a tap on that group — but it looks exactly
+     * like one: the finger came down and went up in the same place. So
+     * the same release both armed the box and fell through to `tapLift`,
+     * which reads the agitation the group had *when the finger landed* —
+     * before the probe raised it — and answered the gesture the game had
+     * just asked for with a buzz and NO TEMPER DETECTED — PROBE FIRST.
+     *
+     * The refiner did probe first. That is what they had just done.
+     */
+    let armed = false;
 
     if (g.kind === "marquee") {
       // A tap is the mode-toggle gesture, not a zero-area selection: without
@@ -1402,7 +1439,7 @@ export class GameEngine {
     } else if (g.kind === "carry" && this.packet) {
       this.resolveDrop({ x: this.packet.x, y: this.packet.y });
     } else if (g.kind === "probe") {
-      this.armSelectIfIdentified(g, dt);
+      armed = this.armSelectIfIdentified(g, dt);
     }
 
     // A tap on a group takes the whole group. Drag-to-box is not a
@@ -1416,9 +1453,9 @@ export class GameEngine {
     // here left the gesture open forever, so the very next touch — the one
     // dragging the packet you just lifted — was discarded as a second
     // finger and the board went dead.
-    let tapHandled = false;
+    let tapHandled = armed;
     const aim = isTap ? this.tapTarget(x, y, this.reticleFor(x, y, g.kind)) : null;
-    if (isTap && !hadPacket && this.tapToSelect) {
+    if (isTap && !armed && !hadPacket && this.tapToSelect) {
       tapHandled = this.tapLift(aim);
       // The group is moving, and the finger is not. Woe droops, frolic
       // skips, malice lunges — and a group can walk out of its own tap pad
@@ -1491,22 +1528,32 @@ export class GameEngine {
    * use one on the fast path. Gated on *live* proximity rather than the
    * latch, so lifting a finger somewhere empty never arms anything.
    */
-  private armSelectIfIdentified(g: Gesture, durationMs: number): void {
-    if (this.packet || this.mode === "select") return;
+  /** True when this release armed the box, which makes it not a tap. */
+  private armSelectIfIdentified(g: Gesture, durationMs: number): boolean {
+    if (this.packet || this.mode === "select") return false;
     // Only a deliberate study arms the box: the cluster must have been
     // identified during this very gesture, the finger must still be on it
     // at release, and the probe must have lasted long enough to actually
     // read the motion. Brushing past a cluster mid-sweep does not count.
-    if (g.latchedDuring < 0 || g.latchedDuring !== this.latchedId) return;
-    if (durationMs < ARM_SELECT_MIN_MS) return;
+    if (g.latchedDuring < 0 || g.latchedDuring !== this.latchedId) return false;
+    if (durationMs < ARM_SELECT_MIN_MS) return false;
     const cluster = this.board.clusters[this.latchedId];
-    if (!cluster || cluster.refined) return;
-    if (cluster.probe < ARM_SELECT_AT) return;
+    if (!cluster || cluster.refined) return false;
+    if (cluster.probe < ARM_SELECT_AT) return false;
     this.mode = "select";
     getAudio().click();
     haptics.tap();
-    this.say("TEMPER DETECTED — DRAW A SELECTION", "info", "untilPacket");
+    // Beat three. It names the whole of what is left to do — box it, and
+    // drag it into the bin — rather than only the next half of it: a
+    // refiner who has just watched numbers surface for the first time is
+    // owed the destination as well as the gesture.
+    this.say(
+      "TEMPER DETECTED — BOX IT AND DRAG IT TO ITS BIN",
+      "info",
+      "untilPacket",
+    );
     this.snapshotDirty = true;
+    return true;
   }
 
   private releaseGesture(): void {
@@ -2163,6 +2210,22 @@ export class GameEngine {
     }
 
     if (this.message && this.messageIsStale()) this.clearMessage();
+
+    // Beat two: the file has been named, now say how to open it. Dropped
+    // the moment the refiner is already doing it — a coach line that
+    // arrives after the lesson has been learned is an interruption.
+    if (this.coachAt >= 0 && live) {
+      if (this.packet || this.mode === "select" || this.latchedId >= 0) {
+        this.coachAt = -1;
+      } else if (this.elapsed >= this.coachAt) {
+        this.coachAt = -1;
+        this.say(
+          "HOLD DOWN ON THE NUMBERS TO FIND THE STRANGE ONES.",
+          "info",
+          "untilAction",
+        );
+      }
+    }
 
     // A teaching file offers its lesson a second time, once, for a player
     // who read the first line, did nothing, and watched it disappear.
