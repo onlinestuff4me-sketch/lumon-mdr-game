@@ -209,6 +209,78 @@ export const findGroup = (page, kind = "real") =>
     };
   }, kind);
 
+/**
+ * The next group whose bin still has room.
+ *
+ * `findGroup` takes the first unrefined cluster on the board, which on a
+ * two-temper file goes on offering WO groups after the WO bin has reached
+ * quota — and every one of those is refused. A test driving a multi-bin
+ * file to 100% has to pick the temper the file still wants.
+ */
+export const findGroupToBin = (page) =>
+  page.evaluate(() => {
+    const e = window.__mdr;
+    const b = e.board;
+    const room = new Set(
+      e.getSnapshot().bins.filter((x) => x.fill < 1).map((x) => x.temper),
+    );
+    const c = b.clusters.filter(
+      (x) =>
+        !x.refined &&
+        !x.decoy &&
+        !x.fifth &&
+        !b.nodes[x.members[0]].retired &&
+        room.has(x.temper),
+    )[0];
+    if (!c) return null;
+    const xs = c.members.map((m) => b.nodes[m].hx + b.nodes[m].dx);
+    const ys = c.members.map((m) => b.nodes[m].hy + b.nodes[m].dy);
+    return {
+      id: c.id,
+      temper: c.temper,
+      size: c.members.length,
+      one: { x: xs[0], y: ys[0] },
+      min: { x: Math.min(...xs), y: Math.min(...ys) },
+      max: { x: Math.max(...xs), y: Math.max(...ys) },
+      ctr: {
+        x: (Math.min(...xs) + Math.max(...xs)) / 2,
+        y: (Math.min(...ys) + Math.max(...ys)) / 2,
+      },
+      bin: e.layout.binRects[c.temper],
+    };
+  });
+
+/**
+ * One named cluster's live geometry.
+ *
+ * The probe surfaces the cluster the test chose; re-reading the board by
+ * "first group with room" afterwards can hand back a *different* one of
+ * the same temper, which has not been probed and which the marquee
+ * therefore catches nothing of. A test that probes one group and boxes
+ * another gets a reprimand per attempt and never finishes the file.
+ */
+export const groupById = (page, id) =>
+  page.evaluate((wanted) => {
+    const e = window.__mdr;
+    const b = e.board;
+    const c = b.clusters.find((x) => x.id === wanted);
+    if (!c) return null;
+    const xs = c.members.map((m) => b.nodes[m].hx + b.nodes[m].dx);
+    const ys = c.members.map((m) => b.nodes[m].hy + b.nodes[m].dy);
+    return {
+      id: c.id,
+      temper: c.temper,
+      one: { x: xs[0], y: ys[0] },
+      min: { x: Math.min(...xs), y: Math.min(...ys) },
+      max: { x: Math.max(...xs), y: Math.max(...ys) },
+      ctr: {
+        x: (Math.min(...xs) + Math.max(...xs)) / 2,
+        y: (Math.min(...ys) + Math.max(...ys)) / 2,
+      },
+      bin: e.layout.binRects[c.temper],
+    };
+  }, id);
+
 /** Walk a drag along its real path at hand speed, with a settle at each end,
  *  so a gesture costs what a gesture costs. */
 export async function drag(page, origin, from, to, speed = 750) {
@@ -441,6 +513,64 @@ export async function boxAndBin(page, origin, g, pad = 10) {
   );
   if (!(await state(page)).carrying) return false;
   return carryToBin(page, origin, g);
+}
+
+/**
+ * Carry a lifted group to a bin that does not want it.
+ *
+ * The one way a test can make the mistake a refiner makes. Picks any bin
+ * on the deck whose temper is not the group's, and drops the packet in it.
+ */
+export async function carryToWrongBin(page, origin, g) {
+  const bin = await page.evaluate((t) => {
+    const e = window.__mdr;
+    const other = e
+      .getSnapshot()
+      .bins.map((b) => b.temper)
+      .find((x) => x !== t);
+    return other ? e.layout.binRects[other] : null;
+  }, g.temper);
+  if (!bin) return false;
+  const from = await page.evaluate(() => ({
+    x: window.__mdr.packet.x,
+    y: window.__mdr.packet.y,
+  }));
+  await drag(
+    page,
+    origin,
+    await touchFor(page, from, "carry"),
+    await touchFor(page, { x: bin.x + bin.w / 2, y: bin.y + bin.h / 2 }, "carry"),
+  );
+  return true;
+}
+
+/**
+ * Carry whatever is actually in hand to the bin that wants it.
+ *
+ * `carryToBin` aims at the bin of the cluster the *test* picked, which is
+ * a guess: a marquee drawn round one group on a crowded two-temper board
+ * can lift a neighbour instead, and the drop then reads as a mis-bin the
+ * test never meant to make. The packet knows its own temper; this asks it.
+ */
+export async function carryHeldToItsBin(page, origin) {
+  const held = await page.evaluate(() => {
+    const e = window.__mdr;
+    if (!e.packet) return null;
+    const r = e.layout.binRects[e.packet.temper];
+    return { from: { x: e.packet.x, y: e.packet.y }, bin: r };
+  });
+  if (!held) return false;
+  await drag(
+    page,
+    origin,
+    await touchFor(page, held.from, "carry"),
+    await touchFor(
+      page,
+      { x: held.bin.x + held.bin.w / 2, y: held.bin.y + held.bin.h / 2 },
+      "carry",
+    ),
+  );
+  return !(await state(page)).carrying;
 }
 
 export async function carryToBin(page, origin, g) {

@@ -226,7 +226,16 @@ export const LANE_LABEL: Record<Lane, string> = {
  * the refiner earned it and knows what they did. What it may never do is
  * hint at the effect. Nothing here touches the catalog.
  */
-export function reasonFor(rung: Rung): string {
+export function reasonFor(rung: Rung, rescheduledAt?: number): string {
+  // A rescheduled incentive says what actually issued it. It was earned by
+  // a run of clean files that ended before it could be paid, and it is
+  // being handed over now because a file count was reached — telling the
+  // refiner it is for an unblemished record they know they broke is the
+  // one thing this line must not do.
+  if (rescheduledAt !== undefined) {
+    const f = `${rescheduledAt} ${rescheduledAt === 1 ? "FILE" : "FILES"}`;
+    return `RESCHEDULED INCENTIVE · ${f} REFINED`;
+  }
   const n = rung.at;
   const files = `${n} ${n === 1 ? "FILE" : "FILES"}`;
   const bins = `${n} ${n === 1 ? "BIN" : "BINS"}`;
@@ -320,11 +329,20 @@ export function newlyEarned(
   before: Counters,
   after: Counters,
   claimed: ReadonlySet<string>,
+  deferred: Readonly<Record<string, number>> = {},
 ): Rung[] {
   const second = (c: Counters, lane: Lane) =>
     lane === "screens" ? c.screens : c.bins;
   return LADDER.filter((rung) => {
     if (claimed.has(rung.id)) return false;
+    // A rescheduled rung has left the lane it was born in. A precision
+    // incentive a refiner missed is not withdrawn — it is placed on a file
+    // milestone instead, and from then on that milestone is the only thing
+    // that earns it. The counter it used to read no longer decides.
+    const moved = deferred[rung.id];
+    if (moved !== undefined) {
+      return before.screens < moved && after.screens >= moved;
+    }
     // Already satisfied before this boundary: it was earned then, not now.
     // (Nothing is lost — an earned rung stays in the queue until presented.)
     const wasMet =
@@ -392,7 +410,18 @@ export interface LaneForecast {
  */
 export function laneVisible(lane: Lane, c: Counters): boolean {
   if (lane === "temper") return c.screens >= 15;
-  if (lane === "perfect") return c.perfectTotal >= 1;
+  // The precision lane is never *forecast*. It still pays — a clean run
+  // is still worth something — but it is never the instruction on screen.
+  //
+  // "REFINE 1 MORE FILE WITHOUT ERROR" is a goal a refiner cannot plan
+  // around: they do not know which drop will be the wrong one, and being
+  // told the incentive rides on it turns every ordinary file into an exam.
+  // Worse, it is the one goal a single mistake makes unreachable, so the
+  // instruction on the board goes on asking for something that is already
+  // gone. Clean play is now a surprise that arrives, like the first two
+  // incentives; a broken run is a notice, and what it cost is rescheduled
+  // rather than lost. See `deferredRungs` in `progress.ts`.
+  if (lane === "perfect") return false;
   return true;
 }
 

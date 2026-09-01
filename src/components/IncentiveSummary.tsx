@@ -246,8 +246,6 @@ export function IncentiveSummary({
   const lane = lanes.length
     ? [...lanes].sort((a, b) => a.remaining - b.remaining)[0]
     : null;
-  const laneSpan = lane ? Math.max(1, lane.target - lane.from) : 1;
-  const laneDone = lane ? Math.max(0, lane.current - lane.from) : 0;
 
   const stow = () => {
     if (exit !== "open") return;
@@ -470,40 +468,26 @@ export function IncentiveSummary({
           {lane ? (
             <div
               style={veil}
-              className="mt-4 w-full rounded-[3px] border border-phos-500 bg-phos-900/60 px-3 py-3 text-left"
+              className="mt-4 w-full rounded-[3px] border border-phos-500 bg-phos-900/60 px-3 py-3.5 text-center"
             >
-              <p className="crt-text-glow text-[9px] font-bold tracking-[0.22em] text-phos-300">
-                ANOTHER INCENTIVE IS COMING
-              </p>
-              <p className="crt-text-glow mt-2 text-[13px] font-bold leading-tight tracking-[0.14em] text-phos-100">
+              {/* One instruction, and what obeying it buys. Nothing else.
+                  This box carried a headline, a meter, a fraction and a
+                  remainder line as well, and every one of them was the
+                  same fact said again in another notation — the refiner
+                  reads REFINE 1 MORE FILE and is then asked to check it
+                  against a bar, against 0/1, and against 1 TO GO. Four
+                  readings of one number is not four times as clear. */}
+              <p className="crt-text-glow text-[14px] font-bold leading-tight tracking-[0.14em] text-phos-100">
                 {lane.action.replace(/\.$/, "").toUpperCase()}
               </p>
-              {/* The stretch from the last incentive to the next, like
-                  every other incentive meter in the game — never the
-                  running total against a target that moves. */}
-              <div className="mt-2 flex items-center gap-2">
-                {/* `bg-phos-800` at this weight reads as a *filled* bar:
-                    an empty 5px track was reported as "the progress bar
-                    looked complete" next to the words 0/1. An empty track
-                    has to look empty. */}
-                <div className="h-[5px] flex-1 overflow-hidden rounded-sm border border-phos-800 bg-phos-950">
-                  <div
-                    className="h-full bg-phos-300 transition-[width] duration-500 ease-out"
-                    style={{
-                      width: `${Math.min(100, Math.round((laneDone / laneSpan) * 100))}%`,
-                      boxShadow: "0 0 8px var(--color-phos-300)",
-                    }}
-                  />
-                </div>
-                <span className="shrink-0 text-[9px] tabular-nums tracking-[0.14em] text-phos-400">
-                  {laneDone}/{laneSpan}
-                </span>
-              </div>
-              <p className="mt-2 text-[8px] tracking-[0.2em] text-phos-500">
-                {`${lane.remaining} TO GO · CONTENTS CLASSIFIED`}
+              <p className="mt-1.5 text-[9px] tracking-[0.2em] text-phos-500">
+                TO RECEIVE ANOTHER INCENTIVE
               </p>
+              {/* The one thing that is genuinely a second requirement
+                  rather than the first one restated. Only the Waffle
+                  tiers have one. */}
               {lane.also ? (
-                <p className="mt-1.5 text-[8px] tracking-[0.16em] text-phos-600">
+                <p className="mt-2 text-[8px] tracking-[0.16em] text-phos-600">
                   {`ALSO ${lane.also.current}/${lane.also.target} ${lane.also.label} · BOTH REQUIRED`}
                 </p>
               ) : null}

@@ -39,21 +39,29 @@ function clock(seconds: number): string {
  *
  * 1. **It is finished.** REFINED, the border blooming, the meter full —
  *    held on the board for `FILE_SETTLE_S` before any overlay may cover
- *    it, which is the only window this mark has.
+ *    it, and held again by `HANDOVER_HOLD_MS` in `GameStage` after the
+ *    panel that covered it is dismissed. Both windows exist because this
+ *    mark has nowhere else to be seen.
  * 2. **It leaves.** The finished card slides out to the left, alone.
  * 3. **The next one arrives.** After a beat of empty card, the new file
  *    slides in from the right at 0%.
  *
  * Overlapped, the two slides read as one shuffle and neither is watched.
  * The gap between them is what makes each a thing that happened.
+ *
+ * These are slow on purpose, and were made slower again after a playtest
+ * called them "much too fast": a beat that is over before the eye has
+ * found it is a beat that was not spent. Together they run about two and
+ * a half seconds, and the whole point of the sequence is that a refiner
+ * can watch all three parts of it happen.
  */
 
 /** How long the finished file takes to leave. */
-const OUT_MS = 620;
+const OUT_MS = 1000;
 /** The empty beat between the two, so they are not one motion. */
-const GAP_MS = 220;
+const GAP_MS = 380;
 /** How long the next file takes to arrive. */
-const IN_MS = 660;
+const IN_MS = 900;
 
 /** Everything the card draws about one file, frozen so a leaving file can
  *  keep showing what it was when it left. */

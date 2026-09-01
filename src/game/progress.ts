@@ -27,7 +27,7 @@
 import { LEVELS, TEMPERS } from "./constants";
 import { scopedKey } from "./runScope";
 import { pickFacts } from "./facts";
-import { newlyEarned, type Counters, type Rung } from "./rewards";
+import { LADDER, newlyEarned, rungById, type Counters, type Rung } from "./rewards";
 import type { Temper } from "./types";
 
 /**
@@ -71,6 +71,21 @@ export interface Progress {
   rewardState: Record<string, RewardState>;
   /** Rung ids earned and not yet presented, oldest first. */
   rewardQueue: string[];
+  /**
+   * Rung id -> the `filesCompleted` count that will issue it instead.
+   *
+   * The precision incentives are the only things in here. They are earned
+   * by a run of files refined without error, and a single wrong bin ends
+   * that run — so before this existed, one slip on file nine could put an
+   * incentive several files further away with nothing said about it but a
+   * red line and a notice.
+   *
+   * Lumon does not take things back. A missed precision incentive is
+   * *rescheduled*: it stops reading the streak and is issued when the
+   * refiner has refined `RECYCLE_FILES` more files, however they refine
+   * them. The notice says so, and then it simply arrives.
+   */
+  deferredRungs: Record<string, number>;
   /** Fact ids already read out, so a card never repeats one. */
   seenFactIds: string[];
   /**
@@ -165,6 +180,7 @@ export function emptyProgress(): Progress {
     perfectScreenStreak: 0,
     rewardState: {},
     rewardQueue: [],
+    deferredRungs: {},
     seenFactIds: [],
     factsByRung: {},
     inspectCounts: {},
@@ -220,6 +236,15 @@ export interface Completion {
 }
 
 /**
+ * How many more files a missed precision incentive is rescheduled to.
+ *
+ * Two, so the refiner sees it come back inside the session that lost it.
+ * Far enough that the notice is not immediately contradicted; near enough
+ * that "it has been rescheduled" is a promise they get to watch be kept.
+ */
+const RECYCLE_FILES = 2;
+
+/**
  * Credit a completed screen. Pure: hand it a ledger, get a new one back
  * plus whatever that crossing just earned.
  *
@@ -255,10 +280,30 @@ export function applyCompletion(
         : 0,
     rewardState: { ...p.rewardState },
     rewardQueue: [...p.rewardQueue],
+    deferredRungs: { ...p.deferredRungs },
     factsByRung: { ...p.factsByRung },
   };
 
-  const earned = newlyEarned(before, counters(next), claimedIds(p));
+  // A run of clean files has just ended. What it was earning is not lost:
+  // it moves onto a file milestone and is issued there, however the files
+  // between here and it are refined.
+  if (counts && !done.perfect && p.perfectScreenStreak > 0) {
+    const missed = LADDER.filter((r) => r.lane === "perfect")
+      .filter(
+        (r) =>
+          p.rewardState[r.id] === undefined &&
+          next.deferredRungs[r.id] === undefined,
+      )
+      .sort((a, b) => a.at - b.at)[0];
+    if (missed) next.deferredRungs[missed.id] = next.filesCompleted + RECYCLE_FILES;
+  }
+
+  const earned = newlyEarned(
+    before,
+    counters(next),
+    claimedIds(p),
+    next.deferredRungs,
+  );
   const seen = [...p.seenFactIds];
   for (const rung of earned) {
     next.rewardState[rung.id] = "earned_pending";
@@ -370,6 +415,15 @@ function coerce(raw: unknown): Progress {
     }
   }
 
+  // A save written before incentives could be rescheduled simply has none
+  // outstanding, which is the truth about it.
+  const deferredRungs: Record<string, number> = {};
+  if (p.deferredRungs && typeof p.deferredRungs === "object") {
+    for (const [id, at] of Object.entries(p.deferredRungs)) {
+      if (rungById(id)) deferredRungs[id] = num(at, 0);
+    }
+  }
+
   const inspectCounts: Record<string, number> = {};
   if (p.inspectCounts && typeof p.inspectCounts === "object") {
     for (const [id, n] of Object.entries(p.inspectCounts)) {
@@ -397,6 +451,7 @@ function coerce(raw: unknown): Progress {
     perfectScreenStreak: num(p.perfectScreenStreak, 0),
     rewardState,
     rewardQueue: queue,
+    deferredRungs,
     seenFactIds: ids(p.seenFactIds),
     factsByRung,
     inspectCounts,

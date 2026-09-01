@@ -308,8 +308,8 @@ Three rules hold it:
   paid out. Until then this is a file card and nothing else — which is also
   what gives the launch animation one simple object to land on.
 - **The requirement is a noun phrase, not a sentence.** `1 MORE FILE`, not
-  `Refine 1 more file without error.` — a line that truncates mid-word has
-  said nothing, and `shortFor()` exists for exactly this one place.
+  `Refine 1 more file.` — a line that truncates mid-word has said nothing,
+  and `shortFor()` exists for exactly this one place.
 - **An empty track has to look empty.** A `bg-phos-800` track at 5px reads
   as a *filled* bar; an empty one was reported as "the progress bar looked
   complete" beside the words `0/1`. Empty tracks are `bg-phos-950` with a
@@ -331,19 +331,29 @@ now, and they do not overlap:
 
 | | Beat | |
 | --- | --- | --- |
-| 1 | **It is finished.** `REFINED`, the border blooming, the meter full | 1.75s, on the board |
-| 2 | **It leaves.** The finished card slides out to the left, alone | 620ms |
-| 3 | **The next arrives.** After an empty beat, the new file slides in from the right at 0% | 220ms + 660ms |
+| 1 | **It is finished.** `REFINED`, the border blooming, the meter full | 1.75s on the board, then 1s more once the panel is dismissed |
+| 2 | **It leaves.** The finished card slides out to the left, alone | 1000ms |
+| 3 | **The next arrives.** After an empty beat, the new file slides in from the right at 0% | 380ms + 900ms |
 
 Overlapped, the two slides read as one shuffle and neither is watched. **The
 gap between them is what makes each a thing that happened** — an empty card
-for a fifth of a second is not dead air, it is punctuation.
+for a third of a second is not dead air, it is punctuation.
 
-Beat one needs somewhere to live: a finished file is held for
-`FILE_SETTLE_S` (1.75s) before any overlay may cover the board, where a
-stage that ends mid-file keeps the old `SETTLE_S` (0.6s). Tapping briskly
-through orientation is exactly as brisk as it was; the one mark that has
-nowhere else to be seen gets the time.
+Beat one needs somewhere to live, and it needs it **twice**. A finished
+file is held for `FILE_SETTLE_S` (1.75s) before any overlay may cover the
+board — a stage that ends mid-file keeps the old `SETTLE_S` (0.6s) — and
+then held again for `HANDOVER_HOLD_MS` (1s) *after* the refiner dismisses
+whatever covered it. Both ways out of a finished file (`NEXT FILE` on the
+panel, `RESUME REFINEMENT` on the summary) used to call for the next file
+on the same frame, so the file just finished was wiped away underneath the
+page that was still leaving, and the moment its card said `REFINED` at
+100% with nothing on top of it never happened at all.
+
+**The whole sequence is four statements, and each one is slow enough to
+watch**: this file is finished, this file is leaving, this file is gone,
+the next one is here. Roughly three and a half seconds end to end. It was
+under two, and a playtest called it "much too fast" — a beat that is over
+before the eye has found it is a beat that was not spent.
 
 Two mechanics worth keeping: the outgoing card is a *frozen snapshot* shown
 at 100%, so it leaves finished; and the swap is triggered in a **layout**
@@ -490,6 +500,53 @@ carries nothing a refiner could work backward from.
 The separation is structural, not a promise: `src/game/rewards.ts` holds
 the ladder and knows no names; `src/game/catalog.ts` holds the names and is
 imported only by the reveal, which runs after the thing has been earned.
+
+### A goal is something a refiner can act on
+
+Every goal the game puts on screen has to survive two questions: *can I do
+this on purpose?* and *is it still true after I fail?*
+
+`REFINE 1 MORE FILE WITHOUT ERROR` failed both. Nobody knows which drop
+will be the wrong one, so it cannot be planned around; and one wrong bin
+makes it unreachable, so the instruction goes on asking for something that
+is already gone. So the precision lane is **never forecast** —
+`laneVisible("perfect")` is false — and a clean run pays out unannounced,
+the way the first two incentives do.
+
+What a wrong bin costs depends on where it happens:
+
+| Where | What happens |
+| --- | --- |
+| Inside the teaching (`training`) | The red line at the top of the board, and nothing else. No run starts, none ends, no incentive moves. |
+| Past it, on a deck with one bin | Nothing. A bin that cannot be missed is arithmetic, not precision. |
+| Past it, on a deck with a choice | The run closes, and the incentive it was earning is **rescheduled** onto a file milestone two files out. |
+
+**A missed incentive is moved, never taken.** Lumon does not take things
+back, and neither does the ledger: the rung goes into `deferredRungs` with
+a file count, stops reading the streak, and is issued when that count is
+reached — however those files are refined. The notice says so in the same
+breath as the bad news, and the card that eventually opens says
+`RESCHEDULED INCENTIVE`, not the unblemished record the refiner knows they
+broke.
+
+### One instruction, said once
+
+A promise on screen is one line and one subordinate line:
+
+```text
+REFINE 1 MORE FILE
+TO RECEIVE ANOTHER INCENTIVE
+```
+
+It carried four things before: a headline, that instruction, a meter, a
+fraction, and a remainder line — `ANOTHER INCENTIVE IS COMING`, then
+`REFINE 1 MORE FILE`, then a bar, then `0/1`, then `1 TO GO`. Every one of
+them is **the same number in another notation**, and four readings of one
+fact is not four times as clear. The meter had its own problem: a bar at
+0/1 is a bar that never moves before it is gone.
+
+A second counter is different from the same counter restated. The Waffle
+tiers genuinely need two, and they keep their `BOTH REQUIRED` line.
 
 ### Canon
 

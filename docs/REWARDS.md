@@ -218,19 +218,35 @@ this ladder and is not counted as shipped.
 These are minor and ambient by design, so they may share a boundary with a major
 from Lane A or B without breaking the one-major rule.
 
-### Lane D — PERFECT PLAY, revealed after the first perfect screen
+### Lane D — PERFECT PLAY, never announced
 
 | Threshold | Reward |
 |---|---|
-| First perfect screen | **R03 Outie Fact** — this is what reveals the lane |
+| First perfect file | **R03 Outie Fact** |
 | 3 perfect in a row | **R02 Finger Trap** variant |
 | 5 perfect in a row | **R05 Melon Bar** encore |
 
-A screen counts toward the streak only if it had **more than one bin on the
-deck**. A one-bin orientation screen cannot be mis-binned, so finishing it
-cleanly is not precision — and counting it would have paid the first
-precision reward out on screen one, before the refiner had been shown a
-second bin to get wrong. Twenty-two of the twenty-three files qualify.
+**This lane is never forecast.** `laneVisible("perfect")` is false, so
+nothing on any screen ever reads `REFINE 1 MORE FILE WITHOUT ERROR`. That
+instruction failed both tests a goal has to pass: a refiner cannot do it on
+purpose — nobody knows which drop will be the wrong one — and a single
+mistake makes it unreachable, so the board goes on asking for something
+already gone. Clean play pays out unannounced, the way the first two
+incentives do.
+
+A file counts toward the run only if it had **more than one bin on the
+deck** *and* was past the teaching (`training`). A one-bin file cannot be
+mis-binned, so finishing it cleanly is arithmetic rather than precision;
+and orientation is where mistakes are supposed to happen, so a wrong bin
+there gets the red line at the top of the board and nothing else — it
+starts no run, ends none, and costs no incentive. Sixteen files qualify.
+
+**A missed incentive is rescheduled, not lost.** When a run closes, the
+next unearned precision rung goes into `deferredRungs` with a file count
+two files out. From then on it stops reading the streak entirely and is
+issued when that count is reached, however those files are refined. The
+card that eventually opens says `RESCHEDULED INCENTIVE · N FILES REFINED`
+rather than naming a record the refiner knows they broke.
 
 ### Lane E — RETURN, phase 2
 
@@ -636,20 +652,29 @@ way. It cannot live on the file panel: most of orientation advances itself
 900 ms after clearing, and a notice that wipes with the screen is a notice
 nobody read.
 
-The copy stays inside Lumon's vocabulary. The refiner has a **record**, it
-was **unblemished**, and what it earns is a **commendation** — nothing here
-is a streak and nothing here is a scoreboard:
+The copy stays inside Lumon's vocabulary — the refiner has a **record** and
+it was **unblemished**, and nothing here is a streak or a scoreboard — but
+the screen is deliberately not only bad news. Told an incentive is gone and
+left there, a refiner has been punished for a slip. Told it has been
+*rescheduled* to a file count they can reach by refining files, they have
+been given the truth and the way back in the same breath:
 
-> **YOUR UNBLEMISHED RECORD HAS BEEN CLOSED**
-> A temper was consigned to a bin that did not want it. The record stood at
-> 2 files refined without error. It now stands at none.
-> 3 consecutive files refined without error are required before the next
-> commendation may be issued.
-> No incentive already held has been withdrawn. Lumon does not take things
+> **AN INCENTIVE HAS BEEN MISSED**
+> A temper was consigned to a bin that did not want it. Your unblemished
+> record stood at 2 files and now stands at none, and the incentive it was
+> earning could not be issued for this file.
+> It has not been withdrawn. It has been rescheduled, and will be issued
+> when 2 more files have been refined.
+> No incentive already kept has been withdrawn. Lumon does not take things
 > back.
 
-The number it asks for is read from the precision lane, so it is always the
-real next threshold rather than a figure in a string.
+The number is read from the reschedule the ledger actually wrote, so the
+screen cannot promise a milestone the ledger is not holding. And it is said
+in **files refined**, not files refined without error: the rescheduled
+incentive no longer asks for a clean one, and repeating the condition that
+was just broken would be asking for the impossible twice.
+
+This never fires inside orientation.
 
 ### What the player is never made to wait for
 
@@ -670,6 +695,7 @@ binsTotal               binsByTemper: { WO, FC, DR, MA }
 perfectScreensTotal     perfectScreenStreak
 rewardStatusById        locked | earned_pending | presenting | claimed
 rewardQueue             seenFactIds
+deferredRungs           rung id -> the filesCompleted that will issue it
 lastSeenAt              resumeCount
 ```
 
