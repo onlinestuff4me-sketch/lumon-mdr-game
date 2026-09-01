@@ -1842,6 +1842,115 @@ section("music dance experience");
   eq("only the multiplier resets", missed.multiplier, 1);
 }
 
+// ═══ the coach band teaches orientation ══════════════════════════════
+//
+// Orientation's groups move by themselves, so there is nothing to probe
+// and the whole lesson is: that one is moving, take it, put it in a bin.
+// The band used to say one sentence, on the frame the level started —
+// before the board had finished painting and two seconds before the group
+// it was describing was moving at all — and then go quiet for good.
+section("the orientation coach");
+{
+  const say = () =>
+    page.evaluate(() => {
+      const s = window.__mdr.getSnapshot();
+      return { text: s.message ?? "", kind: s.messageKind };
+    });
+
+  // Recorded from the frame the level starts, so *when* a line arrives is
+  // part of what is checked rather than something read after the fact.
+  const openingOf = (index) =>
+    page.evaluate(async (i) => {
+      window.__mdr.startLevel(i);
+      const t0 = performance.now();
+      return await new Promise((done) => {
+        const tick = () => {
+          const s = window.__mdr.getSnapshot();
+          if (s.message) {
+            return done({
+              text: s.message,
+              kind: s.messageKind,
+              ms: Math.round(performance.now() - t0),
+              emergence: window.__mdr.emergence,
+            });
+          }
+          if (performance.now() - t0 > 8000) return done(null);
+          requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      });
+    }, index);
+
+  {
+    const open = await openingOf(0);
+    check("the first line waits for the numbers to arrive",
+      open !== null && open.emergence > 0.4, JSON.stringify(open));
+    check("and is the gesture, in the words a new refiner has",
+      /ONE GROUP IS ALREADY MOVING\. TAP IT\./.test(open?.text ?? ""),
+      open?.text);
+    eq("marked as coaching, so the band can draw it as an instruction",
+      open?.kind, "coach");
+  }
+
+  // Five seconds of reading TAP IT and not tapping: show what the tap is
+  // for rather than leaving one line up for ever.
+  await page.waitForFunction(
+    () => /DRAG THE NUMBERS/.test(window.__mdr.getSnapshot().message ?? ""),
+    null,
+    { timeout: 9000 },
+  ).catch(() => {});
+  check("an idle refiner is shown the rest of the lesson",
+    /DRAG THE NUMBERS INTO THE BIN\./.test((await say()).text), (await say()).text);
+
+  // Taking a group, putting it back, and taking it again.
+  {
+    await load(page, 0);
+    await page.waitForTimeout(2600);
+    const g = await findGroup(page);
+    await tap(page, origin, await touchFor(page, g.one, "marquee"));
+    await page.waitForTimeout(400);
+    check("taking a group says what to do with it",
+      /DRAG THE NUMBERS INTO THE BIN\./.test((await say()).text), (await say()).text);
+    // Put it down on open board: a change of mind, not a mistake.
+    await page.evaluate(() => {
+      window.__mdr.pointerDown(9, 30, 30);
+      window.__mdr.pointerUp(9, 30, 30);
+    });
+    await page.waitForTimeout(700);
+    check("and putting it back steps the lesson back with it",
+      /ONE GROUP IS ALREADY MOVING\. TAP IT\./.test((await say()).text),
+      (await say()).text);
+  }
+
+  // A screen with several groups on it does not say "one group".
+  {
+    const many = await page.evaluate(() =>
+      window.__mdr.levels.findIndex(
+        (l) => l.name === "ORIENTATION" && l.quota >= 2 && l.tempers.length >= 2,
+      ),
+    );
+    const open = await openingOf(many);
+    check("a board with several groups moving says so",
+      /MORE NUMBERS ARE MOVING\. TAP THEM\./.test(open?.text ?? ""), open?.text);
+
+    // And it is still talking after the first group is binned. The line
+    // was scoped to clear itself once anything had been refined, which
+    // left the band empty for the rest of every orientation screen.
+    await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });
+    await page.waitForTimeout(500);
+    const g = await findGroup(page);
+    await tap(page, origin, await touchFor(page, g.one, "marquee"));
+    await page.waitForTimeout(400);
+    if ((await state(page)).carrying) await carryToBin(page, origin, g);
+    // The praise keeps its beat first, and the coach comes back after it.
+    await page.waitForTimeout(2600);
+    const after = await say();
+    check("and goes on coaching once a group has been binned",
+      /TAP TH/.test(after.text), JSON.stringify(after));
+    eq("still as a coaching line", after.kind, "coach");
+  }
+}
+
 // ═══ the coach band walks a file ═════════════════════════════════════
 //
 // Past orientation every file hides its groups, and the band is the only

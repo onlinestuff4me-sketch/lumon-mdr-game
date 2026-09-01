@@ -250,6 +250,50 @@ three times in the first few seconds of a file. An error is the one
 exception and lands whole: a reprimand that takes half a second to spell
 itself out arrives after the refiner has already moved on.
 
+### The coach band teaches orientation
+
+Orientation's groups move by themselves, so there is nothing to probe and
+the whole lesson is three sentences long: *that one is moving*, *take it*,
+*put it in a bin*. The band used to say one of them, once, and then go
+quiet for good.
+
+It is a state machine read off the board now, not a script:
+
+| Board | Line |
+| --- | --- |
+| Nothing held, one group, nothing refined yet | `ONE GROUP IS ALREADY MOVING. TAP IT.` |
+| Nothing held, one group, some already refined | `ONE GROUP IS STILL MOVING. TAP IT.` |
+| Nothing held, two or more left | `MORE NUMBERS ARE MOVING. TAP THEM.` |
+| A group in hand | `DRAG THE NUMBERS INTO THE BIN.` |
+
+Four rules hold it together:
+
+- **It waits for the numbers.** The opening line used to be said on the
+  frame the level started — before the scan pass had finished painting the
+  board, and a full two seconds before the group it describes was moving
+  at all. "One group is already moving" was a claim about a still screen.
+  It now arrives at 60% of the emergence, typed onto a board where the
+  thing it names is visible.
+- **It reads the board, not a script.** Lift one and it is the drag line;
+  put it back and it is the tap line again; bin one of four and it is
+  still the tap line but now correctly in the plural. No transition has to
+  know about any other.
+- **It steps back when the refiner does.** Letting a group go is a change
+  of mind, not a mistake, so the band returns to the sentence that was
+  true a moment ago — typed, so it is seen to change its mind rather than
+  blink.
+- **Good news keeps its beat.** A praise or a reprimand holds the band for
+  1.5s before the coach speaks again, and the coach re-reads the board on
+  the way out rather than saying what it queued.
+
+And **an instruction looks like an instruction**: a coach line is the
+brightest thing in the band, bold, with a lit border, and it breathes on
+`crt-throb` once it has finished typing. Everything else in that band
+states a fact and sits still.
+
+If a refiner reads `TAP IT` and does nothing for five seconds, they are
+told what the tap is *for* rather than left with one line forever.
+
 ### The coach band walks the refiner through a file
 
 Past orientation every file hides its groups, and the band at the top of

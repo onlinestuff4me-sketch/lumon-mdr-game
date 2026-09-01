@@ -968,7 +968,7 @@ function StatusTicker({
   hud: ReturnType<typeof useEngine>["hud"];
   height: number;
 }) {
-  const instant = hud.messageKind !== "info";
+  const instant = hud.messageKind === "error" || hud.messageKind === "praise";
   const line = useTypeOver(hud.message ?? "", {
     go: true,
     initial: "",
@@ -983,19 +983,33 @@ function StatusTicker({
   if (!hud.message && !line.text) {
     return <div className="shrink-0" style={{ height }} />;
   }
+  // A coach line is an instruction, not a status: it is the brightest
+  // thing in the band and it breathes, because a refiner who has not
+  // noticed it is a refiner sitting in front of a board they do not know
+  // what to do with. Everything else states a fact and sits still.
+  const coaching = hud.messageKind === "coach";
   const color =
     hud.messageKind === "error"
       ? "text-alarm border-alarm/60"
       : hud.messageKind === "praise"
         ? "text-phos-200 border-phos-400/70"
-        : "text-phos-400 border-phos-600/70";
+        : coaching
+          ? "text-phos-100 border-phos-400/80 bg-phos-600/20"
+          : "text-phos-400 border-phos-600/70";
   return (
     <div
       className="pointer-events-none relative z-20 flex shrink-0 items-center justify-center overflow-hidden px-3"
       style={{ height }}
     >
       <span
-        className={`crt-text-glow max-w-full rounded-[2px] border bg-phos-950/90 px-2 py-1 text-center text-[9px] leading-snug tracking-[0.14em] ${color}`}
+        className={`crt-text-glow max-w-full rounded-[2px] border px-2 py-1 text-center text-[9px] leading-snug tracking-[0.14em] ${
+          coaching ? "font-bold" : "bg-phos-950/90"
+        } ${color}`}
+        style={
+          coaching && !line.typing
+            ? { animation: "crt-throb 2.4s ease-in-out infinite" }
+            : undefined
+        }
       >
         {line.text}
       </span>
