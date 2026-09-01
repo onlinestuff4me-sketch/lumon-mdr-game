@@ -527,6 +527,15 @@ separated beats rather than one blur, and each beat is one statement.
 | 2 | The summary catches that same file and *holds* it (300 ms) | The folder is on this shelf now |
 | 3 | The file walks into the category row it moved (720 ms) | This is the shelf it belongs on |
 | 4 | `+1` rises off the row, the count ticks, the bar grows, the row lights (`meter-take`) | The shelf is one fuller |
+| 5 | *Only then*: the next goal and the way back fade up together | And here is the next one |
+
+Beat five is the point of beats one to four. Until the filing has finished
+— the file landed, the count ticked, the `+1` risen — the page shows
+nothing below the shelf rows: no `ANOTHER INCENTIVE IS COMING`, no `RESUME
+REFINEMENT`. The receipt and the promise are two subjects, and putting them
+on screen together asks the refiner to read both and lets them read
+neither. Their space is reserved rather than collapsed, so nothing above
+jumps when they arrive.
 
 The hold in beat 2 exists because the file arrives on the same frame the
 page does, and a refiner who has just tapped a button is not yet looking at

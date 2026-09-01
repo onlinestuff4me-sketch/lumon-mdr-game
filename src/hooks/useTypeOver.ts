@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { getAudio } from "../audio/AudioEngine";
 
 /**
  * One line of text being replaced by another, a character at a time.
@@ -39,6 +40,14 @@ interface Options {
   gapMs?: number;
   /** Skip the animation entirely — reduced motion, or nothing to reveal. */
   instant?: boolean;
+  /**
+   * Click once per character typed.
+   *
+   * Only the *typing* half — a backspace is not a keystroke anyone hears
+   * on a machine like this, and clicking through the erase doubles the
+   * number of sounds for the half nobody is reading.
+   */
+  audible?: boolean;
 }
 
 export function useTypeOver(
@@ -46,10 +55,11 @@ export function useTypeOver(
   {
     go,
     initial = "",
-    eraseMs = 12,
-    typeMs = 26,
+    eraseMs = 16,
+    typeMs = 34,
     gapMs = 90,
     instant = false,
+    audible = false,
   }: Options,
 ): { text: string; typing: boolean } {
   const [text, setText] = useState(initial);
@@ -88,14 +98,21 @@ export function useTypeOver(
     // ...then type the new one.
     for (let n = 1; n <= to.length; n++) {
       const slice = to.slice(0, n);
+      const ch = to[n - 1];
       at += typeMs;
-      timers.current.push(setTimeout(() => setText(slice), at));
+      timers.current.push(
+        setTimeout(() => {
+          setText(slice);
+          // A space is a key nobody hears on a terminal this loud.
+          if (audible && ch.trim()) getAudio().keystroke();
+        }, at),
+      );
     }
     return () => {
       for (const t of timers.current) clearTimeout(t);
       timers.current = [];
     };
-  }, [to, go, eraseMs, typeMs, gapMs, instant]);
+  }, [to, go, eraseMs, typeMs, gapMs, instant, audible]);
 
   return { text: display, typing };
 }

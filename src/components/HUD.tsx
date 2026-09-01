@@ -33,16 +33,27 @@ function clock(seconds: number): string {
  * and their eyes are on the bin; the bin's meter moves, and so does this
  * one. At the top of the screen this meter moved where nobody was looking.
  *
- * **A file leaves and the next one arrives.** Finishing a file used to
- * mean watching every bar on the screen snap back to zero at once. The
- * card marks the completion first — REFINED, the border blooming — and
- * then slides out to the left while the next file slides in from the
- * right at 0%, so the reset is a *change of file* rather than a loss of
- * progress.
+ * **A file leaves and then the next one arrives.** Finishing a file used
+ * to mean watching every bar on the screen snap back to zero at once. It
+ * is three separated beats now, and they do not overlap:
+ *
+ * 1. **It is finished.** REFINED, the border blooming, the meter full —
+ *    held on the board for `FILE_SETTLE_S` before any overlay may cover
+ *    it, which is the only window this mark has.
+ * 2. **It leaves.** The finished card slides out to the left, alone.
+ * 3. **The next one arrives.** After a beat of empty card, the new file
+ *    slides in from the right at 0%.
+ *
+ * Overlapped, the two slides read as one shuffle and neither is watched.
+ * The gap between them is what makes each a thing that happened.
  */
 
-/** How long the finished file takes to leave and the next one to arrive. */
-const SLIDE_MS = 560;
+/** How long the finished file takes to leave. */
+const OUT_MS = 620;
+/** The empty beat between the two, so they are not one motion. */
+const GAP_MS = 220;
+/** How long the next file takes to arrive. */
+const IN_MS = 660;
 
 /** Everything the card draws about one file, frozen so a leaving file can
  *  keep showing what it was when it left. */
@@ -50,7 +61,8 @@ interface Face {
   id: string;
   name: string;
   code: string;
-  stage: readonly [number, number] | null;
+  /** Stages of this file *finished*, and how many there are. */
+  done: readonly [number, number] | null;
   pct: number;
   clockText: string;
   urgent: boolean;
@@ -95,20 +107,39 @@ export function HUD({
   const refined = done && hud.phase === "complete";
 
   const id = `${hud.levelName}#${hud.fileCode}`;
+  /**
+   * How many of this file's screens are *done*, not which one is open.
+   *
+   * `hud.stage` is 1-based and names the screen the refiner is on, so the
+   * second of three read `2/3` while two thirds of the file was still
+   * ahead of them — a fraction that looks like progress and is not. The
+   * count is the screens behind them, plus this one when it is finished.
+   */
+  const stages = hud.stage ?? null;
+  const doneStages: readonly [number, number] | null = stages
+    ? [Math.min(stages[1], stages[0] - 1 + (hud.progress >= 1 ? 1 : 0)), stages[1]]
+    : null;
   const now: Face = {
     id,
     name: hud.levelName,
     code: hud.fileCode,
-    stage: hud.stage ?? null,
+    done: doneStages,
     pct,
     clockText: hud.untimed ? "--:--" : clock(hud.timeLeft),
     urgent,
   };
 
+  /**
+   * Which beat of the handover is playing.
+   *
+   * `out` — the finished file is leaving and nothing has arrived.
+   * `in` — the new file is coming in from the right.
+   */
+  const [beat, setBeat] = useState<"idle" | "out" | "in">("idle");
   /** The file that has just left, still showing itself finished. */
   const [out, setOut] = useState<Face | null>(null);
-  /** True for the frame the incoming card is still off to the right. */
-  const [entering, setEntering] = useState(false);
+  /** True for the frame either card is still parked off its edge. */
+  const [parked, setParked] = useState(false);
   const shown = useRef<Face>(now);
 
   // Declared *before* the sync below, so on the commit that changes files
@@ -121,13 +152,29 @@ export function HUD({
   useLayoutEffect(() => {
     const last = shown.current;
     if (last.id === id) return;
-    setOut({ ...last, pct: 100, clockText: "REFINED", urgent: false });
-    setEntering(true);
-    const raf = requestAnimationFrame(() => setEntering(false));
-    const t = setTimeout(() => setOut(null), SLIDE_MS);
+    setOut({
+      ...last,
+      pct: 100,
+      done: last.done ? [last.done[1], last.done[1]] : null,
+      clockText: "REFINED",
+      urgent: false,
+    });
+    setBeat("out");
+    setParked(true);
+    const raf = requestAnimationFrame(() => setParked(false));
+    const timers = [
+      // Beat two ends: the finished file is gone and the card is empty.
+      setTimeout(() => {
+        setOut(null);
+        setBeat("in");
+        setParked(true);
+        requestAnimationFrame(() => setParked(false));
+      }, OUT_MS + GAP_MS),
+      setTimeout(() => setBeat("idle"), OUT_MS + GAP_MS + IN_MS),
+    ];
     return () => {
       cancelAnimationFrame(raf);
-      clearTimeout(t);
+      for (const t of timers) clearTimeout(t);
     };
   }, [id]);
 
@@ -183,11 +230,11 @@ export function HUD({
         <div
           className="pointer-events-none absolute inset-0 flex flex-col justify-center px-2.5"
           style={{
-            transform: entering ? "translateX(0)" : "translateX(-108%)",
-            opacity: entering ? 1 : 0,
-            transition: entering
+            transform: parked ? "translateX(0)" : "translateX(-112%)",
+            opacity: parked ? 1 : 0,
+            transition: parked
               ? undefined
-              : `transform ${SLIDE_MS}ms cubic-bezier(.4,0,.2,1), opacity ${SLIDE_MS}ms ease-in`,
+              : `transform ${OUT_MS}ms cubic-bezier(.5,0,.3,1), opacity ${OUT_MS}ms ease-in`,
           }}
         >
           <FileLines face={out} refined onHandbook={onHandbook} onSettings={onSettings} inert />
@@ -197,14 +244,20 @@ export function HUD({
       <div
         className="flex flex-col justify-center gap-1"
         style={
-          out || entering
-            ? {
-                transform: entering ? "translateX(108%)" : "translateX(0)",
-                transition: entering
-                  ? undefined
-                  : `transform ${SLIDE_MS}ms cubic-bezier(.4,0,.2,1)`,
-              }
-            : undefined
+          beat === "out"
+            ? // Waiting its turn, off to the right and invisible: the
+              // finished file leaves alone, which is what makes its
+              // leaving a beat rather than half of a crossfade.
+              { transform: "translateX(112%)", opacity: 0 }
+            : beat === "in"
+              ? {
+                  transform: parked ? "translateX(112%)" : "translateX(0)",
+                  opacity: parked ? 0 : 1,
+                  transition: parked
+                    ? undefined
+                    : `transform ${IN_MS}ms cubic-bezier(.3,0,.2,1), opacity ${IN_MS}ms ease-out`,
+                }
+              : undefined
         }
       >
         <FileLines
@@ -268,9 +321,12 @@ function FileLines({
         <span className="crt-text-glow truncate text-phos-400">
           <span className="text-phos-600">FILE: </span>
           {face.name} #{face.code}
-          {face.stage && face.stage[1] > 1 ? (
+          {/* Screens *refined*, out of the screens this file has — the
+              word is there because a bare fraction beside a file name
+              reads as "file 1 of 3". */}
+          {face.done && face.done[1] > 1 ? (
             <span className="text-phos-600">
-              {` ${face.stage[0]}/${face.stage[1]}`}
+              {` ${face.done[0]}/${face.done[1]} REFINED`}
             </span>
           ) : null}
         </span>

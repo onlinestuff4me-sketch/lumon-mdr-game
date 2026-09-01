@@ -48,8 +48,15 @@ import { FileGlyph } from "./FileGlyph";
 const HOLD_MS = 300;
 /** How long it takes to reach the row it counts toward. */
 const FLY_MS = 720;
-/** How long the fed row stays lit once it has it. */
-const GLOW_MS = 1100;
+/**
+ * How long the fed row stays lit once it has it.
+ *
+ * Long enough for the `+1` to finish rising off the row before anything
+ * else appears: what earns the next incentive is a different subject, and
+ * putting it on screen while the count is still ticking asks the refiner
+ * to read two things at once and lets them read neither.
+ */
+const GLOW_MS = 1800;
 /** How long the page takes to pack itself down before it leaves. */
 const PACK_MS = 420;
 /** How long the packed page takes to reach the header strip. */
@@ -263,6 +270,8 @@ export function IncentiveSummary({
    * also the moment there is anything on it worth reading.
    */
   const inFlight = arrival === "held" || arrival === "flying";
+  /** True once the incentive has finished being filed and counted. */
+  const settled = arrival === "done";
   const bodyDim = leaving ? 0.18 : 1;
   /**
    * Applied per element rather than to the whole body, because opacity
@@ -438,10 +447,26 @@ export function IncentiveSummary({
             <ChevronRight size={10} strokeWidth={2.4} aria-hidden />
           </button>
 
-          {/* 5. What earns the next one — never what it is. Last on the page
-                 and the brightest thing on it: everything above is a receipt
-                 for work already done, and this is the only line that is
-                 about the work still to do. */}
+          {/* 5. What earns the next one — never what it is. Last on the
+                 page, the brightest thing on it, and *not shown at all*
+                 until the incentive has finished being filed.
+
+                 The receipt and the promise are two subjects. Held back,
+                 the refiner watches one thing land, and then is handed the
+                 next goal as a separate event. The space is reserved
+                 rather than collapsed, so nothing above jumps when they
+                 arrive — what changes is only whether they are there. */}
+          <div
+            className="flex w-full flex-col items-center"
+            style={{
+              opacity: settled ? 1 : 0,
+              transform: settled ? "translateY(0)" : "translateY(10px)",
+              pointerEvents: settled ? undefined : "none",
+              transition: reduced
+                ? undefined
+                : "opacity 420ms ease-out, transform 420ms cubic-bezier(.2,.7,.3,1)",
+            }}
+          >
           {lane ? (
             <div
               style={veil}
@@ -503,6 +528,7 @@ export function IncentiveSummary({
             RESUME REFINEMENT
             <ChevronRight size={12} strokeWidth={2.6} />
           </button>
+          </div>
         </div>
 
         {/* The file the card folded itself into, arriving. It starts in the

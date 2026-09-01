@@ -229,14 +229,20 @@ Reserving the space up front is what this replaces, and it was worse: a
 hand's width of nothing under the plate, held for text that had not been
 written yet.
 
-### Text that changes meaning is typed over, never swapped
+### Text that changes meaning is typed over, never swapped, and is heard
 
 A terminal does not cross-fade a headline. Where a line genuinely becomes a
 *different statement* — "YOU'VE EARNED AN INCENTIVE" becoming the name of
 the thing — it is backspaced over and retyped a character at a time, with
 `crt-caret` blinking under the cursor while the machine works
 (`src/hooks/useTypeOver.ts`). The erase is faster than the type: deleting
-is not the part anyone is reading. This is for meaning, not decoration —
+is not the part anyone is reading.
+
+**And it clicks.** One keystroke per character *typed* — never per
+character erased, which would double the sounds for the half nobody reads,
+and never on a space. The click is the same shape as the office keyboards
+in the ambient bed but quieter and on the effects bus, so it reads as *this
+terminal* writing rather than as the room. This is for meaning, not decoration —
 a label that is merely *updating* still just updates.
 
 ### Two timing rules
@@ -283,10 +289,16 @@ saying what reaching 100% will buy, with a link to the full record and a
 count beside it.
 
 ```text
-FILE: ORIENTATION #0001 1/3                        --:--
+FILE: ORIENTATION #0001 1/3 REFINED                --:--
 ▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░  33%  [HANDBOOK ?] [⚙]
 1 MORE FILE FOR YOUR NEXT INCENTIVE      SEE ALL 3/28 ›
 ```
+
+**A fraction counts what is done, never where you are.** That line read
+`2/3` on the second screen of three — a number that looks like progress and
+is not, since two thirds of the file was still ahead. It counts the screens
+*behind* the refiner, and it carries the word `REFINED`, because a bare
+fraction beside a file name reads as "file 1 of 3".
 
 Three rules hold it:
 
@@ -311,18 +323,43 @@ to do, and the board under it is the doing of it.
 ticker · grid · bins · file card
 ```
 
-### A file leaves; the next one arrives
+### A file leaves, and *then* the next one arrives
 
 Finishing a file used to mean watching every bar on the screen snap back to
-zero at once, which reads as progress being taken away. The file card marks
-the completion first — `REFINED`, the border blooming — and then **slides
-out to the left while the next file slides in from the right** at 0%. The
-reset is a change of file, not a loss.
+zero at once, which reads as progress being taken away. It is three beats
+now, and they do not overlap:
+
+| | Beat | |
+| --- | --- | --- |
+| 1 | **It is finished.** `REFINED`, the border blooming, the meter full | 1.75s, on the board |
+| 2 | **It leaves.** The finished card slides out to the left, alone | 620ms |
+| 3 | **The next arrives.** After an empty beat, the new file slides in from the right at 0% | 220ms + 660ms |
+
+Overlapped, the two slides read as one shuffle and neither is watched. **The
+gap between them is what makes each a thing that happened** — an empty card
+for a fifth of a second is not dead air, it is punctuation.
+
+Beat one needs somewhere to live: a finished file is held for
+`FILE_SETTLE_S` (1.75s) before any overlay may cover the board, where a
+stage that ends mid-file keeps the old `SETTLE_S` (0.6s). Tapping briskly
+through orientation is exactly as brisk as it was; the one mark that has
+nowhere else to be seen gets the time.
 
 Two mechanics worth keeping: the outgoing card is a *frozen snapshot* shown
 at 100%, so it leaves finished; and the swap is triggered in a **layout**
 effect, because a passive one shows the arriving card at rest for one frame
 before it jumps off-screen to begin its slide.
+
+### One subject at a time
+
+Where a screen has a receipt and a promise on it, the promise waits. The
+incentive summary shows nothing below the shelf rows — not the next goal,
+not the way back — until the file has landed, the count has ticked and the
+`+1` has finished rising. Then those arrive together, as their own event.
+
+The space they will occupy is **reserved, not collapsed**: what changes is
+only whether they are there, so nothing above them jumps when they appear.
+A screen that grows while you are reading it has interrupted you twice.
 
 ### One object, handed from screen to screen
 

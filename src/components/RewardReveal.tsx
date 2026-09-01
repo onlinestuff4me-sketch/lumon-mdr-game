@@ -75,9 +75,9 @@ const KEEP_MS = 460;
  * Exported as constants because the rest of the card's choreography is
  * timed off them: the caption band opens when the headline stops.
  */
-const ERASE_MS = 10;
-const TYPE_MS = 20;
-const HEAD_GAP_MS = 110;
+const ERASE_MS = 14;
+const TYPE_MS = 30;
+const HEAD_GAP_MS = 140;
 
 /** How long the caption band takes to open, sliding the control down. */
 const BAND_MS = 320;
@@ -209,16 +209,20 @@ export function RewardReveal({
     typeMs: TYPE_MS,
     gapMs: HEAD_GAP_MS,
     instant: !sealed || reduced || skipped,
+    // The headline is the line the refiner is reading; the terminal is
+    // heard writing it.
+    audible: true,
   });
   // Behind the headline, and quicker per character because it is a
   // sentence rather than a title. It waits for the band to start opening,
   // so the words are written into a space that is making room for them.
   const body = useTypeOver(caption, {
     go: revealed,
-    eraseMs: 7,
-    typeMs: 13,
-    gapMs: 90,
+    eraseMs: 9,
+    typeMs: 17,
+    gapMs: 110,
     instant: reduced || skipped,
+    audible: true,
   });
 
   /**
