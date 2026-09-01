@@ -654,6 +654,20 @@ export class AudioEngine {
   }
 
   /**
+   * One character arriving on a card that is typing itself out.
+   *
+   * The same shape as the office keyboards in the bed — a short bandpassed
+   * click over a low thump — but on the effects bus and quieter, so it
+   * reads as *this terminal* writing rather than as the room. Randomised
+   * per call, because thirty identical clicks in a row is a buzzer.
+   */
+  keystroke(): void {
+    const hz = 1500 + Math.random() * 900;
+    this.blip("square", hz, hz * 0.55, 0.028, 0.05);
+    this.noise(0.02, 0.035, 2400 + Math.random() * 1400);
+  }
+
+  /**
    * Packet lifts off the grid.
    *
    * A flat mechanical click, not a rising chime. The rising pair read as

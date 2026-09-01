@@ -1303,7 +1303,7 @@ section("incentives");
   // The headline is not swapped, it is typed over: the announcement is
   // backspaced away and the name written in its place. For most of a
   // second the card is mid-word, which is the whole point of it.
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(2200);
   check("and the name is typed over the announcement",
     (await seen("FINGER TRAP")) === 1);
   check("leaving nothing of what it replaced",
@@ -1312,9 +1312,10 @@ section("incentives");
     (await action().innerText()).includes("KEEP INCENTIVE"));
 
   await action().click();
-  // The card folds into a file, the summary catches it, holds it, and walks
-  // it into the row it counts toward. The row is not told until it lands.
-  await page.waitForTimeout(2000);
+  // The card folds into a file, the summary catches it, holds it, walks it
+  // into the row it counts toward, and lights that row for nearly two
+  // seconds before what earns the next incentive is shown at all.
+  await page.waitForTimeout(3400);
   eq("filing claims it", (await ledger()).rewardState.S01, "claimed");
   eq("and empties the queue", (await ledger()).rewardQueue.length, 0);
 
@@ -1337,7 +1338,8 @@ section("incentives");
     await page.evaluate(() => window.__mdr.levelIndex), 2);
 
   await resume();
-  await page.waitForTimeout(1400);
+  // Out, a beat, and in — three chunky beats rather than one shuffle.
+  await page.waitForTimeout(2000);
   // A file that pays out ends on the summary and nowhere else. FILE
   // REFINED says what the summary already said, so showing both made the
   // refiner dismiss two screens in a row for one file.
@@ -1369,7 +1371,7 @@ section("incentives");
   check("behind one seal, opened once",
     (await action().innerText()).includes("OPEN"));
   await action().click();
-  await page.waitForTimeout(1500);
+  await page.waitForTimeout(2200);
   check("the first is the file-lane incentive",
     (await seen("YOU HAVE BEEN ISSUED AN ERASER")) === 1);
   check("and the second is not on screen with it", (await seen("MELON BAR")) === 0);
@@ -1388,7 +1390,7 @@ section("incentives");
   eq("the second is still owed", mid.rewardState.B040, "earned_pending");
 
   await action().click();
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(3400);
   const done = await ledger();
   eq("both end up claimed", [done.rewardState.S02, done.rewardState.B040], ["claimed", "claimed"]);
   eq("with nothing left in the queue", done.rewardQueue.length, 0);
@@ -1444,7 +1446,11 @@ section("incentives");
       await boxAndBin(page, origin, g);
       await page.waitForTimeout(150);
     }
-    await page.waitForTimeout(800);
+    // A finished *file* is now held for 1.75s before any overlay may cover
+    // it — the file card's REFINED mark has nowhere else to be seen — so a
+    // fixed 800ms lands before the card exists and finds nothing to click.
+    await settled(page);
+    await page.waitForTimeout(300);
   }
   // Screen three also earns a fact card, so a card is expected here — what
   // must never happen is the finger trap being *presented* a second time.
@@ -1454,7 +1460,7 @@ section("incentives");
   for (let i = 0; i < 8 && (await landing().count()) === 0; i++) {
     if ((await action().count()) === 0) break;
     await action().first().click({ timeout: 4000 }).catch(() => {});
-    await page.waitForTimeout(1700);
+    await page.waitForTimeout(2500);
   }
   await page.waitForTimeout(300);
   const refiled = await ledger();

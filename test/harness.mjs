@@ -281,12 +281,14 @@ export async function settleIncentives(page) {
     if ((await action.count()) === 0) break;
     // The filing sequence is deliberately slow: the card folds into a file
     // (460ms), the file is held and then walked into the row it counts
-    // toward (~1s), and the summary packs itself down and flies into the
-    // record (1.2s). Clicking through any of that is how a test ends up
-    // racing an element on its way out of the DOM.
+    // toward (~1s), the row is lit and counted for nearly two seconds
+    // before what earns the next incentive is even shown, and the summary
+    // then packs itself down and flies into the file card (1.2s). Clicking
+    // through any of that is how a test ends up racing an element on its
+    // way out of the DOM — or one that has not arrived yet.
     await action.first().click({ timeout: 4000 }).catch(() => {});
     cleared++;
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2300);
   }
   return cleared;
 }

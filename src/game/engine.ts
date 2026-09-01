@@ -181,6 +181,19 @@ const ABSORB_SECONDS = 0.45;
  * board is showing a finished file rather than a finishing one.
  */
 const SETTLE_S = 0.6;
+/**
+ * And how long a *finished file* is left alone.
+ *
+ * Longer, deliberately. A stage that ends mid-file is a step; a file that
+ * ends is the thing the whole screen has been counting toward, and the
+ * file card marks it — REFINED, the border blooming, the meter full — in
+ * the one window before an overlay covers the board. At six hundred
+ * milliseconds that mark went by before anyone had looked down at it.
+ *
+ * It costs nothing mid-file: a stage that auto-advances keeps `SETTLE_S`,
+ * so tapping briskly through orientation is exactly as brisk as it was.
+ */
+const FILE_SETTLE_S = 1.75;
 /** How long the digits take to fly from the grid into the box. Long
  *  enough to be watched, short enough that a refiner who already knows
  *  where the bin is never has to wait for it. */
@@ -2014,8 +2027,11 @@ export class GameEngine {
     const level = LEVELS[this.levelIndex];
     this.phase = "complete";
     // The meters have this long to reach their ends before anything is
-    // allowed to cover them.
-    this.settleAt = this.elapsed + SETTLE_S;
+    // allowed to cover them — and a file that is *finished* gets longer,
+    // because the file card's REFINED mark has nowhere else to be seen.
+    this.settleAt =
+      this.elapsed +
+      ((level.ceremony ?? "full") === "none" ? SETTLE_S : FILE_SETTLE_S);
     this.releaseGesture();
     getAudio().silenceAll();
     haptics.releaseProximity();
