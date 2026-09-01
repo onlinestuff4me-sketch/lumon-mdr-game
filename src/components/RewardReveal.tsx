@@ -111,6 +111,11 @@ interface Props {
   /** The rung that issued it, for the line saying why. */
   rung: Rung;
   /**
+   * The file count that issued it, when this incentive was missed once and
+   * rescheduled onto a file milestone. Absent for every ordinary payout.
+   */
+  rescheduledAt?: number;
+  /**
    * The sentences this incentive reads, already chosen and already stored.
    * One for a fact card, three or four for a Wellness session, none for an
    * object.
@@ -132,6 +137,7 @@ interface Props {
 export function RewardReveal({
   reward,
   rung,
+  rescheduledAt,
   facts,
   index,
   total,
@@ -306,7 +312,7 @@ export function RewardReveal({
             say; open, it stays put, so the refiner can still see what they
             did to get it. */}
         <p className="mt-3 flex h-[11px] items-center text-[8px] tracking-[0.2em] text-phos-500">
-          {reasonFor(rung)}
+          {reasonFor(rung, rescheduledAt)}
         </p>
 
         {/* The plate. Fixed aspect in both states, so the lid and the

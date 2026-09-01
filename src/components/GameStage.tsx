@@ -13,7 +13,7 @@ import {
 } from "../game/progress";
 import { presentable } from "../game/catalog";
 import { factById, type Fact } from "../game/facts";
-import { LADDER, rungById } from "../game/rewards";
+import { rungById } from "../game/rewards";
 import { RewardReveal } from "./RewardReveal";
 import { RecordNotice } from "./RecordNotice";
 import { IncentiveSummary } from "./IncentiveSummary";
@@ -38,17 +38,16 @@ import { PhaseOverlay } from "./PhaseOverlay";
 import { Viewport } from "./Viewport";
 
 /**
- * The next rung of the precision lane above a given run of clean files.
+ * How long the finished board is held, uncovered, before the next file is
+ * called for.
  *
- * Used only to tell a refiner who has just broken one what the next
- * commendation costs, in files rather than in jargon.
+ * A beat, not a delay. The board is still lit, the file card still reads
+ * REFINED at 100%, and nothing is on top of either — which for the whole
+ * of this game's life was true only in the moment between a file finishing
+ * and a panel covering it, and never at all once the refiner dismissed
+ * that panel.
  */
-function nextPerfectTarget(from: number): number | null {
-  const targets = LADDER.filter((r) => r.lane === "perfect")
-    .map((r) => r.at)
-    .sort((a, b) => a - b);
-  return targets.find((n) => n > from) ?? targets[0] ?? null;
-}
+const HANDOVER_HOLD_MS = 1000;
 
 /** A stable seed per rung, so the same session rebuilds the same floor. */
 function hashRung(id: string): number {
@@ -312,17 +311,40 @@ export function GameStage() {
     names: [],
   });
   /**
-   * A run of clean files that a wrong bin has just closed.
+   * A run of clean files that a wrong bin has just closed, and the file
+   * milestone the incentive it was earning has been moved to.
    *
    * Told plainly, because the alternative is a counter that silently went
-   * back to nothing: the refiner is owed the fact that a commendation just
-   * moved further away, and what it now takes to reach it.
+   * back to nothing. What the refiner is owed here is both halves: an
+   * incentive was missed, and it has not been taken away — it is waiting
+   * at a file count they can reach by refining files, clean or otherwise.
    */
+  /**
+   * True while the finished board is being held, uncovered, before the
+   * next file is called for.
+   *
+   * Both ways out of a finished file — NEXT FILE on the panel, RESUME
+   * REFINEMENT on the incentive summary — dismiss something that has been
+   * covering the board, and both used to ask the engine for the next file
+   * on the same frame. The file the refiner had just finished was wiped
+   * away underneath the page that was still leaving, and the one moment
+   * its card said REFINED at 100% with nothing on top of it never
+   * happened. This is that moment.
+   */
+  const [handing, setHanding] = useState(false);
   const [broken, setBroken] = useState<{
     levelId: string;
     at: number;
-    needs: number;
+    /** `filesCompleted` at which the rescheduled incentive is issued. */
+    atFile: number;
   } | null>(null);
+  // The hold is over the moment the engine actually leaves the completed
+  // phase, so the panel it suppresses can never come back for a frame
+  // between the timer firing and the wipe starting.
+  useEffect(() => {
+    if (hud.phase !== "complete") setHanding(false);
+  }, [hud.phase]);
+
   // Keyed by the file it happened on, not by a screen count: the count is
   // what the completion is about to change, so a note keyed to it would
   // never match the panel it was written for.
@@ -380,6 +402,34 @@ export function GameStage() {
   const closeHandbook = useCallback(() => {
     setHandbook(false);
   }, []);
+
+  /**
+   * Leave a finished file: uncover it, hold it, and only then ask for the
+   * next one.
+   *
+   * The hold is the whole change. What follows it is already three
+   * separated beats in the file card — the finished file leaves alone, the
+   * card is empty for a moment, the new file arrives — but they all used
+   * to begin on the frame a panel was dismissed, with the board wiping
+   * through them. Held first, the order a refiner sees is: this file is
+   * finished, this file is leaving, this file is gone, the next one is
+   * here. Four statements instead of one shuffle.
+   */
+  const handTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const advance = useCallback(() => {
+    if (handTimer.current) return;
+    setHanding(true);
+    handTimer.current = setTimeout(() => {
+      handTimer.current = null;
+      engine.nextLevel();
+    }, HANDOVER_HOLD_MS);
+  }, [engine]);
+  useEffect(
+    () => () => {
+      if (handTimer.current) clearTimeout(handTimer.current);
+    },
+    [],
+  );
 
   // Reconciles every reason the game might be held, and is the sole resume
   // path. The reveal uses the same pause the handbook does, which is what
@@ -479,25 +529,36 @@ export function GameStage() {
     if (level) {
       // Read before crediting: the ledger is about to reset the run.
       const hadClean = progressRef.current.perfectScreenStreak;
+      const wasDeferred = progressRef.current.deferredRungs;
       // The last stage of a file is the one that credits it. Bins are
       // still credited every stage — a group binned is a group binned —
       // but a file is only refined once all of it is.
       const fileComplete = level.stage ? level.stage[0] === level.stage[1] : true;
-      const counts = engine.fileCounts && fileComplete;
+      // Orientation is where mistakes are supposed to happen. A wrong bin
+      // there gets the red line at the top of the board and nothing else:
+      // it starts no run of clean files, ends none, and costs no incentive.
+      // The precision lane begins where the teaching stops.
+      const counts = engine.fileCounts && fileComplete && !level.training;
+      const credited = creditScreen({
+        levelId: level.id,
+        tempers: level.tempers,
+        quota: level.quota,
+        perfect: engine.filePerfect,
+        countsForPerfect: engine.fileCounts && !level.training,
+        fileComplete,
+      });
+      // The notice is driven by what the ledger actually did, not by a
+      // second guess at it: an incentive was rescheduled, or there is
+      // nothing to tell the refiner about.
       if (counts && !engine.filePerfect && hadClean > 0) {
-        const needs = nextPerfectTarget(hadClean) ?? 3;
-        setBroken({ levelId: level.id, at: hadClean, needs });
+        const moved = Object.entries(credited.deferredRungs).find(
+          ([id]) => wasDeferred[id] === undefined,
+        );
+        if (moved) {
+          setBroken({ levelId: level.id, at: hadClean, atFile: moved[1] });
+        }
       }
-      setProgress(
-        creditScreen({
-          levelId: level.id,
-          tempers: level.tempers,
-          quota: level.quota,
-          perfect: engine.filePerfect,
-          countsForPerfect: engine.fileCounts,
-          fileComplete,
-        }),
-      );
+      setProgress(credited);
     }
   }, [hud.phase, hud.levelIndex, engine]);
 
@@ -822,6 +883,10 @@ export function GameStage() {
             its scrim is the pause: the clock is stopped and input ignored
             while the drawer is open, so no phase can change underneath
             it. */}
+        {/* Gone the instant NEXT FILE is pressed, rather than when the
+            engine gets round to the wipe: the hold it makes room for is
+            only worth having if the board is actually visible during it. */}
+        {handing ? null : (
         <PhaseOverlay
           hud={hud}
           progress={progress}
@@ -841,7 +906,7 @@ export function GameStage() {
             }
             launch(0);
           }}
-          onNext={() => engine.nextLevel()}
+          onNext={advance}
           onRestart={() => engine.restart()}
           onNewQuarter={() => {
             // Back to the briefing, where the saves are read — so the
@@ -872,6 +937,7 @@ export function GameStage() {
             launch(run ? continueIndex(run, LEVELS.length) : 0);
           }}
         />
+        )}
 
         {/* Above the phase overlay and the handbook alike: a celebration
             owns the screen while it runs. */}
@@ -906,6 +972,7 @@ export function GameStage() {
             key={owed[0].rungId}
             reward={owed[0].reward}
             rung={owed[0].rung}
+            rescheduledAt={progress.deferredRungs[owed[0].rungId]}
             facts={owed[0].facts}
             index={stackIndex}
             total={stackTotal}
@@ -948,7 +1015,7 @@ export function GameStage() {
               // advances itself — the engine's own timer is doing it and a
               // second call would skip a file — and not on the last, which
               // ends the quarter rather than continuing it.
-              if (ceremonyHandled) engine.nextLevel();
+              if (ceremonyHandled) advance();
             }}
           />
         ) : null}
@@ -966,7 +1033,7 @@ export function GameStage() {
         {noticing && brokenHere ? (
           <RecordNotice
             at={brokenHere.at}
-            needs={brokenHere.needs}
+            due={Math.max(1, brokenHere.atFile - progress.filesCompleted)}
             onAcknowledge={() => setBroken(null)}
           />
         ) : null}

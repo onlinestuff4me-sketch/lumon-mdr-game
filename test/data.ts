@@ -397,6 +397,86 @@ console.log(`\n── incentive ladder ${"─".repeat(41)}`);
     ok("a screen credits once, however often the boundary fires");
   }
 
+  // ── a missed precision incentive is rescheduled, not lost ──────────
+  //
+  // The precision lane is never forecast — a goal that asks for a file
+  // refined without error is one a single slip makes unreachable, and the
+  // instruction would go on asking for something already gone. So the
+  // whole of what a wrong bin does is here: the run closes, and what it
+  // was earning moves onto a file milestone, where an ordinary file pays
+  // it out.
+  {
+    const files = LEVELS.filter((l) => (l.showBins ?? l.tempers).length > 1);
+    const clean = (p: Progress, lv: (typeof LEVELS)[number], perfect: boolean) =>
+      applyCompletion(p, {
+        levelId: lv.id,
+        tempers: lv.tempers,
+        quota: lv.quota,
+        perfect,
+        countsForPerfect: !lv.training,
+        fileComplete: true,
+      });
+
+    // Nothing in the forecast ever asks for a clean file.
+    {
+      let p3: Progress = emptyProgress();
+      let asked = 0;
+      for (const lv of LEVELS) {
+        for (const lane of forecast(counters(p3))) {
+          if (lane.lane === "perfect") asked++;
+          if (/without error/i.test(lane.action)) asked++;
+        }
+        p3 = clean(p3, lv, true).progress;
+      }
+      if (asked > 0) fail(`the forecast asked for a clean file ${asked} times`);
+      ok("no forecast, anywhere on the ladder, asks for a file without error");
+    }
+
+    // A mistake inside the teaching costs nothing at all.
+    {
+      let p3: Progress = emptyProgress();
+      for (const lv of LEVELS.filter((l) => l.training)) {
+        p3 = clean(p3, lv, false).progress;
+      }
+      if (Object.keys(p3.deferredRungs).length !== 0) {
+        fail("a wrong bin in orientation rescheduled an incentive");
+      }
+      if (p3.perfectScreenStreak !== 0) fail("orientation built a run of clean files");
+      ok("a wrong bin inside the teaching costs nothing");
+    }
+
+    // Outside it: two clean files, then one with a mistake in it.
+    {
+      let p3: Progress = emptyProgress();
+      const past = files.filter((l) => !l.training);
+      p3 = clean(p3, past[0], true).progress;
+      p3 = clean(p3, past[1], true).progress;
+      if (p3.perfectScreenStreak !== 2) fail("clean files did not build a run");
+      const before = p3.filesCompleted;
+      p3 = clean(p3, past[2], false).progress;
+      const moved = Object.entries(p3.deferredRungs);
+      if (moved.length !== 1) {
+        fail(`a broken run rescheduled ${moved.length} incentives, wanted 1`);
+      } else {
+        const [id, at] = moved[0];
+        const rung = LADDER.find((r) => r.id === id);
+        if (rung?.lane !== "perfect") fail(`${id} is not a precision incentive`);
+        if (at !== before + 1 + 2) fail(`${id} was placed at ${at}, wanted ${before + 3}`);
+        // And it is actually issued there, by files refined however they
+        // were refined — the two that follow both carry a mistake.
+        let found = false;
+        for (const lv of past.slice(3, 6)) {
+          const step = clean(p3, lv, false);
+          p3 = step.progress;
+          if (step.earned.some((r) => r.id === id)) found = true;
+        }
+        if (!found) fail(`${id} was rescheduled and then never issued`);
+        else ok(`a missed incentive is issued ${at - before} files later, clean or not`);
+      }
+      if (p3.perfectScreenStreak !== 0) fail("a wrong bin left the run standing");
+    }
+  }
+
   // The forecast shows the next threshold and never the one after it.
   {
     let p2: Progress = emptyProgress();

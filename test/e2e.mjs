@@ -14,6 +14,7 @@ import {
   open, state, findGroup, touchFor, drag, tap, touchTap, load, setMode,
   boxAndBin, carryToBin, byName, section, check, eq, summary, settleIncentives,
   lastTrainingIndex, orientationIndices, refineFile, readLedger, writeLedger,
+  carryToWrongBin, findGroupToBin, carryHeldToItsBin, groupById,
   settled, beginRefining,
 } from "./harness.mjs";
 
@@ -1233,9 +1234,10 @@ section("incentives");
   /** Clear the landing screen that follows the last card of a stack. */
   const resume = async () => {
     await landing().click({ timeout: 4000 });
-    // The page packs itself down and then flies into the record; the board
-    // is not back until both beats are over.
-    await page.waitForTimeout(1400);
+    // The page packs itself down and then flies into the record; then the
+    // board it uncovers is *held*, finished, before the next file is asked
+    // for. The board is not back until all three beats are over.
+    await page.waitForTimeout(2600);
   };
   /**
    * Refine a whole file and stop the instant its last stage reads 100%,
@@ -1329,17 +1331,24 @@ section("incentives");
   check("with the category's real denominator", (await seen("1 OF 10")) === 1);
   // Last on the page and the loudest thing on it: everything above is a
   // receipt, and this is the only object about work still to do.
-  check("says plainly that another one is coming",
-    (await seen("ANOTHER INCENTIVE IS COMING")) === 1);
-  check("and what it costs", (await seen("TO GO")) >= 1);
-  check("without saying what it is", (await seen("CLASSIFIED")) >= 1);
+  // One instruction and what obeying it buys — and nothing that says the
+  // same number again in another notation. The headline, the meter, the
+  // fraction and the remainder line were four readings of one fact.
+  check("says what earns the next one",
+    (await seen("REFINE 1 MORE FILE")) >= 1);
+  check("and what obeying it buys",
+    (await seen("TO RECEIVE ANOTHER INCENTIVE")) === 1);
+  check("without a second notation for the same number",
+    (await seen("TO GO")) === 0);
+  check("and without saying what the incentive is",
+    (await seen("MELON")) === 0 && (await seen("ERASER")) === 0);
   await page.waitForTimeout(700);
   eq("and the board does not advance underneath it",
     await page.evaluate(() => window.__mdr.levelIndex), 2);
 
   await resume();
   // Out, a beat, and in — three chunky beats rather than one shuffle.
-  await page.waitForTimeout(2000);
+  await page.waitForTimeout(2400);
   // A file that pays out ends on the summary and nowhere else. FILE
   // REFINED says what the summary already said, so showing both made the
   // refiner dismiss two screens in a row for one file.
@@ -1831,6 +1840,177 @@ section("music dance experience");
   eq("it takes nothing off the meter", missed.meter, missed.before.meter);
   eq("and nothing off the score", missed.score, missed.before.score);
   eq("only the multiplier resets", missed.multiplier, 1);
+}
+
+// ═══ a mistake, and what it costs ════════════════════════════════════
+//
+// The precision incentives are never advertised — "REFINE 1 MORE FILE
+// WITHOUT ERROR" is a goal a refiner cannot plan around and a single slip
+// makes unreachable — so what a wrong bin does is a mechanic that has to
+// be checked from the outside: nothing in orientation, and outside it a
+// notice plus a reschedule rather than a loss.
+section("a wrong bin");
+{
+  const seed = (p) => writeLedger(page, p);
+
+  // ── inside orientation: the red line and nothing else ─────────────
+  await seed({
+    version: 1, filesCompleted: 0, screensCompleted: 0, binsTotal: 0,
+    binsByTemper: { WO: 0, FC: 0, DR: 0, MA: 0 },
+    creditedLevelIds: [], perfectScreensTotal: 0, perfectScreenStreak: 0,
+    rewardState: {}, rewardQueue: [], seenFactIds: [], factsByRung: {},
+    inspectCounts: {}, lastShownRewardId: null,
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+
+  // A late orientation stage, so the deck has more than one bin to get
+  // wrong. The first stages have one, and one bin cannot be missed.
+  const wide = await page.evaluate(
+    () => window.__mdr.levels.findIndex((l) => l.training && (l.showBins?.length ?? l.tempers.length) > 1),
+  );
+  await load(page, wide);
+  {
+    const g = await findGroup(page);
+    await tap(page, origin, await touchFor(page, g.one, "marquee"));
+    check("a packet can be lifted", (await state(page)).carrying);
+    await carryToWrongBin(page, origin, g);
+    const st = await state(page);
+    check("the wrong bin is refused, and says so at the top of the board",
+      st.message !== null && st.message.length > 0, JSON.stringify(st.message));
+  }
+  // Finish the file anyway. Orientation is where mistakes are supposed to
+  // happen, and one costs nothing at all.
+  {
+    let guard = 0;
+    while ((await state(page)).progress < 100 && guard++ < 12) {
+      const g = await findGroup(page);
+      if (!g) break;
+      await tap(page, origin, await touchFor(page, g.one, "marquee"));
+      if (!(await state(page)).carrying) break;
+      await carryToBin(page, origin, g);
+    }
+    await settled(page);
+    await page.waitForTimeout(2200);
+    const led = await readLedger(page);
+    eq("and nothing is rescheduled for it", Object.keys(led.deferredRungs ?? {}), []);
+    check("no notice is raised inside orientation",
+      (await page.locator("[data-record-notice]").count()) === 0);
+  }
+
+  // ── outside it: the notice, and the incentive moved ────────────────
+  await seed({
+    version: 1, filesCompleted: 5, screensCompleted: 5, binsTotal: 24,
+    binsByTemper: { WO: 8, FC: 6, DR: 5, MA: 5 },
+    creditedLevelIds: [],
+    // A run of clean files is standing, so there is something to break.
+    perfectScreensTotal: 2, perfectScreenStreak: 2,
+    rewardState: { S01: "claimed", S02: "claimed", S03: "claimed", S05: "claimed" },
+    rewardQueue: [], seenFactIds: [], factsByRung: {}, inspectCounts: {},
+    lastShownRewardId: null,
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+
+  // LE MANS: past the teaching, and two bins on the deck. The four files
+  // before KINGSPORT carry one temper each, and a deck with one bin on it
+  // cannot be mis-binned — those have never counted toward precision and
+  // still do not. Its groups hide, so each one has to be probed up before
+  // it can be boxed.
+  const named = await byName(page, "LE MANS");
+  await load(page, named);
+  {
+    /** Surface the next hidden group its file still has room for. */
+    const lift = async () => {
+      await setMode(page, "probe");
+      const g = await findGroupToBin(page);
+      if (!g) return null;
+      const at = await touchFor(page, g.ctr, "probe");
+      await page.mouse.move(origin.x + at.x, origin.y + at.y);
+      await page.mouse.down();
+      await page.waitForTimeout(700);
+      await page.mouse.up();
+      await page.waitForTimeout(150);
+      await setMode(page, "select");
+      // Re-read *this* cluster after the probe: the digits have moved
+      // under it, and it is the only one that has been surfaced.
+      return (await groupById(page, g.id)) ?? g;
+    };
+    // The mistake, once.
+    const first = await lift();
+    check("a packet can be lifted past orientation too", first !== null);
+    if (first) {
+      await drag(
+        page,
+        origin,
+        await touchFor(page, { x: first.min.x - 10, y: first.min.y - 10 }, "marquee"),
+        await touchFor(page, { x: first.max.x + 10, y: first.max.y + 10 }, "marquee"),
+      );
+      if ((await state(page)).carrying) {
+        await carryToWrongBin(page, origin, first);
+      }
+      await page.waitForTimeout(150);
+    }
+    // Then the file, finished properly. Generous on retries: a scattered
+    // cluster has to be probed up again, and this file has a clock.
+    let guard = 0;
+    while ((await state(page)).progress < 100 && guard++ < 40) {
+      const g = await lift();
+      if (!g) {
+        await page.waitForTimeout(300);
+        continue;
+      }
+      await drag(
+        page,
+        origin,
+        await touchFor(page, { x: g.min.x - 6, y: g.min.y - 6 }, "marquee"),
+        await touchFor(page, { x: g.max.x + 6, y: g.max.y + 6 }, "marquee"),
+      );
+      // Whatever the marquee actually lifted goes to its own bin, not to
+      // the bin of the group the test was aiming at.
+      if ((await state(page)).carrying) await carryHeldToItsBin(page, origin);
+      await page.waitForTimeout(150);
+    }
+    eq("the file is refined despite the mistake",
+      (await state(page)).progress, 100);
+  }
+  await settled(page);
+  await page.waitForTimeout(2400);
+  {
+    const led = await readLedger(page);
+    const moved = Object.entries(led.deferredRungs ?? {});
+    check("the incentive the clean run was earning is not lost",
+      moved.length === 1, JSON.stringify(led.deferredRungs));
+    if (moved.length === 1) {
+      eq("it is placed two files further on, whatever refines them",
+        moved[0][1], led.filesCompleted + 2);
+    }
+    eq("and the run itself is closed", led.perfectScreenStreak, 0);
+  }
+  // Good news first: the notice waits behind anything owed, so the cards
+  // and the summary are cleared before it can be looked at.
+  {
+    const notice = page.locator("[data-record-notice]");
+    for (let i = 0; i < 10 && (await notice.count()) === 0; i++) {
+      const card = page.locator("[data-reward-action]");
+      const land = page.locator("[data-record-landing]");
+      if (await card.count()) await card.click();
+      else if (await land.count()) await land.click();
+      else await page.waitForTimeout(400);
+      await page.waitForTimeout(2400);
+    }
+    check("the notice waits until the good news is done",
+      (await notice.count()) === 1);
+  }
+  {
+    const text = await page.evaluate(() => document.body.innerText);
+    check("the refiner is told an incentive was missed",
+      /AN INCENTIVE\s+HAS BEEN MISSED/.test(text), text.slice(0, 160));
+    check("and told it has been rescheduled rather than withdrawn",
+      /rescheduled/.test(text) && /has not been withdrawn/.test(text));
+    check("in files refined, not files refined without error",
+      /2 more files have been\s+refined/.test(text));
+  }
 }
 
 // ═══ 11. nothing threw ═══════════════════════════════════════════════
