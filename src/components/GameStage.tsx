@@ -972,7 +972,12 @@ function StatusTicker({
   const line = useTypeOver(hud.message ?? "", {
     go: true,
     initial: "",
-    eraseMs: 9,
+    // Slower than a keystroke on purpose. This band un-writes as often as
+    // it writes — a file finishes and REFINED is deleted, a group is put
+    // back and the instruction before it returns — and at nine
+    // milliseconds a character the seven letters of REFINED were gone
+    // inside four frames, which is a flicker rather than a reversal.
+    eraseMs: 22,
     typeMs: 15,
     gapMs: 60,
     instant,
@@ -1002,6 +1007,7 @@ function StatusTicker({
       style={{ height }}
     >
       <span
+        data-ticker
         className={`crt-text-glow max-w-full rounded-[2px] border px-2 py-1 text-center text-[9px] leading-snug tracking-[0.14em] ${
           coaching ? "font-bold" : "bg-phos-950/90"
         } ${color}`}

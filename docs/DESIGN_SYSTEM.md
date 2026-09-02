@@ -248,7 +248,20 @@ a label that is merely *updating* still just updates.
 **The coach band is typed too**, because it is a line that changes meaning
 three times in the first few seconds of a file. An error is the one
 exception and lands whole: a reprimand that takes half a second to spell
-itself out arrives after the refiner has already moved on.
+itself out arrives after the refiner has already moved on. Praise lands
+whole for the same reason.
+
+**And what gets un-written is whatever is on screen** — including a line
+that arrived whole. `instant` is a way of *arriving*, not a reason for the
+buffer to fall behind: it used to draw its text directly and leave the
+animation buffer holding the last line that had been typed, so the moment
+anything animated again that stale line was painted for a frame and then
+carefully deleted. A file would finish, the band would say `REFINED`, and
+the refiner would watch an instruction from a minute earlier being
+unspelled over a board that was already wiping out. The erase is also
+slower than the type here (22ms a character): this band un-writes as often
+as it writes, and seven letters gone inside four frames is a flicker
+rather than a reversal.
 
 ### The coach band teaches orientation
 

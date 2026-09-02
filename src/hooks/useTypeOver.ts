@@ -17,7 +17,9 @@ import { getAudio } from "../audio/AudioEngine";
  * What gets erased is whatever is *currently drawn*, not a fixed `from`
  * string — so a caption that changes again while the card is open (a
  * Wellness session walks three sentences) backspaces over the sentence
- * the refiner was reading rather than over something they never saw.
+ * the refiner was reading rather than over something they never saw. That
+ * holds for lines that arrived *whole* too: a message shown instantly is
+ * still a message on screen, and it is the one an erase has to consume.
  *
  * Returns the text to draw and whether the machine is still working, so a
  * caller can blink a caret while it is and stop when it is not.
@@ -63,11 +65,30 @@ export function useTypeOver(
   }: Options,
 ): { text: string; typing: boolean } {
   const [text, setText] = useState(initial);
-  // The two states that are not animation — held before `go`, and skipped
-  // outright — are derived rather than stored. Pushing them into `text`
-  // from an effect would be a render spent saying what this line already
-  // says, and it is what the machine is *doing* that the caret reports.
-  const display = !go ? initial : instant ? to : text;
+  /**
+   * A line that arrives whole still goes through the buffer.
+   *
+   * `instant` used to bypass `text` and draw `to` directly, which left the
+   * buffer holding whatever the last *animated* line had been. The moment
+   * `instant` turned off again — and on the coach band it is decided per
+   * message, so it turns off often — that stale line was what got
+   * rendered, and then what got erased.
+   *
+   * It read as: a file finishes, the band says REFINED, and then REFINED
+   * is replaced in a single frame by the instruction from a minute ago,
+   * which is unspelled letter by letter while the board wipes out
+   * underneath it. The refiner watches a message they had already finished
+   * with being carefully deleted.
+   *
+   * Adjusted during render rather than from an effect on purpose: the
+   * frame in between is the entire bug, and an effect would still paint
+   * it once.
+   */
+  if (go && instant && text !== to) setText(to);
+  // Held before `go` is the one state that is not animation, and it is
+  // derived rather than stored — a render spent saying what this line
+  // already says.
+  const display = !go ? initial : text;
   const typing = go && !instant && display !== to;
   /** What is on screen right now, which is what an erase has to consume. */
   const shown = useRef(display);
