@@ -88,7 +88,7 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
     kind: "object",
     name: "STANDARD REFINER ERASER",
     earned: "YOU HAVE BEEN ISSUED AN ERASER",
-    line: "Issued at ten percent, as the handbook provides. There is nothing here for you to erase.",
+    line: "Lumon provides. There is nothing for you to erase.",
     poster: asset("r01_eraser.webp"),
   },
   R02: {

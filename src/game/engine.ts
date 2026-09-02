@@ -81,7 +81,7 @@ export interface HudSnapshot {
   bins: BinView[];
   carrying: boolean;
   message: string | null;
-  messageKind: "praise" | "error" | "info" | null;
+  messageKind: "praise" | "error" | "info" | "coach" | null;
   glitch: boolean;
   audioReady: boolean;
   muted: boolean;
@@ -239,6 +239,8 @@ const BIN_CATCH_BELOW = 24;
  */
 const COACH_AFTER_S = 1.9;
 
+
+
 const WIPE_OUT_S = 0.24;
 const WIPE_IN_S = 0.44;
 /**
@@ -251,6 +253,31 @@ const WIPE_IN_S = 0.44;
  * move, which is the thing the whole sequence is teaching.
  */
 const EMERGE_S = 2;
+
+/**
+ * When the orientation coach's first line arrives.
+ *
+ * *After* the numbers do. The line used to be said on the frame the level
+ * started, which is before the scan pass has finished painting the board
+ * and a full two seconds before the group it is talking about is moving
+ * at all — so "one group is already moving" was a claim about a still
+ * screen. It waits for the wipe and most of the emergence, and then types
+ * itself out onto a board where the thing it describes is visible.
+ */
+const ORIENT_COACH_AT = WIPE_IN_S + EMERGE_S * 0.6;
+
+/**
+ * How long the coach waits for a first tap before showing the rest of the
+ * lesson anyway.
+ *
+ * Five seconds of a refiner reading TAP IT and not tapping is a refiner
+ * who does not yet know what tapping is *for*. The second half of the
+ * gesture is the answer, and it costs nothing to give it early.
+ */
+const ORIENT_IDLE_S = 5;
+
+/** The beat a praise or a reprimand keeps before the coach speaks again. */
+const COACH_AFTER_NEWS_S = 1.5;
 /**
  * Proximity at which a cluster counts as positively identified.
  *
@@ -329,6 +356,13 @@ export class GameEngine {
    * or -1 where it has nothing further to say.
    */
   private coachAt = -1;
+  /** What the scheduled coach line will say when `coachAt` arrives. */
+  private coachLine = "";
+  /**
+   * When the orientation coach gives up waiting for a first tap and shows
+   * the rest of the lesson anyway, or -1 once it has.
+   */
+  private coachIdleAt = -1;
   private orientHintAt = -1;
   /** The sentence that re-offer will say, chosen with the file. */
   private hintLine = "";
@@ -385,7 +419,8 @@ export class GameEngine {
 
   /** Cluster ids currently pulsing from a rejected drop. */
   glitchUntil = 0;
-  message: { text: string; kind: "praise" | "error" | "info" } | null = null;
+  message: { text: string; kind: "praise" | "error" | "info" | "coach" } | null =
+    null;
   private messageScope: MessageScope = "sticky";
   /** Per-cluster agitation as it stood the instant the finger landed. */
   private agitationAtDown: number[] = [];
@@ -729,11 +764,13 @@ export class GameEngine {
     // read the first line, did nothing, and watched it go. They are
     // different lessons, so the file picks the sentence rather than the
     // timer.
-    this.hintLine = level.teachProbe
-      ? "HOLD A FINGER ON THE NUMBERS. THE STRANGE ONES WILL SHOW THEMSELVES."
-      : "BOX THE MOVING DIGITS. DRAG THEM TO THE BIN.";
-    this.orientHintAt =
-      level.selfAgitate === true || level.teachProbe === true ? 13 : -1;
+    // Only the file that teaches the probe still re-offers its lesson on a
+    // timer. Orientation has a coach that answers to the board now, and a
+    // second sentence arriving over it thirteen seconds later was one more
+    // thing to read rather than a second chance.
+    this.hintLine =
+      "HOLD A FINGER ON THE NUMBERS. THE STRANGE ONES WILL SHOW THEMSELVES.";
+    this.orientHintAt = level.teachProbe === true ? 13 : -1;
     this.advanceAt = -1;
     this.settleAt = -1;
     this.flawless = true;
@@ -760,9 +797,12 @@ export class GameEngine {
     if (level.selfAgitate) {
       // The generic "FILE LOADED" line teaches nothing to someone who does
       // not yet know the matrix hides anything. Orientation's groups move
-      // by themselves, so there is only ever one thing to say.
-      this.say("ONE GROUP IS ALREADY MOVING. BOX IT.", "info", "untilAction");
-      this.coachAt = -1;
+      // by themselves, and the coach walks the gesture instead — but not
+      // yet: the line is scheduled for after the board has arrived and the
+      // group it describes is actually moving.
+      this.clearMessage();
+      this.coach(this.orientCoach(), ORIENT_COACH_AT);
+      this.coachIdleAt = ORIENT_COACH_AT + ORIENT_IDLE_S;
     } else {
       // Every file past orientation hides its groups, and the band walks
       // the refiner through it in three beats rather than one.
@@ -781,7 +821,11 @@ export class GameEngine {
       // nothing, which is the whole of the teaching for the twenty-one
       // files where the probe is actually required.
       this.say(`FILE ${level.name} #${level.fileCode} LOADED`, "info");
-      this.coachAt = this.elapsed + COACH_AFTER_S;
+      this.coach(
+        "HOLD DOWN ON THE NUMBERS TO FIND THE STRANGE ONES.",
+        COACH_AFTER_S,
+      );
+      this.coachIdleAt = -1;
     }
     getAudio().fileLoaded();
     // The new picture is painted on by the same scan pass that took the old
@@ -991,12 +1035,47 @@ export class GameEngine {
    */
   private say(
     text: string,
-    kind: "praise" | "error" | "info",
+    kind: "praise" | "error" | "info" | "coach",
     scope: MessageScope = "sticky",
   ): void {
     this.message = { text, kind };
     this.messageScope = scope;
     this.snapshotDirty = true;
+  }
+
+  /**
+   * What an orientation screen's coach band should be saying right now.
+   *
+   * Read off the board rather than remembered, so it is right after every
+   * transition without each transition having to know about the others:
+   * lift one, and it is the drag line; put it back, and it is the tap
+   * line again; bin one of four, and it is still the tap line but now in
+   * the plural it was always meant to be in.
+   */
+  private orientCoach(): string {
+    if (this.packet) return "DRAG THE NUMBERS INTO THE BIN.";
+    const real = this.board.clusters.filter((c) => !c.decoy && !c.fifth);
+    const left = real.filter((c) => !c.refined).length;
+    if (left > 1) return "MORE NUMBERS ARE MOVING. TAP THEM.";
+    // "Already" is the opening: it is what makes a still-looking board
+    // worth a second look. Once something has been refined the same
+    // sentence is simply untrue, and the refiner is being told about a
+    // board they have already been working on.
+    return real.some((c) => c.refined)
+      ? "ONE GROUP IS STILL MOVING. TAP IT."
+      : "ONE GROUP IS ALREADY MOVING. TAP IT.";
+  }
+
+  /** Put a coach line on the band, now or after a beat. */
+  private coach(line: string, delayS = 0): void {
+    if (delayS <= 0) {
+      this.coachAt = -1;
+      this.coachLine = "";
+      this.say(line, "coach", "sticky");
+      return;
+    }
+    this.coachLine = line;
+    this.coachAt = this.elapsed + delayS;
   }
 
   /** True once the message on screen is describing something that is over. */
@@ -1928,7 +2007,16 @@ export class GameEngine {
     this.mode = LEVELS[this.levelIndex].startMode ?? "probe";
     getAudio().lift();
     haptics.lift();
-    this.say("PACKET LIFTED — ASSIGN A TEMPER", "info", "untilDropped");
+    // Orientation is being taught a gesture, not given a status line. The
+    // moment a group is in hand the coach says what to do with it, in the
+    // words it has been using — "assign a temper" is the manual's phrase
+    // for it and means nothing to someone on their second screen.
+    if (LEVELS[this.levelIndex].selfAgitate === true) {
+      this.coachIdleAt = -1;
+      this.coach("DRAG THE NUMBERS INTO THE BIN.");
+    } else {
+      this.say("PACKET LIFTED — ASSIGN A TEMPER", "info", "untilDropped");
+    }
     this.snapshotDirty = true;
     return packet;
   }
@@ -1949,7 +2037,15 @@ export class GameEngine {
     this.hoverBin = null;
     getAudio().release();
     haptics.tap();
-    this.clearMessage();
+    // Where the coach is teaching, letting go steps the lesson back rather
+    // than emptying the band: the refiner is where they were a moment ago
+    // and is owed the sentence that was true there. It is typed in, like
+    // every other line, so the band is seen to change its mind.
+    if (LEVELS[this.levelIndex].selfAgitate === true) {
+      this.coach(this.orientCoach());
+    } else {
+      this.clearMessage();
+    }
     this.snapshotDirty = true;
   }
 
@@ -2025,6 +2121,15 @@ export class GameEngine {
       this.packet = null;
       this.phase = "probe";
       this.checkCompletion();
+      // Good news first, and then back to the lesson. Queued rather than
+      // said, so the praise keeps the beat it earned — and re-read when it
+      // fires, since by then the board says how many are left.
+      // `fileDone` rather than reading `phase` here: the assignment above
+      // narrows it, and the whole question is whether `checkCompletion`
+      // has since changed it.
+      if (LEVELS[this.levelIndex].selfAgitate === true && !this.fileDone) {
+        this.coach(this.orientCoach(), COACH_AFTER_NEWS_S);
+      }
     } else {
       const bin = this.bins[target];
       bin.lastHitAt = this.elapsed;
@@ -2062,6 +2167,11 @@ export class GameEngine {
     }
     if (!keepAgitation) cluster.agitation = 0;
     if (this.latchedId === cluster.id) this.latchedId = -1;
+  }
+
+  /** Whether the file on screen has just finished. */
+  private get fileDone(): boolean {
+    return this.phase === "complete";
   }
 
   private checkCompletion(): void {
@@ -2211,19 +2321,46 @@ export class GameEngine {
 
     if (this.message && this.messageIsStale()) this.clearMessage();
 
-    // Beat two: the file has been named, now say how to open it. Dropped
-    // the moment the refiner is already doing it — a coach line that
-    // arrives after the lesson has been learned is an interruption.
+    const orienting = LEVELS[this.levelIndex].selfAgitate === true;
+
+    // Whatever the coach has queued. On a file that hides its groups this
+    // is beat two — the file has been named, now say how to open it — and
+    // it is dropped the moment the refiner is already doing it, because a
+    // coach line that arrives after the lesson has been learned is an
+    // interruption. On orientation the queue is how every line gets its
+    // turn behind a praise or a reprimand.
     if (this.coachAt >= 0 && live) {
-      if (this.packet || this.mode === "select" || this.latchedId >= 0) {
+      const busy = this.packet || this.mode === "select" || this.latchedId >= 0;
+      if (!orienting && busy) {
         this.coachAt = -1;
       } else if (this.elapsed >= this.coachAt) {
+        const line = this.coachLine;
         this.coachAt = -1;
+        this.coachLine = "";
+        // Re-read on the way out: five seconds is long enough for the
+        // board to have changed under a queued line.
+        //
+        // Sticky where the coach is driving. `untilAction` clears a
+        // message once anything has been refined, which is right for a
+        // line that describes a one-off — and wrong for a lesson that
+        // goes on being the lesson: it wiped the band a frame after the
+        // first group was binned and left orientation silent.
         this.say(
-          "HOLD DOWN ON THE NUMBERS TO FIND THE STRANGE ONES.",
-          "info",
-          "untilAction",
+          orienting ? this.orientCoach() : line,
+          "coach",
+          orienting ? "sticky" : "untilAction",
         );
+      }
+    }
+
+    // Orientation only: the refiner has read TAP IT and not tapped. Show
+    // them what the tap is for rather than leaving one line up forever.
+    if (this.coachIdleAt >= 0 && live) {
+      if (this.packet || this.board.clusters.some((c) => c.refined)) {
+        this.coachIdleAt = -1;
+      } else if (this.elapsed >= this.coachIdleAt) {
+        this.coachIdleAt = -1;
+        this.coach("DRAG THE NUMBERS INTO THE BIN.");
       }
     }
 
