@@ -26,7 +26,24 @@ const SECTIONS = [
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 /** Height of the pinned header and tab row, which anchors have to clear. */
-const NAV_H = 88;
+/**
+ * The pinned stack at the top of the drawer: the title row and the tab
+ * row under it. Measured, not guessed — the scroll spy compares against
+ * it, and a section jumped to has to clear it.
+ */
+const NAV_H = 85;
+
+/**
+ * Where a section lands when a tab is tapped: a few pixels *under* the
+ * pinned rows rather than exactly at their edge.
+ *
+ * Landing flush left a five-pixel band between the tab row and the
+ * heading, and what showed through it was the last sliver of the section
+ * above — on the incentives tab, the red left border of the MALICE row.
+ * Tucking the anchor under the header costs nothing (the heading below it
+ * has its own top margin) and there is nothing left to peek.
+ */
+const JUMP_MT = NAV_H - 6;
 
 interface Props {
   onClose: () => void;
@@ -160,6 +177,18 @@ export function HandbookModal({
     const el = scroller.current;
     if (!el) return;
     const onScroll = () => {
+      // The foot of the document lights the last tab, whatever the
+      // geometry says.
+      //
+      // A spy that only asks "which heading has passed the top edge?"
+      // cannot ever choose the final section: there is not enough
+      // document below SETTINGS to scroll its heading up to the header,
+      // so the scroller bottoms out with ARCHIVE still the last one that
+      // passed. Tapping SETTINGS scrolled correctly and lit nothing —
+      // which reads as the tap having failed.
+      if (el.scrollTop >= el.scrollHeight - el.clientHeight - 4) {
+        return setAt(SECTIONS[SECTIONS.length - 1].id);
+      }
       const top = el.getBoundingClientRect().top + NAV_H;
       let seen: SectionId = SECTIONS[0].id;
       for (const s of SECTIONS) {
@@ -269,7 +298,8 @@ export function HandbookModal({
 
         <h3
           data-section="refine"
-          className="crt-text-glow mb-2 scroll-mt-[88px] text-[10px] font-bold tracking-[0.2em] text-phos-300"
+          style={{ scrollMarginTop: JUMP_MT }}
+          className="crt-text-glow mb-2 text-[10px] font-bold tracking-[0.2em] text-phos-300"
         >
           HOW TO REFINE MACRODATA
         </h3>
@@ -307,7 +337,8 @@ export function HandbookModal({
 
         <h3
           data-section="tempers"
-          className="crt-text-glow mb-2 scroll-mt-[88px] text-[10px] font-bold tracking-[0.2em] text-phos-300"
+          style={{ scrollMarginTop: JUMP_MT }}
+          className="crt-text-glow mb-2 text-[10px] font-bold tracking-[0.2em] text-phos-300"
         >
           THE FOUR TEMPERS
         </h3>
@@ -343,7 +374,7 @@ export function HandbookModal({
         {/* The forecast is reachable mid-file from here — the clock is
             paused while the drawer is open, so checking how far the next
             incentive is costs nothing but the reading. */}
-        <div data-section="incentives" className="scroll-mt-[88px]" />
+        <div data-section="incentives" style={{ scrollMarginTop: JUMP_MT }} />
         {progress.filesCompleted > 0 ? (
           <>
             <h3 className="crt-text-glow mb-1 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300">
@@ -369,7 +400,8 @@ export function HandbookModal({
 
         <h3
           data-section="archive"
-          className="crt-text-glow mb-1 mt-4 scroll-mt-[88px] text-[10px] font-bold tracking-[0.2em] text-phos-300"
+          style={{ scrollMarginTop: JUMP_MT }}
+          className="crt-text-glow mb-1 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300"
         >
           PERPETUITY WING · ARCHIVE
         </h3>
@@ -424,7 +456,8 @@ export function HandbookModal({
 
         <h3
           data-section="settings"
-          className="crt-text-glow mb-2 mt-4 scroll-mt-[88px] text-[10px] font-bold tracking-[0.2em] text-phos-300"
+          style={{ scrollMarginTop: JUMP_MT }}
+          className="crt-text-glow mb-2 mt-4 text-[10px] font-bold tracking-[0.2em] text-phos-300"
         >
           TERMINAL SETTINGS
         </h3>

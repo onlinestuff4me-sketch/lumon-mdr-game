@@ -1725,6 +1725,67 @@ section("wellness");
   const after = (await ledger()).factsByRung.S03 ?? [];
   check("and a reload cannot draw a different one", after.join() === chosen.join(),
     `${chosen.join()} -> ${after.join()}`);
+
+  // ── a session changes its card, visibly ───────────────────────────
+  //
+  // Several sentences read out in turn, every one on the same card in the
+  // same room: swapping the text in place changed nothing a refiner could
+  // see, and pressing the control looked like it had done nothing.
+  await seed({
+    version: 1, filesCompleted: 6, screensCompleted: 6, binsTotal: 20,
+    binsByTemper: { WO: 8, FC: 4, DR: 4, MA: 4 },
+    creditedLevelIds: [], perfectScreensTotal: 0, perfectScreenStreak: 0,
+    rewardState: { S01: "claimed", S02: "claimed", S09: "earned_pending" },
+    rewardQueue: ["S09"], deferredRungs: {}, seenFactIds: [],
+    factsByRung: { S09: ["OF_CANON_012", "OF_CANON_008", "OF_CANON_001"] },
+    inspectCounts: {}, lastShownRewardId: null,
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  await finish(2);
+  await page.waitForTimeout(2400);
+
+  const act = page.locator("[data-reward-action]");
+  await act.click();
+  await page.waitForTimeout(3200);
+  check("a session opens on the first of its sentences",
+    /1\/3/.test(await page.evaluate(() => document.body.innerText)));
+
+  // Sample the plates every frame across the change: two of them on
+  // screen at once, exactly one plate-width apart, is the pass. Started
+  // rather than awaited — the click that begins the pass has to happen
+  // while it is still running.
+  await page.evaluate(() => {
+    window.__pass = [];
+    const t0 = performance.now();
+    const tick = () => {
+      const plates = [...document.querySelectorAll("img[alt]")].filter((n) =>
+        n.closest('[class*="aspect-"]'),
+      );
+      if (plates.length > 1) {
+        const [a, b] = plates.map((n) => n.parentElement.getBoundingClientRect());
+        window.__pass.push({
+          apart: Math.round(b.left - a.left),
+          w: Math.round(a.width),
+        });
+      }
+      if (performance.now() - t0 < 2500) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  });
+  await act.click();
+  await page.waitForTimeout(1600);
+  const pass = await page.evaluate(() => window.__pass);
+
+  check("changing sentence slides one card off and the next on",
+    pass.length >= 3, `${pass.length} frames with two cards`);
+  // Exactly one width apart, so they abut: any wider and the empty frame
+  // shows through the middle of the pass.
+  const misaligned = pass.filter((f) => Math.abs(f.apart - f.w) > 2);
+  eq("with the two abutting, so no empty frame shows between them",
+    misaligned.length, 0);
+  check("and the next sentence is the one left on the stand",
+    /2\/3/.test(await page.evaluate(() => document.body.innerText)));
 }
 
 // ═══ 11c. the dance experience ═══════════════════════════════════════
@@ -1849,6 +1910,70 @@ section("music dance experience");
 // The band used to say one sentence, on the frame the level started —
 // before the board had finished painting and two seconds before the group
 // it was describing was moving at all — and then go quiet for good.
+// ═══ the handbook's own navigation ═══════════════════════════════════
+section("the handbook nav");
+{
+  await writeLedger(page, {
+    version: 1, filesCompleted: 2, screensCompleted: 2, binsTotal: 7,
+    binsByTemper: { WO: 4, FC: 3, DR: 0, MA: 0 },
+    creditedLevelIds: [], perfectScreensTotal: 0, perfectScreenStreak: 0,
+    rewardState: { S01: "claimed", S02: "claimed" }, rewardQueue: [],
+    deferredRungs: {}, seenFactIds: [], factsByRung: {}, inspectCounts: {},
+    lastShownRewardId: null,
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  await load(page, 2);
+  await page.waitForTimeout(500);
+  await page.locator("[data-handbook]").click();
+  await page.waitForTimeout(700);
+
+  const lit = () =>
+    page.evaluate(() => {
+      const el = [...document.querySelectorAll("[data-section-tab]")].find(
+        (n) => n.getAttribute("aria-current") === "true",
+      );
+      return el ? el.dataset.sectionTab : null;
+    });
+
+  // A section jumped to has to clear the pinned rows completely. Landing
+  // flush left a few pixels of the section *above* showing between the
+  // tabs and the heading — on this tab, the red left border of the last
+  // temper row.
+  await page.locator("[data-section-tab='incentives']").click();
+  await page.waitForTimeout(900);
+  {
+    const gap = await page.evaluate(() => {
+      const tabs = document.querySelector("[data-section-tab='refine']").parentElement;
+      const anchor = document.querySelector("[data-section='incentives']");
+      return Math.round(
+        anchor.getBoundingClientRect().top - tabs.getBoundingClientRect().bottom,
+      );
+    });
+    check("a section lands under the pinned rows, not below them",
+      gap <= 0, `${gap}px of the section above was showing`);
+  }
+  eq("and the tab it was reached from is lit", await lit(), "incentives");
+
+  // The last section is the one a spy of this shape cannot reach: there
+  // is not enough document below it to scroll its heading to the top, so
+  // the scroller bottoms out with the previous section still winning.
+  // Tapping SETTINGS scrolled correctly and lit nothing.
+  await page.locator("[data-section-tab='settings']").click();
+  await page.waitForTimeout(1200);
+  eq("and the last tab lights when the document bottoms out",
+    await lit(), "settings");
+  check("with the settings actually on screen",
+    await page.evaluate(() => {
+      const h = document.querySelector("[data-section='settings']");
+      const r = h.getBoundingClientRect();
+      return r.top > 0 && r.bottom < window.innerHeight;
+    }));
+
+  await page.locator('[aria-label="Close handbook"]').click();
+  await page.waitForTimeout(300);
+}
+
 section("the orientation coach");
 {
   const say = () =>

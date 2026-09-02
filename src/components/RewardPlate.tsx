@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { RewardDef } from "../game/catalog";
 
 /**
@@ -26,14 +27,23 @@ export function RewardPlate({
   reward,
   text,
   className = "",
+  style,
 }: {
   reward: RewardDef;
   /** The sentence to print, for the plates that carry one. */
   text?: string | null;
   className?: string;
+  /** Positioning from the caller — a Wellness session slides these. */
+  style?: CSSProperties;
 }) {
   if (reward.doctrine) {
-    return <HandbookPage text={text ?? reward.line} className={className} />;
+    return (
+      <HandbookPage
+        text={text ?? reward.line}
+        className={className}
+        style={style}
+      />
+    );
   }
   const typeset = reward.kind === "fact" || reward.kind === "session";
   return (
@@ -41,7 +51,7 @@ export function RewardPlate({
     // cascade. It has to be positioned *somehow*, or the absolute image
     // inside it measures against an ancestor and the plate paints as a
     // bare rectangle — which is exactly what it did.
-    <div className={`relative overflow-hidden ${className}`}>
+    <div className={`relative overflow-hidden ${className}`} style={style}>
       <img
         className="absolute inset-0 h-full w-full object-cover"
         src={reward.poster}
@@ -75,9 +85,11 @@ export function RewardPlate({
 function HandbookPage({
   text,
   className = "",
+  style,
 }: {
   text: string;
   className?: string;
+  style?: CSSProperties;
 }) {
   const first = text.slice(0, 1);
   const rest = text.slice(1);
@@ -87,6 +99,7 @@ function HandbookPage({
       style={{
         background:
           "linear-gradient(105deg, #d8cdb0 0%, #e7ddc4 18%, #efe7d2 52%, #e3d8bd 100%)",
+        ...style,
       }}
     >
       {/* Age. Two soft stains and a darkened outer edge — a page that has

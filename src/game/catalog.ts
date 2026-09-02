@@ -124,7 +124,7 @@ export const CATALOG: Partial<Record<RewardId, RewardDef>> = {
     kind: "object",
     name: "MELON BAR",
     earned: "YOU HAVE BEEN AWARDED A MELON BAR",
-    line: "The melon has been cubed to a tolerance of two millimeters. Please enjoy each cube equally.",
+    line: "The melon has been cubed to a tolerance of two centimeters. Please enjoy each cube equally.",
     poster: asset("r05_melon_bar.webp"),
   },
   R06: {
