@@ -1951,6 +1951,84 @@ section("the orientation coach");
   }
 }
 
+// ═══ a finished file un-writes the line it finished on ═══════════════
+//
+// Everything in this band is typed and untyped, and what gets untyped has
+// to be what is actually on screen. A line shown *whole* — praise and
+// reprimands are, so a reprimand cannot arrive after the mistake — used to
+// leave the animation buffer holding the last line that had been typed.
+// The moment anything animated again, that stale line was drawn for a
+// frame and then carefully deleted: a file finished, the band said
+// REFINED, and the refiner watched an instruction from a minute earlier
+// being unspelled over a board that was already wiping out.
+section("the band un-writes what it wrote");
+{
+  // A clean page, so nothing an earlier section left open is holding the
+  // engine paused: the whole point here is the beat *after* a file ends,
+  // and a screen that never auto-advances never has one.
+  await writeLedger(page, {
+    version: 1, filesCompleted: 0, screensCompleted: 0, binsTotal: 0,
+    binsByTemper: { WO: 0, FC: 0, DR: 0, MA: 0 },
+    creditedLevelIds: [], perfectScreensTotal: 0, perfectScreenStreak: 0,
+    rewardState: {}, rewardQueue: [], deferredRungs: {}, seenFactIds: [],
+    factsByRung: {}, inspectCounts: {}, lastShownRewardId: null,
+  });
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  await load(page, 0);
+  await page.waitForTimeout(2600);
+
+  // Refine the screen first, then watch. The last drop is what finishes
+  // the file, so by the time the recorder is installed the band is
+  // already saying REFINED — which is exactly the frame this is about.
+  let guard = 0;
+  while ((await state(page)).progress < 100 && guard++ < 10) {
+    const g = await findGroup(page);
+    if (!g) break;
+    await tap(page, origin, await touchFor(page, g.one, "marquee"));
+    if (!(await state(page)).carrying) break;
+    await carryToBin(page, origin, g);
+  }
+
+  // Every distinct string the band draws from here, read off the DOM.
+  const drawn = await page.evaluate(
+    () =>
+      new Promise((done) => {
+        const out = [];
+        let last = null;
+        const t0 = performance.now();
+        const tick = () => {
+          const el = document.querySelector("[data-ticker]");
+          const txt = el ? el.innerText.trim() : "";
+          if (txt !== last) {
+            out.push(txt);
+            last = txt;
+          }
+          if (performance.now() - t0 < 3500) return requestAnimationFrame(tick);
+          done(out);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+
+  check("the file finishes on REFINED", drawn[0] === "REFINED", JSON.stringify(drawn.slice(0, 4)));
+  // From there until the band empties, every frame has to be a prefix of
+  // the word it is deleting. A line from a minute ago is not one.
+  const erasing = [];
+  for (const t of drawn.slice(1)) {
+    if (t === "") break;
+    erasing.push(t);
+  }
+  const stray = erasing.filter((t) => !"REFINED".startsWith(t));
+  eq("and un-writes that word, and nothing else", stray, []);
+  // Sampled per frame, so this is a floor rather than the truth — but a
+  // word that vanished in one step records none of these at all.
+  check("a character at a time, rather than in one step",
+    erasing.length >= 3, JSON.stringify(erasing));
+  check("and the band is empty when it has finished",
+    drawn.includes(""), JSON.stringify(drawn));
+}
+
 // ═══ the coach band walks a file ═════════════════════════════════════
 //
 // Past orientation every file hides its groups, and the band is the only
