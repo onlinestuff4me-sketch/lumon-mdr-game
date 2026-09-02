@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { RewardDef } from "../game/catalog";
 import type { Fact } from "../game/facts";
@@ -95,6 +95,14 @@ const BAND_MS = 320;
  * the control moves.
  */
 const BAND_H = 56;
+
+/**
+ * How long one card of a Wellness session takes to be replaced.
+ *
+ * Long enough to be read as a hand changing the card, short enough that a
+ * refiner tapping through four sentences is never waiting on it.
+ */
+const SLIDE_MS = 420;
 
 /** The block a terminal leaves under the character it is about to write. */
 function Caret({ on }: { on: boolean }) {
@@ -193,6 +201,43 @@ export function RewardReveal({
   const fact = facts[step] ?? null;
   const lastStep = step >= facts.length - 1;
   const advances = facts.length > 1 && !lastStep;
+
+  /**
+   * The card being taken away, while the next one arrives.
+   *
+   * A Wellness session is several sentences read out in turn, and every
+   * one of them is printed on the same card in the same room — so
+   * swapping the text in place changed nothing a refiner could see. They
+   * pressed the control and could not tell whether anything had happened.
+   *
+   * Sliding is the answer rather than a fade: the plate is a photograph of
+   * a card on a stand, and one card being taken off the stand and
+   * replaced is a thing that could actually occur in that room.
+   *
+   * The two travel exactly one width apart, so they abut rather than
+   * leaving a band of the empty frame between them — at anything wider
+   * the pale backing showed through the middle of the pass and the effect
+   * read as two separate cards rather than one being replaced.
+   */
+  const [outgoing, setOutgoing] = useState<Fact | null>(null);
+  /** True for the frame both cards are still parked at their edges. */
+  const [parked, setParked] = useState(false);
+  const onStand = useRef(fact);
+  useLayoutEffect(() => {
+    const last = onStand.current;
+    if (!last || last === fact || reduced) return;
+    setOutgoing(last);
+    setParked(true);
+    const raf = requestAnimationFrame(() => setParked(false));
+    const t = setTimeout(() => setOutgoing(null), SLIDE_MS);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(t);
+    };
+  }, [fact, reduced]);
+  useEffect(() => {
+    onStand.current = fact;
+  });
 
   /**
    * The two lines the seal rewrites.
@@ -338,6 +383,19 @@ export function RewardReveal({
             open && plateIsPale(reward) ? "bg-[#e9e5d9]" : "bg-black"
           }`}
         >
+          {open && outgoing ? (
+            <RewardPlate
+              reward={reward}
+              text={outgoing.text}
+              className="absolute inset-0 h-full w-full"
+              style={{
+                transform: parked ? "translateX(0)" : "translateX(-100%)",
+                transition: parked
+                  ? undefined
+                  : `transform ${SLIDE_MS}ms cubic-bezier(.5,0,.3,1)`,
+              }}
+            />
+          ) : null}
           {open ? (
             // Sized rather than positioned: the box around it is already
             // the fixed 9/16 the lid occupies, so the plate simply fills
@@ -347,6 +405,18 @@ export function RewardReveal({
               reward={reward}
               text={fact?.text ?? null}
               className="h-full w-full"
+              style={
+                outgoing
+                  ? {
+                      transform: parked
+                        ? "translateX(100%)"
+                        : "translateX(0)",
+                      transition: parked
+                        ? undefined
+                        : `transform ${SLIDE_MS}ms cubic-bezier(.5,0,.3,1)`,
+                    }
+                  : undefined
+              }
             />
           ) : null}
 

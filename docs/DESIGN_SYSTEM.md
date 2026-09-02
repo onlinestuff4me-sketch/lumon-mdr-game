@@ -477,6 +477,40 @@ picture of a chair. And **the caption band reserves three lines and clips
 in silence past them**, so a data invariant caps every catalog line at 96
 characters rather than trusting anyone to count.
 
+### A pinned nav owns the space it covers
+
+Two rules, both learned the same way — by something showing where nothing
+should:
+
+- **A section jumped to lands *under* the pinned rows, not flush with
+  them.** Flush left a five-pixel band between the tab row and the
+  heading, and what came through it was the tail of the section above (on
+  the incentives tab, the red left border of the last temper row). The
+  anchor tucks a few pixels behind the header; the heading has its own top
+  margin and clears it anyway. One constant drives both the scroll margin
+  and the spy, so they cannot drift apart.
+- **The foot of a document lights the last tab.** A scroll spy that only
+  asks "which heading has passed the top edge?" can never choose the final
+  section: there is not enough document below it to scroll its heading up
+  to the header, so the scroller bottoms out with the previous section
+  still winning. Tapping SETTINGS scrolled correctly and lit nothing,
+  which reads as the tap having failed.
+
+### A card that changes has to be seen to change
+
+A Wellness session is several sentences read out in turn, and every one is
+printed on the same card in the same room. Swapping the text in place
+changed nothing a refiner could see — they pressed the control and could
+not tell whether it had done anything.
+
+The card **slides**: the old one off to the left, the new one in behind
+it, 420ms. Sliding rather than fading because the plate is a photograph of
+a card on a stand, and a card being taken off a stand and replaced is a
+thing that could happen in that room. The two travel exactly one width
+apart so they abut — at anything wider the empty frame shows through the
+middle of the pass, and it reads as two separate cards rather than one
+replacing the other.
+
 ### One subject at a time
 
 Where a screen has a receipt and a promise on it, the promise waits. The
