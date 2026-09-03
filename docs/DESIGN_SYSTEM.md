@@ -514,7 +514,7 @@ replacing the other.
 ### A reward that is played has to answer
 
 The dance floor is the one place in this game where a refiner is *doing*
-something for its own sake, and everything it draws is feedback. Four
+something for its own sake, and everything it draws is feedback. Six
 rules, all of them learned by watching someone play it:
 
 - **Never show an instruction the board cannot satisfy.** "Connect three"
@@ -525,8 +525,27 @@ rules, all of them learned by watching someone play it:
 - **A progress bar counts the whole thing or it is a decoration.** The
   Dance Meter had three segments for a session that yields eight chains;
   it filled in the first fifteen seconds and then sat there. It has eight
-  now, and filling it *ends* the dance — finishing because you danced
-  beats finishing because a clock ran out.
+  now.
+- **Nothing may end an experience before the bar it drew fills.** A meter
+  on screen is a promise about when this stops. There was a clock behind
+  it too, and the clock won: the dance cut to the office film with four of
+  eight segments lit, which reads as the reward being confiscated rather
+  than completed. The meter is the only ending now — there is no clock, no
+  lives, nothing to fail and nothing to run out of.
+- **Teach a move by making it, not by describing it.** The screen before
+  the floor used to read `CONNECT 3+ GLOWING GROUPS OF ONE TEMPER` and
+  hand over control. A refiner who had spent eight files dragging one
+  group at a time played the whole thing without ever chaining three. It
+  now runs the dance — a real session, the real painter, the real HUD,
+  with a ghost fingertip taking three groups and releasing on the beat
+  while a segment fills — and loops. Under `prefers-reduced-motion` it
+  holds the frame the loop exists to arrive at rather than moving.
+- **A rule the interaction depends on is counted out loud, in the
+  interaction.** One grey line above the board is a rule a player either
+  read or did not. Three pips under the header fill as groups are taken —
+  `2 OF 3 — ONE MORE GROUP`, then `RELEASE ON THE BEAT` — each held group
+  is ringed *and numbered* on the floor, and every other lit group that
+  could join it wears a dashed ring on the beat.
 - **Scale the celebration to what was done.** One bloom per cluster plus
   one over the whole chain, sized by its length. Three identical puffs say
   *three things happened*; the ring over them says *and they were one

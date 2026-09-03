@@ -2,7 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
 import { getAudio } from "../audio/AudioEngine";
 import { haptics } from "../audio/haptics";
-import { TEMPER_DEFS } from "../game/constants";
 import { GlyphAtlas } from "../game/glyphAtlas";
 import {
   ACCESSORIES,
@@ -12,6 +11,9 @@ import {
   MdeSession,
   type Genre,
 } from "../game/mde";
+import { drawFloor } from "../game/mdeDraw";
+import { MdeDemo } from "./MdeDemo";
+import { ChainPips, DanceMeter } from "./MdeHud";
 import type { RewardDef } from "../game/catalog";
 
 /**
@@ -52,7 +54,6 @@ export function MdeStage({ reward, seed, muted, onDone }: Props) {
     score: 0,
     multiplier: 1,
     merges: 0,
-    remaining: 45,
     chain: 0,
   });
 
@@ -106,14 +107,13 @@ export function MdeStage({ reward, seed, muted, onDone }: Props) {
         if (!muted) getAudio().mdeBeat(beat, genre.bpm);
       }
 
-      draw(ctx, session, atlas, w, h);
+      drawFloor(ctx, session, atlas, w, h);
       const s = session.snapshot();
       setHud({
         meter: s.meter,
         score: s.score,
         multiplier: s.multiplier,
         merges: s.merges,
-        remaining: Math.ceil(s.remaining),
         chain: s.chain.length,
       });
 
@@ -234,22 +234,35 @@ export function MdeStage({ reward, seed, muted, onDone }: Props) {
     );
   }
 
+  // The demonstration. Same frame as the floor, same HUD, same painter —
+  // a refiner watches the move being made on the screen they are about to
+  // be handed, and then makes it. A sentence on a title card was what this
+  // had before, and a sentence is not a demonstration.
   if (stage === "instruction") {
     return (
-      <Frame title={genre.name} caption={`${accessory} ISSUED`}>
-        <p className="crt-text-glow max-w-[260px] text-[11px] font-bold leading-relaxed tracking-[0.14em] text-phos-300">
-          CONNECT 3+ GLOWING GROUPS OF ONE TEMPER. RELEASE ON THE BEAT. FILL THE
-          DANCE METER.
-        </p>
-        <p className="mt-3 max-w-[260px] text-[9px] leading-relaxed text-phos-600">
-          There is no way to fail this. A missed beat costs a multiplier and
-          nothing else.
-        </p>
-        <button type="button" className={`${BTN} mt-5`} onClick={() => setStage("play")}>
-          BEGIN
-          <ChevronRight size={12} strokeWidth={2.6} />
-        </button>
-      </Frame>
+      <div className="absolute inset-0 z-70 flex flex-col bg-phos-950">
+        <div className="flex items-baseline justify-between px-4 pb-1 pt-3 text-[9px] tracking-[0.2em] text-phos-600">
+          <span className="crt-text-glow text-phos-400">{genre.name}</span>
+          <span>{accessory} ISSUED</span>
+        </div>
+        <MdeDemo genre={genre} seed={seed ^ 0x5f5e} />
+        <div className="px-4 pb-5 text-center">
+          <p className="mx-auto max-w-[280px] text-[9px] leading-relaxed text-phos-600">
+            Three groups of one temper, released on the beat, fill one
+            segment. There is no way to fail this and no clock to run out —
+            the dance ends when the meter is full.
+          </p>
+          <button
+            type="button"
+            className={`${BTN} mt-4`}
+            style={{ animation: "crt-throb 1.9s ease-in-out infinite" }}
+            onClick={() => setStage("play")}
+          >
+            BEGIN
+            <ChevronRight size={12} strokeWidth={2.6} />
+          </button>
+        </div>
+      </div>
     );
   }
 
@@ -258,11 +271,14 @@ export function MdeStage({ reward, seed, muted, onDone }: Props) {
       <div className="absolute inset-0 z-70 flex flex-col bg-phos-950">
         <div className="flex items-baseline justify-between px-4 pb-1 pt-3 text-[9px] tracking-[0.2em] text-phos-600">
           <span className="crt-text-glow text-phos-400">{genre.name}</span>
-          <span className="tabular-nums">{hud.remaining}s</span>
+          {/* The accessory, not a countdown. This corner used to hold a
+              clock, and that clock used to end the session mid-dance —
+              with the Dance Meter at four of eight. Nothing runs out here
+              any more, and the meter along the bottom is the only number
+              worth watching. */}
+          <span>{accessory}</span>
         </div>
-        <p className="px-4 pb-2 text-[8px] leading-snug tracking-[0.14em] text-phos-600">
-          CONNECT 3+ GLOWING GROUPS OF ONE TEMPER · RELEASE ON THE BEAT
-        </p>
+        <ChainPips chain={hud.chain} />
 
         <div ref={wrapRef} className="relative min-h-0 flex-1">
           <canvas
@@ -276,32 +292,16 @@ export function MdeStage({ reward, seed, muted, onDone }: Props) {
           />
         </div>
 
-        {/* The Dance Meter: three segments, and a score that only ever
-            goes up. Nothing here can empty. */}
-        <div className="px-4 pb-4 pt-2">
-          <div className="flex items-center gap-1">
-            {Array.from({ length: METER_SEGMENTS }, (_, i) => (
-              <div
-                key={i}
-                className="h-[6px] flex-1 overflow-hidden rounded-sm bg-phos-800"
-              >
-                <div
-                  className="h-full bg-phos-400 transition-[width] duration-300"
-                  style={{
-                    width: hud.meter > i ? "100%" : "0%",
-                    boxShadow: "0 0 8px var(--color-phos-400)",
-                  }}
-                />
-              </div>
-            ))}
-          </div>
-          <div className="mt-1.5 flex items-baseline justify-between text-[9px] tracking-[0.16em] text-phos-600">
-            <span className="tabular-nums text-phos-400">{hud.score}</span>
-            <span>
-              {hud.chain > 0 ? `CHAIN ${hud.chain}` : `x${hud.multiplier}`}
+        {/* The Dance Meter, filling. It is the only thing that ends a
+            session, so it is the only thing that counts. */}
+        <DanceMeter
+          meter={hud.meter}
+          right={
+            <span className="tabular-nums">
+              {hud.score} · x{hud.multiplier}
             </span>
-          </div>
-        </div>
+          }
+        />
       </div>
     );
   }
@@ -373,168 +373,3 @@ function Frame({
   );
 }
 
-/**
- * One frame of the floor.
- *
- * Idle digits sit dim in the same grid the terminal uses. A lit cluster
- * takes its temper's color *and* its temper's motion — two channels, so
- * a refiner who plays with the color assist off is not suddenly reading
- * hue alone. A chained cluster is ringed, which is a third.
- */
-function draw(
-  ctx: CanvasRenderingContext2D,
-  session: MdeSession,
-  atlas: GlyphAtlas,
-  w: number,
-  h: number,
-): void {
-  ctx.clearRect(0, 0, w, h);
-  const s = session.snapshot();
-  const chain = new Set(s.chain);
-  // A slow breath on the beat, so the whole floor moves as one thing.
-  const pulse = 0.5 + 0.5 * Math.cos(s.beatPhase * Math.PI * 2);
-
-  // The shove a merge gives the floor. Small — this is a celebration in a
-  // basement, not an earthquake — and it decays inside a third of a
-  // second, so the next chain is drawn on a still board.
-  ctx.save();
-  if (s.shake > 0) {
-    const k = s.shake * s.shake * 5;
-    ctx.translate(
-      (Math.random() * 2 - 1) * k,
-      (Math.random() * 2 - 1) * k,
-    );
-  }
-
-  for (const n of session.nodes) {
-    const c = n.cluster >= 0 ? session.clusters[n.cluster] : null;
-    const lit = !!c && c.lit && !c.spent;
-    const inChain = !!c && chain.has(c.id);
-    const key = lit ? c!.temper : "idle";
-    const alpha = lit ? 0.65 + 0.35 * pulse : 0.16;
-    const scale = lit ? 1 + 0.08 * pulse : 1;
-    atlas.draw(
-      ctx,
-      inChain ? "hot" : key,
-      n.digit,
-      n.hx + n.dx,
-      n.hy + n.dy,
-      alpha,
-      n.rot,
-      scale * (n.scale || 1),
-    );
-  }
-
-  // The chain, drawn as the thin phosphor trail the reference images show.
-  if (s.chain.length > 1) {
-    ctx.save();
-    ctx.strokeStyle = "rgba(214,255,236,0.75)";
-    ctx.lineWidth = 1.5;
-    ctx.shadowColor = "rgba(214,255,236,0.9)";
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    s.chain.forEach((id, i) => {
-      const c = session.clusters[id];
-      if (i === 0) ctx.moveTo(c.cx, c.cy);
-      else ctx.lineTo(c.cx, c.cy);
-    });
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  // Rings on everything in hand, so the chain reads without color.
-  ctx.save();
-  ctx.lineWidth = 1.5;
-  for (const id of s.chain) {
-    const c = session.clusters[id];
-    ctx.strokeStyle = "rgba(214,255,236,0.55)";
-    ctx.beginPath();
-    ctx.arc(c.cx, c.cy, c.radius + 12, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-  ctx.restore();
-
-  // A chain the phrase ended under, coming apart. The links stay where
-  // they were and fall away from each other, so what a refiner sees is
-  // the thing they were holding breaking rather than the floor forgetting
-  // their finger.
-  for (const k of session.snaps) {
-    const t = 1 - k.life;
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, k.life) * 0.9;
-    ctx.strokeStyle = "rgba(255,90,77,0.95)";
-    ctx.lineWidth = 1.5;
-    ctx.shadowColor = "rgba(255,90,77,0.8)";
-    ctx.shadowBlur = 8;
-    ctx.setLineDash([5, 5 + t * 26]);
-    ctx.beginPath();
-    k.pts.forEach((p, i) => {
-      // Each link drifts a little further from the last as it goes.
-      const drop = t * 16 * (i % 2 ? 1 : -1);
-      if (i === 0) ctx.moveTo(p.x, p.y + drop);
-      else ctx.lineTo(p.x, p.y + drop);
-    });
-    ctx.stroke();
-    ctx.setLineDash([]);
-    for (const p of k.pts) {
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, 10 + t * 16, 0, Math.PI * 2);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
-
-  // Blooms: a compact geometric burst, not an explosion. The one drawn
-  // over the whole chain is bigger and carries a ring, because it is
-  // celebrating the chain rather than one cluster of it.
-  for (const b of session.blooms) {
-    const big = b.size > 1;
-    const reach = big ? 40 + b.size * 26 : 46;
-    const r = (1 - b.life) * reach + 6;
-    ctx.save();
-    ctx.globalAlpha = Math.max(0, b.life);
-    ctx.strokeStyle = TEMPER_DEFS[b.temper].css;
-    ctx.lineWidth = big ? 3 : 2;
-    ctx.shadowColor = TEMPER_DEFS[b.temper].css;
-    ctx.shadowBlur = big ? 26 : 14;
-    ctx.beginPath();
-    for (let i = 0; i < 6; i++) {
-      const a = (i / 6) * Math.PI * 2;
-      const x = b.x + Math.cos(a) * r;
-      const y = b.y + Math.sin(a) * r;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.stroke();
-    if (big) {
-      // A second ring, running ahead of the first, and spokes out of the
-      // middle — the difference between "that worked" and "that was good".
-      ctx.globalAlpha = Math.max(0, b.life) * 0.55;
-      ctx.beginPath();
-      ctx.arc(b.x, b.y, r * 1.5, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.lineWidth = 1.5;
-      for (let i = 0; i < 8; i++) {
-        const a = (i / 8) * Math.PI * 2 + 0.2;
-        ctx.beginPath();
-        ctx.moveTo(b.x + Math.cos(a) * r * 0.5, b.y + Math.sin(a) * r * 0.5);
-        ctx.lineTo(b.x + Math.cos(a) * r * 1.25, b.y + Math.sin(a) * r * 1.25);
-        ctx.stroke();
-      }
-    }
-    ctx.restore();
-  }
-  ctx.globalAlpha = 1;
-  ctx.restore();
-
-  // The floor lighting up, over everything, unshaken — a flash that moved
-  // with the shake would read as a fault in the tube.
-  if (s.flash > 0) {
-    ctx.save();
-    ctx.globalAlpha = s.flash * 0.22;
-    ctx.fillStyle = "#d6ffec";
-    ctx.fillRect(0, 0, w, h);
-    ctx.restore();
-  }
-}
