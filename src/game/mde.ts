@@ -36,8 +36,27 @@ export const MDE_SECONDS = 45;
 /** Chain length that scores. The instruction says three; so does this. */
 export const MIN_CHAIN = 3;
 
-/** Segments in the Dance Meter. */
-export const METER_SEGMENTS = 3;
+/**
+ * Segments in the Dance Meter — and, since one merge fills one, the
+ * number of chains a session asks for.
+ *
+ * It was three, which a refiner cleared in the first fifteen seconds and
+ * then danced out the remaining thirty against a bar that could not move.
+ * A meter that stops counting before the experience does is not a meter,
+ * it is a decoration. Eight is what a 45-second floor actually yields at
+ * a comfortable pace, and filling it *ends* the session — the dance is
+ * finished because it was danced, rather than because a clock ran out.
+ */
+export const METER_SEGMENTS = 8;
+
+/**
+ * The beat between a merge and the floor re-lighting.
+ *
+ * Long enough for the bloom to be the thing on screen. Without it the new
+ * phrase lands on the same frame as the merge and the payoff is painted
+ * over by its own reward.
+ */
+const REPHRASE_S = 0.5;
 
 /**
  * How far from a beat a release still counts, in seconds.
@@ -96,6 +115,27 @@ export interface Bloom {
   /** 1 at the moment of the merge, falling to 0. */
   life: number;
   temper: Temper;
+  /**
+   * How much of the floor this bloom is celebrating: 1 for one cluster
+   * collapsing, the chain's whole length for the ring drawn over all of
+   * them. A five-chain should not look like a three-chain.
+   */
+  size: number;
+}
+
+/**
+ * A chain that came apart because the phrase ended under it.
+ *
+ * The floor re-lights every eight beats, and a chain in hand when that
+ * happens cannot survive it — the clusters it was made of are no longer
+ * the ones on the floor. Silently emptying it reads as the game losing
+ * the drag; drawing the links snapping reads as *you took too long*,
+ * which is the truth and is learnable.
+ */
+export interface Snap {
+  readonly pts: readonly { x: number; y: number }[];
+  /** 1 at the break, falling to 0. */
+  life: number;
 }
 
 export interface MdeSnapshot {
@@ -111,6 +151,10 @@ export interface MdeSnapshot {
   readonly misses: number;
   readonly chain: readonly number[];
   readonly finished: boolean;
+  /** 1 on the frame of a merge, falling to 0 — the whole-floor flash. */
+  readonly flash: number;
+  /** The same, for the shove the stage gives the canvas. */
+  readonly shake: number;
 }
 
 /**
@@ -123,14 +167,19 @@ export class MdeSession {
   readonly nodes: GridNode[] = [];
   readonly clusters: MdeCluster[] = [];
   readonly blooms: Bloom[] = [];
+  readonly snaps: Snap[] = [];
 
   private rng: () => number;
   private beatS: number;
   private elapsed = 0;
   /** Wall time of the next phrase change. */
   private nextPhraseAt = 0;
+  /** Wall time the floor re-lights after a merge, or -1. */
+  private rephraseAt = -1;
   private chain: number[] = [];
   private chainTemper: Temper | null = null;
+  private flash = 0;
+  private shake = 0;
 
   meter = 0;
   score = 0;
@@ -305,7 +354,14 @@ export class MdeSession {
       c.spent = false;
       c.agitation = 0;
     }
-    const lead = TEMPERS[Math.floor(this.rng() * 4)];
+    // Only a temper that *has* three clusters can lead. The floor is built
+    // with four of each, so this never fails today — but a phrase whose
+    // lead has two clusters on it is a phrase with no chain in it, and
+    // that is the one thing this floor must never serve.
+    const able = TEMPERS.filter(
+      (t) => this.clusters.filter((c) => c.temper === t).length >= MIN_CHAIN,
+    );
+    const lead = able[Math.floor(this.rng() * able.length)] ?? TEMPERS[0];
     const pool = this.clusters.filter((c) => c.temper === lead);
     for (const c of pool.slice(0, 4)) c.lit = true;
     for (const c of this.clusters) {
@@ -313,6 +369,26 @@ export class MdeSession {
     }
     // Four bars of a phrase at any tempo.
     this.nextPhraseAt = this.elapsed + this.beatS * 8;
+    this.rephraseAt = -1;
+  }
+
+  /**
+   * Whether a chain of three is available right now.
+   *
+   * The promise the instruction makes, checkable. A phrase always opens
+   * with four of one temper lit; what used to break it was a *merge*,
+   * which spends three of those four and leaves the floor with singles
+   * and pairs until the phrase timer came round. The floor re-lights on a
+   * merge now, and this is what says so.
+   */
+  get hasChain(): boolean {
+    const byTemper = new Map<Temper, number>();
+    for (const c of this.clusters) {
+      if (!c.lit || c.spent) continue;
+      byTemper.set(c.temper, (byTemper.get(c.temper) ?? 0) + 1);
+    }
+    for (const n of byTemper.values()) if (n >= MIN_CHAIN) return true;
+    return false;
   }
 
   // ── input ──────────────────────────────────────────────────────────
@@ -368,19 +444,64 @@ export class MdeSession {
       return "miss";
     }
 
+    let mx = 0;
+    let my = 0;
     for (const id of ids) {
       const c = this.clusters[id];
       c.spent = true;
-      this.blooms.push({ x: c.cx, y: c.cy, life: 1, temper: c.temper });
+      mx += c.cx;
+      my += c.cy;
+      this.blooms.push({ x: c.cx, y: c.cy, life: 1, temper: c.temper, size: 1 });
     }
+    // And one over the whole chain, sized by it. Three clusters collapsing
+    // into three identical puffs said "three things happened"; the ring
+    // over all of them says "and they were one thing".
+    const temper = this.clusters[ids[0]].temper;
+    this.blooms.push({
+      x: mx / ids.length,
+      y: my / ids.length,
+      life: 1,
+      temper,
+      size: ids.length,
+    });
+    this.flash = 1;
+    this.shake = 1;
     this.merges += 1;
     this.score += ids.length * 100 * this.multiplier;
     this.multiplier += 1;
     if (this.meter < METER_SEGMENTS) this.meter += 1;
+    // The floor comes back, a beat later. Immediately would paint over the
+    // bloom with the thing the bloom was for; never — which is what it did
+    // — leaves a floor of singles and pairs until the phrase timer comes
+    // round, and the instruction on screen still says connect three.
+    this.rephraseAt = this.elapsed + REPHRASE_S;
     return "merge";
   }
 
   cancel(): void {
+    this.chain = [];
+    this.chainTemper = null;
+  }
+
+  /**
+   * Drop a chain and leave the wreckage on screen for a moment.
+   *
+   * Emptied silently, a chain the phrase timer ran out from under looked
+   * exactly like the floor losing the drag — a bug, in other words. The
+   * links snapping is the same event told honestly: it was there, the
+   * phrase ended, it is gone, and next time be quicker.
+   */
+  private breakChain(): void {
+    if (this.chain.length > 1) {
+      this.snaps.push({
+        pts: this.chain.map((id) => ({
+          x: this.clusters[id].cx,
+          y: this.clusters[id].cy,
+        })),
+        life: 1,
+      });
+      this.multiplier = 1;
+    }
     this.chain = [];
     this.chainTemper = null;
   }
@@ -399,7 +520,14 @@ export class MdeSession {
     const before = this.beatIndex;
     this.elapsed = Math.min(MDE_SECONDS, this.elapsed + dt);
 
-    if (this.elapsed >= this.nextPhraseAt && !this.finished) this.phrase();
+    if (this.rephraseAt >= 0 && this.elapsed >= this.rephraseAt) this.phrase();
+    else if (this.elapsed >= this.nextPhraseAt && !this.finished) {
+      // A chain in hand cannot survive the floor re-lighting under it: the
+      // clusters it is made of are about to stop being the ones on the
+      // floor. Break it where it stands, and leave the break on screen.
+      this.breakChain();
+      this.phrase();
+    }
 
     for (const c of this.clusters) {
       const want = c.lit && !c.spent ? 1 : 0;
@@ -411,6 +539,12 @@ export class MdeSession {
     for (let i = this.blooms.length - 1; i >= 0; i--) {
       if (this.blooms[i].life <= 0) this.blooms.splice(i, 1);
     }
+    for (const k of this.snaps) k.life -= dt * 2.2;
+    for (let i = this.snaps.length - 1; i >= 0; i--) {
+      if (this.snaps[i].life <= 0) this.snaps.splice(i, 1);
+    }
+    this.flash = Math.max(0, this.flash - dt * 2.6);
+    this.shake = Math.max(0, this.shake - dt * 4.5);
 
     return { beatFired: this.beatIndex !== before, beat: this.beatIndex };
   }
@@ -419,8 +553,16 @@ export class MdeSession {
     return Math.floor(this.elapsed / this.beatS);
   }
 
+  /**
+   * Over — because the meter filled, or because the music stopped.
+   *
+   * The first of those is new, and is the point: a dance that ends when
+   * the Dance Meter is full ends *because it was danced*. Running the
+   * clock out is still a finish, and still not a failure — there was
+   * never anything here to fail.
+   */
   get finished(): boolean {
-    return this.elapsed >= MDE_SECONDS;
+    return this.elapsed >= MDE_SECONDS || this.meter >= METER_SEGMENTS;
   }
 
   snapshot(): MdeSnapshot {
@@ -436,6 +578,8 @@ export class MdeSession {
       misses: this.misses,
       chain: [...this.chain],
       finished: this.finished,
+      flash: this.flash,
+      shake: this.shake,
     };
   }
 }

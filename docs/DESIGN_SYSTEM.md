@@ -511,6 +511,34 @@ apart so they abut — at anything wider the empty frame shows through the
 middle of the pass, and it reads as two separate cards rather than one
 replacing the other.
 
+### A reward that is played has to answer
+
+The dance floor is the one place in this game where a refiner is *doing*
+something for its own sake, and everything it draws is feedback. Four
+rules, all of them learned by watching someone play it:
+
+- **Never show an instruction the board cannot satisfy.** "Connect three"
+  over a floor of singles and pairs is the game contradicting itself. A
+  merge re-lights the floor half a second later — long enough for the
+  bloom to be the thing on screen, short enough that the gap is never a
+  dead end.
+- **A progress bar counts the whole thing or it is a decoration.** The
+  Dance Meter had three segments for a session that yields eight chains;
+  it filled in the first fifteen seconds and then sat there. It has eight
+  now, and filling it *ends* the dance — finishing because you danced
+  beats finishing because a clock ran out.
+- **Scale the celebration to what was done.** One bloom per cluster plus
+  one over the whole chain, sized by its length. Three identical puffs say
+  *three things happened*; the ring over them says *and they were one
+  thing*. A flash on the floor and a small shove on the frame, both decayed
+  inside a third of a second so the next attempt is drawn on a still board.
+- **A thing taken away is shown being taken away.** A chain still in hand
+  when the phrase ends cannot survive it. Emptied silently that reads as
+  the game losing the drag — a bug. The links snap in alarm red, dashing
+  apart and drifting as they fade: it was there, time ran out, be quicker.
+  Every mechanic that removes something the refiner was holding owes them
+  that much.
+
 ### One subject at a time
 
 Where a screen has a receipt and a promise on it, the promise waits. The

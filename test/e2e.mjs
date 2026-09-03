@@ -15,6 +15,7 @@ import {
   boxAndBin, carryToBin, byName, section, check, eq, summary, settleIncentives,
   lastTrainingIndex, orientationIndices, refineFile, readLedger, writeLedger,
   carryToWrongBin, findGroupToBin, carryHeldToItsBin, groupById,
+  URL as APP_URL,
   settled, beginRefining,
 } from "./harness.mjs";
 
@@ -2390,6 +2391,39 @@ section("a wrong bin");
     check("in files refined, not files refined without error",
       /2 more files have been\s+refined/.test(text));
   }
+}
+
+// ═══ the dance floor has a door of its own ═══════════════════════════
+//
+// Reaching the Music Dance Experience in the game costs eight files,
+// which is the right price for a refiner and an absurd one for judging
+// whether the floor feels good. `/dance` is the test door.
+section("the /dance door");
+{
+  for (const path of ["dance", "?dance", "#dance"]) {
+    await page.goto(APP_URL + path, { waitUntil: "networkidle" });
+    await page.waitForTimeout(700);
+    const text = await page.evaluate(() => document.body.innerText);
+    check(`${path} opens the dance floor`,
+      /MUSIC DANCE EXPERIENCE/.test(text) && /DEFIANT JAZZ/.test(text),
+      text.split("\n").slice(0, 3).join(" / "));
+    check(`${path} does not open the terminal behind it`,
+      !/HANDBOOK/.test(text), text.slice(0, 80));
+  }
+
+  // And it plays: the same component, the same session handle.
+  await page.getByText("DEFIANT JAZZ").click();
+  await page.waitForTimeout(200);
+  await page.getByText("MARACA").click();
+  await page.waitForTimeout(200);
+  await page.getByText("BEGIN").click();
+  await page.waitForFunction(() => !!window.__mde?.session, null, { timeout: 6000 });
+  check("and the floor it opens has a chain of three on it",
+    await page.evaluate(() => window.__mde.session.hasChain));
+
+  // Back to the terminal for whatever runs after this.
+  await page.goto(APP_URL, { waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
 }
 
 // ═══ 11. nothing threw ═══════════════════════════════════════════════
