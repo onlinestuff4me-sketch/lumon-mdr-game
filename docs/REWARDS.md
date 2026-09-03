@@ -915,9 +915,61 @@ minimum the same specification imposes.
 **Built as proposed:** keep the specification's sentence and change its granularity. During
 the MDE, whole clusters light on the beat; the player boxes three or more
 same-temper clusters and releases inside a generous window; a valid release
-collapses into a phosphor bloom and fills one of three Dance Meter segments. Same
+collapses into a phosphor bloom and fills a Dance Meter segment. Same
 instruction, same feel, zero new gestures, and every touch target stays the size
 it already is.
+
+### Four rules the floor keeps
+
+**There is always a chain of three on the floor.** The instruction says
+connect three; a floor showing singles and pairs is the game contradicting
+its own instruction. A phrase opens with four clusters of one temper lit,
+and only a temper that *has* three can lead. What used to break this was a
+merge: it spends three of the lead's four, and the floor then sat on
+whatever was left until the phrase timer came round — up to three and a
+half seconds of a board that could not be played. A merge now re-lights
+the floor after half a second, which is long enough for the bloom to be
+the thing on screen and short enough that the gap is never a dead end. A
+data invariant plays whole sessions and asserts it.
+
+**The meter counts the whole session.** It had three segments, which a
+refiner filled in the first fifteen seconds and then danced out the
+remaining thirty against a bar that could not move. A meter that stops
+counting before the experience does is a decoration. Eight segments is
+what a 45-second floor yields at a comfortable pace — and **filling it
+ends the session**, so the dance finishes because it was danced rather
+than because a clock ran out. Running the clock out is still a finish and
+still not a failure; there was never anything here to fail.
+
+**A merge is loud.** One bloom per cluster collapsing, plus one over the
+whole chain sized by its length and carrying a second ring and spokes —
+three identical puffs said *three things happened*, and the ring says *and
+they were one thing*. The floor flashes, and the frame takes a small shove
+that decays inside a third of a second, so the next chain is drawn on a
+still board.
+
+**A chain that runs out of time is seen to break.** The floor re-lights
+every eight beats, and a chain in hand cannot survive it — the clusters it
+is made of stop being the ones on the floor. Emptied silently that read as
+the game losing the drag, which is to say as a bug. The links now snap on
+screen in alarm red, dashing apart and drifting as they fade, which is the
+same event told honestly: it was there, the phrase ended, be quicker.
+
+### The floor has a door of its own
+
+`/dance` opens the Music Dance Experience directly. Reaching it in the
+game costs eight files, which is the right price for a refiner and an
+absurd one for judging whether the floor feels good, so the floor gets a
+URL and the eight files stay where they are.
+
+It runs the real component with the real reward record and the real
+settings — a rehearsal on a different stage tells you about the rehearsal
+— and the only thing it adds is another go at the end, on a fresh seed.
+
+Three spellings, because the two hosts disagree about paths: `/dance` (a
+rewrite in `vercel.json`; on GitHub Pages, a `404.html` that the build
+makes a copy of `index.html`), `#dance` and `?dance`, which need no server
+arrangement at all and are the fallback if either of those is ever undone.
 
 Second constraint: temper color is off by default in this game — clusters are
 read by motion, sound and haptics. The MDE must light clusters by **motion and

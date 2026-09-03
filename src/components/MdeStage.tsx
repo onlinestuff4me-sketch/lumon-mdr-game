@@ -394,6 +394,18 @@ function draw(
   // A slow breath on the beat, so the whole floor moves as one thing.
   const pulse = 0.5 + 0.5 * Math.cos(s.beatPhase * Math.PI * 2);
 
+  // The shove a merge gives the floor. Small — this is a celebration in a
+  // basement, not an earthquake — and it decays inside a third of a
+  // second, so the next chain is drawn on a still board.
+  ctx.save();
+  if (s.shake > 0) {
+    const k = s.shake * s.shake * 5;
+    ctx.translate(
+      (Math.random() * 2 - 1) * k,
+      (Math.random() * 2 - 1) * k,
+    );
+  }
+
   for (const n of session.nodes) {
     const c = n.cluster >= 0 ? session.clusters[n.cluster] : null;
     const lit = !!c && c.lit && !c.spent;
@@ -442,15 +454,49 @@ function draw(
   }
   ctx.restore();
 
-  // Blooms: a compact geometric burst, not an explosion.
+  // A chain the phrase ended under, coming apart. The links stay where
+  // they were and fall away from each other, so what a refiner sees is
+  // the thing they were holding breaking rather than the floor forgetting
+  // their finger.
+  for (const k of session.snaps) {
+    const t = 1 - k.life;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, k.life) * 0.9;
+    ctx.strokeStyle = "rgba(255,90,77,0.95)";
+    ctx.lineWidth = 1.5;
+    ctx.shadowColor = "rgba(255,90,77,0.8)";
+    ctx.shadowBlur = 8;
+    ctx.setLineDash([5, 5 + t * 26]);
+    ctx.beginPath();
+    k.pts.forEach((p, i) => {
+      // Each link drifts a little further from the last as it goes.
+      const drop = t * 16 * (i % 2 ? 1 : -1);
+      if (i === 0) ctx.moveTo(p.x, p.y + drop);
+      else ctx.lineTo(p.x, p.y + drop);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    for (const p of k.pts) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 10 + t * 16, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Blooms: a compact geometric burst, not an explosion. The one drawn
+  // over the whole chain is bigger and carries a ring, because it is
+  // celebrating the chain rather than one cluster of it.
   for (const b of session.blooms) {
-    const r = (1 - b.life) * 46 + 6;
+    const big = b.size > 1;
+    const reach = big ? 40 + b.size * 26 : 46;
+    const r = (1 - b.life) * reach + 6;
     ctx.save();
     ctx.globalAlpha = Math.max(0, b.life);
     ctx.strokeStyle = TEMPER_DEFS[b.temper].css;
-    ctx.lineWidth = 2;
+    ctx.lineWidth = big ? 3 : 2;
     ctx.shadowColor = TEMPER_DEFS[b.temper].css;
-    ctx.shadowBlur = 14;
+    ctx.shadowBlur = big ? 26 : 14;
     ctx.beginPath();
     for (let i = 0; i < 6; i++) {
       const a = (i / 6) * Math.PI * 2;
@@ -461,7 +507,34 @@ function draw(
     }
     ctx.closePath();
     ctx.stroke();
+    if (big) {
+      // A second ring, running ahead of the first, and spokes out of the
+      // middle — the difference between "that worked" and "that was good".
+      ctx.globalAlpha = Math.max(0, b.life) * 0.55;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, r * 1.5, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2 + 0.2;
+        ctx.beginPath();
+        ctx.moveTo(b.x + Math.cos(a) * r * 0.5, b.y + Math.sin(a) * r * 0.5);
+        ctx.lineTo(b.x + Math.cos(a) * r * 1.25, b.y + Math.sin(a) * r * 1.25);
+        ctx.stroke();
+      }
+    }
     ctx.restore();
   }
   ctx.globalAlpha = 1;
+  ctx.restore();
+
+  // The floor lighting up, over everything, unshaken — a flash that moved
+  // with the shake would read as a fault in the tube.
+  if (s.flash > 0) {
+    ctx.save();
+    ctx.globalAlpha = s.flash * 0.22;
+    ctx.fillStyle = "#d6ffec";
+    ctx.fillRect(0, 0, w, h);
+    ctx.restore();
+  }
 }

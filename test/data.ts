@@ -7,6 +7,13 @@ import { LEVELS, COLS, ROWS, MIN_CAPTURE, TEMPERS, ORIENT_STAGES } from "../src/
 import { assignMorphs, boardExtras, createBoard } from "../src/game/grid";
 import { LADDER, forecast, newlyEarned } from "../src/game/rewards";
 import { CATALOG } from "../src/game/catalog";
+import {
+  GENRES,
+  MdeSession,
+  MDE_SECONDS,
+  METER_SEGMENTS,
+  MIN_CHAIN,
+} from "../src/game/mde";
 import { FACTS, FACT_PLAN, factById, factCount, pickFacts } from "../src/game/facts";
 import {
   applyCompletion,
@@ -635,6 +642,148 @@ console.log(`\n── incentive ladder ${"─".repeat(41)}`);
     );
     if (withoutFirst.some((r) => r.id === "S30")) fail("Waffle II arrived without Waffle I");
     ok("the Waffle tiers need both counters, in order");
+  }
+}
+
+// ── the dance floor ──────────────────────────────────────────────────
+//
+// Pure, steppable and seeded, so the whole session can be played here in
+// milliseconds — which is the only way to check a promise like "there is
+// always a chain of three" across every floor rather than the one that
+// happened to be on screen.
+
+console.log(`\n── the dance floor ${"─".repeat(43)}`);
+{
+  const beatS = 60 / GENRES[0].bpm;
+  /** The lit clusters of the first temper that has MIN_CHAIN of them. */
+  const trioOn = (s: MdeSession) => {
+    const byTemper = new Map<string, typeof s.clusters>();
+    for (const c of s.clusters) {
+      if (!c.lit || c.spent) continue;
+      const list = byTemper.get(c.temper) ?? [];
+      list.push(c);
+      byTemper.set(c.temper, list);
+    }
+    for (const list of byTemper.values()) {
+      if (list.length >= MIN_CHAIN) return list.slice(0, MIN_CHAIN);
+    }
+    return null;
+  };
+  /** Chain three and let go exactly on a beat. */
+  const merge = (s: MdeSession, at: number) => {
+    const trio = trioOn(s);
+    if (!trio) return { result: "none" as const, at };
+    for (const c of trio) s.touch(c.cx, c.cy);
+    const into = at % beatS;
+    s.step(beatS - into);
+    return { result: s.release(), at: at + (beatS - into) };
+  };
+
+  // Every floor opens with a chain on it, and every phrase after that.
+  {
+    let bad = 0;
+    for (let seed = 0; seed < 60; seed++) {
+      const s = new MdeSession(GENRES[0], seed, 390, 660);
+      if (!s.hasChain) bad++;
+      // Twelve phrases' worth of standing still: the floor re-lights on
+      // its own timer, and each new phrase owes the same promise.
+      for (let n = 0; n < 12; n++) {
+        s.step(beatS * 8 + 0.02);
+        if (!s.hasChain) bad++;
+      }
+    }
+    if (bad) fail(`${bad} phrases offered no chain of three`);
+    else ok("every phrase on every floor offers a chain of three");
+  }
+
+  // And the case that actually broke it: a merge spends three of the
+  // lead's four, and the floor used to sit on singles and pairs until the
+  // phrase timer came round.
+  {
+    let dead = 0;
+    let longest = 0;
+    for (let seed = 0; seed < 40; seed++) {
+      const s = new MdeSession(GENRES[0], seed, 390, 660);
+      let t = 0;
+      let gap = 0;
+      for (let n = 0; n < 6 && !s.finished; n++) {
+        const m = merge(s, t);
+        t = m.at;
+        if (m.result !== "merge") continue;
+        // March forward until the floor has something to offer again.
+        gap = 0;
+        while (!s.hasChain && gap < 3) {
+          s.step(1 / 60);
+          t += 1 / 60;
+          gap += 1 / 60;
+        }
+        longest = Math.max(longest, gap);
+        if (!s.hasChain) dead++;
+      }
+    }
+    if (dead) fail(`${dead} merges left the floor with no chain on it`);
+    else {
+      ok(`a merge re-lights the floor within ${longest.toFixed(2)}s, every time`);
+    }
+  }
+
+  // The meter counts the whole session, and filling it ends the dance.
+  {
+    const s = new MdeSession(GENRES[0], 7, 390, 660);
+    let t = 0;
+    let merges = 0;
+    for (let n = 0; n < METER_SEGMENTS + 2 && !s.finished; n++) {
+      const m = merge(s, t);
+      t = m.at;
+      if (m.result === "merge") merges++;
+      while (!s.hasChain && !s.finished) {
+        s.step(1 / 60);
+        t += 1 / 60;
+      }
+    }
+    if (merges !== METER_SEGMENTS) {
+      fail(`filled the meter in ${merges} merges, wanted ${METER_SEGMENTS}`);
+    }
+    if (!s.finished) fail("a full Dance Meter did not end the session");
+    if (t > MDE_SECONDS) fail(`took ${t.toFixed(1)}s, past the ${MDE_SECONDS}s music`);
+    else ok(`${METER_SEGMENTS} chains fill the meter and end the dance, in ${t.toFixed(1)}s`);
+  }
+
+  // A merge is loud: the floor flashes, the frame is shoved, and the
+  // chain gets a bloom of its own on top of one per cluster.
+  {
+    const s = new MdeSession(GENRES[0], 3, 390, 660);
+    const before = s.blooms.length;
+    const m = merge(s, 0);
+    eqIds("a chain on the beat merges", [m.result], ["merge"]);
+    const made = s.blooms.slice(before);
+    if (made.length !== MIN_CHAIN + 1) {
+      fail(`a ${MIN_CHAIN}-chain made ${made.length} blooms, wanted ${MIN_CHAIN + 1}`);
+    }
+    if (!made.some((b) => b.size === MIN_CHAIN)) {
+      fail("no bloom was sized for the chain as a whole");
+    }
+    const snap = s.snapshot();
+    if (snap.flash <= 0 || snap.shake <= 0) fail("a merge neither flashed nor shook");
+    else ok("a merge flashes the floor, shoves the frame and blooms the chain");
+  }
+
+  // A chain still in hand when the phrase ends comes apart on screen,
+  // rather than being emptied where nobody can see it happen.
+  {
+    const s = new MdeSession(GENRES[0], 11, 390, 660);
+    const trio = trioOn(s)!;
+    for (const c of trio) s.touch(c.cx, c.cy);
+    if (s.snapshot().chain.length !== MIN_CHAIN) fail("could not build a chain to break");
+    // Stand still until the floor re-lights under it — at frame size, the
+    // way it actually runs. One giant step would create the mark and age
+    // it out inside the same call.
+    for (let t = 0; t < beatS * 8 + 0.1; t += 1 / 60) s.step(1 / 60);
+    if (s.snapshot().chain.length !== 0) fail("the chain survived the phrase ending");
+    if (s.snaps.length !== 1) fail(`the break left ${s.snaps.length} marks, wanted 1`);
+    else if (s.snaps[0].pts.length !== MIN_CHAIN) {
+      fail("the break did not record where the links were");
+    } else ok("a chain the phrase ran out from under is seen to snap");
   }
 }
 
