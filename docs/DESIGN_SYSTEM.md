@@ -514,7 +514,7 @@ replacing the other.
 ### A reward that is played has to answer
 
 The dance floor is the one place in this game where a refiner is *doing*
-something for its own sake, and everything it draws is feedback. Six
+something for its own sake, and everything it draws is feedback. Eight
 rules, all of them learned by watching someone play it:
 
 - **Never show an instruction the board cannot satisfy.** "Connect three"
@@ -540,6 +540,20 @@ rules, all of them learned by watching someone play it:
   with a ghost fingertip taking three groups and releasing on the beat
   while a segment fills — and loops. Under `prefers-reduced-motion` it
   holds the frame the loop exists to arrive at rather than moving.
+- **A demonstration is watched, so dress it as footage.** A live board
+  flush in the screen is a board a refiner will reach for, and reaching
+  for something that ignores you teaches that the game is broken. The
+  demonstration sits in an inset frame with its one sentence burned across
+  the top of the picture, a playback bar under it and `DEMONSTRATION`
+  beside that; the only control on the screen throbs and says what
+  tapping it does. Three things follow from "this is a recording": it can
+  run in slow motion, it can choose a flattering floor, and a refiner who
+  looks away has not missed anything.
+- **The thing being demonstrated has to survive being demonstrated.** A
+  chained cluster's digits go hot white, which is the right signal for
+  *in hand* and the wrong one under a caption reading THREE GROUPS OF THE
+  SAME COLOR: the proof disappeared at the moment it was proved. The link
+  and the rings carry the temper's color instead.
 - **A rule the interaction depends on is counted out loud, in the
   interaction.** One grey line above the board is a rule a player either
   read or did not. Three pips under the header fill as groups are taken —

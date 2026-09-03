@@ -63,13 +63,30 @@ export function drawFloor(
     );
   }
 
-  // The chain, drawn as the thin phosphor trail the reference images show.
+  // The atlas leaves `globalAlpha` wherever the last glyph left it, so
+  // everything drawn from here on was inheriting the opacity of the
+  // bottom-right digit — 0.16 whenever that cell happened to be idle. The
+  // chain trail, its rings and the numbers beside them were being drawn at
+  // a sixth of their intended strength on most floors, and at full
+  // strength on the few where that one cell was lit.
+  ctx.globalAlpha = 1;
+
+  // The chain, drawn as the thin phosphor trail the reference images show
+  // — in the temper's own color.
+  //
+  // A chained cluster's digits go hot white, which is the right signal for
+  // "in hand" and the wrong one for a rule that is about color: three
+  // groups of one color, connected, turned into three white groups, and
+  // the one thing the chain was supposed to prove disappeared as it was
+  // proved. The link and the rings carry the color instead.
+  const held = s.chain.length ? session.clusters[s.chain[0]].temper : null;
+  const heldCss = held ? TEMPER_DEFS[held].css : "rgba(214,255,236,0.75)";
   if (s.chain.length > 1) {
     ctx.save();
-    ctx.strokeStyle = "rgba(214,255,236,0.75)";
-    ctx.lineWidth = 1.5;
-    ctx.shadowColor = "rgba(214,255,236,0.9)";
-    ctx.shadowBlur = 8;
+    ctx.strokeStyle = heldCss;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = heldCss;
+    ctx.shadowBlur = 10;
     ctx.beginPath();
     s.chain.forEach((id, i) => {
       const c = session.clusters[id];
@@ -116,7 +133,9 @@ export function drawFloor(
   ctx.textBaseline = "middle";
   s.chain.forEach((id, i) => {
     const c = session.clusters[id];
-    ctx.strokeStyle = "rgba(214,255,236,0.55)";
+    ctx.strokeStyle = heldCss;
+    ctx.shadowColor = heldCss;
+    ctx.shadowBlur = 6;
     ctx.beginPath();
     ctx.arc(c.cx, c.cy, c.radius + 12, 0, Math.PI * 2);
     ctx.stroke();

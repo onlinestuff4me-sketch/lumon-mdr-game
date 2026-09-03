@@ -1838,15 +1838,17 @@ section("music dance experience");
   const instruction = await page.evaluate(() => document.body.innerText);
   check("the instruction is a demonstration, not a sentence",
     /DEMONSTRATION/.test(instruction) &&
-      /CONNECT 3 GROUPS OF ONE TEMPER/.test(instruction),
+      /CONNECT THREE GROUPS\s+OF THE SAME COLOR/.test(instruction),
     instruction.slice(0, 140));
   check("and it says what fills a segment",
-    /Three groups of one temper, released on the beat,\s+fill one segment/.test(instruction),
-    instruction.slice(0, 200));
+    /Three groups of the same color, released on the\s+beat, fill one segment/.test(instruction),
+    instruction.slice(0, 220));
+  check("and it names the one control on the screen",
+    /TAP BEGIN TO TAKE THE FLOOR/.test(instruction));
   check("and it promises there is no way to fail, and no clock",
     /no way to fail/.test(instruction) && /no clock to run out/.test(instruction));
 
-  await page.getByText("BEGIN").click();
+  await page.getByRole("button", { name: /BEGIN/ }).click();
   await page.waitForFunction(() => !!window.__mde?.session, null, { timeout: 5000 });
 
   // The floor is the same matrix: sixteen by twenty-eight, digits and all.
@@ -2427,7 +2429,8 @@ section("the /dance door");
   {
     const shown = await page.evaluate(() => document.body.innerText);
     check("the instruction screen is a demonstration",
-      /DEMONSTRATION/.test(shown) && /CONNECT 3 GROUPS OF ONE TEMPER/.test(shown),
+      /DEMONSTRATION/.test(shown) &&
+        /CONNECT THREE GROUPS\s+OF THE SAME COLOR/.test(shown),
       shown.split("\n").slice(0, 4).join(" / "));
     // And it does the whole loop, unattended: three groups, a release,
     // a segment. A demonstration that only moves a cursor teaches the
@@ -2436,7 +2439,9 @@ section("the /dance door");
       .waitForFunction(
         () => /DANCE METER [1-9] \/ 8/.test(document.body.innerText),
         null,
-        { timeout: 12000 },
+        // One demonstration is deliberately slow — about eight seconds of
+        // wall clock at the rate the floor is stepped for it.
+        { timeout: 25000 },
       )
       .then(() => true)
       .catch(() => false);
@@ -2445,7 +2450,7 @@ section("the /dance door");
   }
 
   // And it plays: the same component, the same session handle.
-  await page.getByText("BEGIN").click();
+  await page.getByRole("button", { name: /BEGIN/ }).click();
   await page.waitForFunction(() => !!window.__mde?.session, null, { timeout: 6000 });
   check("and the floor it opens has a chain of three on it",
     await page.evaluate(() => window.__mde.session.hasChain));

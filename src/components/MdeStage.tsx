@@ -234,33 +234,38 @@ export function MdeStage({ reward, seed, muted, onDone }: Props) {
     );
   }
 
-  // The demonstration. Same frame as the floor, same HUD, same painter —
-  // a refiner watches the move being made on the screen they are about to
-  // be handed, and then makes it. A sentence on a title card was what this
-  // had before, and a sentence is not a demonstration.
+  // The demonstration. Same floor, same painter, same HUD — a refiner
+  // watches the move being made on the screen they are about to be handed,
+  // and then makes it. A sentence on a title card was what this had
+  // before, and a sentence is not a demonstration.
   if (stage === "instruction") {
     return (
       <div className="absolute inset-0 z-70 flex flex-col bg-phos-950">
-        <div className="flex items-baseline justify-between px-4 pb-1 pt-3 text-[9px] tracking-[0.2em] text-phos-600">
+        <div className="flex items-baseline justify-between px-4 pb-2 pt-3 text-[9px] tracking-[0.2em] text-phos-600">
           <span className="crt-text-glow text-phos-400">{genre.name}</span>
           <span>{accessory} ISSUED</span>
         </div>
         <MdeDemo genre={genre} seed={seed ^ 0x5f5e} />
-        <div className="px-4 pb-5 text-center">
+        <div className="px-4 pb-5 pt-3 text-center">
           <p className="mx-auto max-w-[280px] text-[9px] leading-relaxed text-phos-600">
-            Three groups of one temper, released on the beat, fill one
-            segment. There is no way to fail this and no clock to run out —
-            the dance ends when the meter is full.
+            Three groups of the same color, released on the beat, fill one
+            segment. There is no way to fail this and no clock to run out.
           </p>
+          {/* The one control on the screen, and the screen says so. The
+              floor above it is running on its own, which is exactly the
+              thing that could be mistaken for a turn already in progress. */}
           <button
             type="button"
-            className={`${BTN} mt-4`}
+            className={`${BTN} mt-4 px-8 py-3`}
             style={{ animation: "crt-throb 1.9s ease-in-out infinite" }}
             onClick={() => setStage("play")}
           >
             BEGIN
             <ChevronRight size={12} strokeWidth={2.6} />
           </button>
+          <p className="mt-2 text-[8px] tracking-[0.2em] text-phos-700">
+            TAP BEGIN TO TAKE THE FLOOR
+          </p>
         </div>
       </div>
     );
