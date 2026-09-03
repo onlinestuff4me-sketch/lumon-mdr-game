@@ -18,7 +18,14 @@ import { MIN_CHAIN, METER_SEGMENTS } from "../game/mde";
  * release either worked or did not. This counts out loud, from the first
  * group touched, and the sentence changes underneath it.
  */
-export function ChainPips({ chain }: { chain: number }) {
+export function ChainPips({
+  chain,
+  className = "px-4 pb-2",
+}: {
+  chain: number;
+  /** Padding from the caller — inside a frame it is tighter. */
+  className?: string;
+}) {
   const ready = chain >= MIN_CHAIN;
   const line = ready
     ? "RELEASE ON THE BEAT"
@@ -28,7 +35,7 @@ export function ChainPips({ chain }: { chain: number }) {
         ? `${chain} OF ${MIN_CHAIN} — ONE MORE GROUP`
         : `${chain} OF ${MIN_CHAIN} — KEEP DRAGGING`;
   return (
-    <div className="flex items-center gap-2 px-4 pb-2">
+    <div className={`flex items-center gap-2 ${className}`}>
       <div className="flex shrink-0 items-center gap-1" aria-hidden>
         {Array.from({ length: MIN_CHAIN }, (_, i) => (
           <span
@@ -73,13 +80,16 @@ export function ChainPips({ chain }: { chain: number }) {
 export function DanceMeter({
   meter,
   right,
+  className = "px-4 pb-4 pt-2",
 }: {
   meter: number;
   /** The score, or whatever else the screen wants in the corner. */
   right?: React.ReactNode;
+  /** Padding from the caller — inside a frame it is tighter. */
+  className?: string;
 }) {
   return (
-    <div className="px-4 pb-4 pt-2">
+    <div className={className}>
       <div className="flex items-center gap-1">
         {Array.from({ length: METER_SEGMENTS }, (_, i) => (
           <div

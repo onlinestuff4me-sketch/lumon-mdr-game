@@ -963,6 +963,16 @@ the game losing the drag, which is to say as a bug. The links now snap on
 screen in alarm red, dashing apart and drifting as they fade, which is the
 same event told honestly: it was there, the phrase ended, be quicker.
 
+**A chain is drawn in its temper's color.** The digits of a chained
+cluster go hot white, which is the right signal for *in hand* and the
+wrong one for a rule that is about color: three groups of one color,
+connected, became three white groups, and the thing the chain was meant to
+prove vanished at the moment it was proved. The link and the rings carry
+the color now. (Fixing this turned up a second bug behind it: the glyph
+atlas leaves `globalAlpha` wherever the last digit left it, so the trail,
+the rings and the numbers beside them were being painted at 0.16 opacity
+on every floor whose bottom-right cell happened to be idle.)
+
 **The floor counts to three out loud.** "Connect 3+ glowing groups of one
 temper" lived in one grey line above the board, and a refiner who did not
 read it had no second chance to learn the rule: nothing on screen counted
@@ -994,13 +1004,38 @@ into `RELEASE ON THE BEAT`, the chain collapses into its bloom, and one
 segment of the Dance Meter fills. Then it does it again, and the meter
 climbs — the thing being taught is the loop, not the move.
 
-Two constraints on the script:
+**It is dressed as a video, because it has to be watched rather than
+touched.** A live board sitting flush in the screen is a board a refiner
+will reach for, and reaching for it teaches that the game ignores them. So
+it sits in an inset frame, with the one sentence — `CONNECT THREE GROUPS
+OF THE SAME COLOR` — burned across the top of the picture over a scrim, a
+playback bar running underneath it, and `DEMONSTRATION` beside that. The
+only control on the screen is `BEGIN`, which throbs and is labeled `TAP
+BEGIN TO TAKE THE FLOOR`.
 
-- It only starts a run on a phrase with room to finish it in, which is
+Four constraints on the script:
+
+- **It runs in slow motion**, at 0.42× wall speed, and the *session's*
+  clock is what is slowed. Every timing on the floor is measured in the
+  session's own seconds, so a demonstration that merely dawdled between
+  touches would run out of phrase and be seen to fail. Slowing the session
+  scales the phrase, the beat and the release window together. One
+  demonstration is about eight seconds on screen.
+- **It only starts a run on a phrase with room to finish it in**, which is
   what `MdeSession.phraseLeft` is for. The floor re-lights every eight
   beats and takes any chain in hand apart when it does — correct in play,
-  and the one lesson a demonstration must not teach.
-- It steps the clock to the next beat before letting go, so the release
+  and the one lesson a demonstration must not teach. The timings are
+  budgeted against 3.24s, which is eight beats at the fastest genre on the
+  menu.
+- **It chooses its floor.** Even the closest three lit clusters of one
+  temper are a board-width apart on a median floor — clusters are placed at
+  least three cells from each other and only four of each temper light per
+  phrase — so a demonstration that took whatever was offered swept corner
+  to corner and taught a big movement rather than the small deliberate one
+  this actually is. It looks at sixty seeded floors during the pause
+  between runs and takes the first with a compact chain clear of the
+  caption, carrying the Dance Meter across so the loop still reads.
+- **It steps the clock to the next beat before letting go**, so the release
   always lands. The window is generous in play; a demonstration that
   missed it would be teaching the miss.
 
