@@ -745,8 +745,59 @@ console.log(`\n── the dance floor ${"─".repeat(43)}`);
       fail(`filled the meter in ${merges} merges, wanted ${METER_SEGMENTS}`);
     }
     if (!s.finished) fail("a full Dance Meter did not end the session");
-    if (t > MDE_SECONDS) fail(`took ${t.toFixed(1)}s, past the ${MDE_SECONDS}s music`);
-    else ok(`${METER_SEGMENTS} chains fill the meter and end the dance, in ${t.toFixed(1)}s`);
+    else if (s.snapshot().remaining !== 0) {
+      fail("the meter is full and the floor still says something is left");
+    } else ok(`${METER_SEGMENTS} chains fill the meter and end the dance, in ${t.toFixed(1)}s`);
+  }
+
+  // What "remaining" means. It was seconds of music, printed in the
+  // corner of the floor as a countdown; it is segments now, because
+  // segments are the only thing this session is waiting on.
+  {
+    const s = new MdeSession(GENRES[0], 21, 390, 660);
+    if (s.snapshot().remaining !== METER_SEGMENTS) {
+      fail(`a fresh floor says ${s.snapshot().remaining} left, wanted ${METER_SEGMENTS}`);
+    }
+    const m = merge(s, 0);
+    if (m.result !== "merge") fail("could not merge on a fresh floor");
+    else if (s.snapshot().remaining !== METER_SEGMENTS - 1) {
+      fail("a filled segment did not take one off what is left");
+    } else ok("what is left is counted in segments, not in seconds");
+  }
+
+  // And nothing else ends it. The floor used to stop at MDE_SECONDS, which
+  // is how a refiner came to watch the dance cut to the film with four of
+  // eight segments lit — a meter drawn on screen is a promise about when
+  // this stops, and a clock underneath it quietly breaking that promise is
+  // the reward reading as confiscated. Stand on the floor for twice the
+  // music and touch nothing: it is still going, and still dancing.
+  {
+    const s = new MdeSession(GENRES[0], 5, 390, 660);
+    for (let t = 0; t < MDE_SECONDS * 2; t += 1 / 60) s.step(1 / 60);
+    if (s.finished) fail("the music running out ended the session");
+    else if (s.snapshot().elapsed < MDE_SECONDS) {
+      fail("the clock stopped advancing at the end of the music");
+    } else if (!s.hasChain) fail("the floor stopped re-lighting after the music");
+    else {
+      ok(`${MDE_SECONDS * 2}s of standing still ends nothing — only the meter does`);
+    }
+  }
+
+  // The demonstration's one requirement: it can tell how much of the
+  // phrase is left, so a scripted chain is never started inside a phrase
+  // too short to finish it in. A demonstration of the move coming apart
+  // is the one lesson the instruction screen must not teach.
+  {
+    const s = new MdeSession(GENRES[0], 2, 390, 660);
+    const opening = s.phraseLeft;
+    if (Math.abs(opening - beatS * 8) > 0.01) {
+      fail(`a phrase opens with ${opening.toFixed(2)}s left, wanted ${(beatS * 8).toFixed(2)}s`);
+    }
+    for (let t = 0; t < beatS * 8 - 0.05; t += 1 / 60) s.step(1 / 60);
+    if (s.phraseLeft > 0.1) fail("the phrase did not run down");
+    s.step(0.1);
+    if (s.phraseLeft < beatS * 7) fail("a new phrase did not reset the room it offers");
+    else ok("the floor says how long the phrase it is on has left");
   }
 
   // A merge is loud: the floor flashes, the frame is shoved, and the

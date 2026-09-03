@@ -141,7 +141,16 @@
   100% { filter: brightness(1); }
 }
 
+/* The dance floor's instruction, once it has become an instruction. The
+   chain is long enough and the only thing left is to let go on the beat,
+   so the sentence breathes instead of sitting there as a label. */
+@keyframes mde-cue {
+  0%, 100% { opacity: 0.72; }
+  50%      { opacity: 1; }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  @keyframes mde-cue    { 0%, 100% { opacity: 1; } }
   @keyframes crt-open   { 0%, 100% { transform: none; filter: none; } }
   @keyframes crt-resolve { 0% { opacity: 0; } 100% { opacity: 1; } }
   @keyframes crt-band   { 0%, 100% { opacity: 0; } }

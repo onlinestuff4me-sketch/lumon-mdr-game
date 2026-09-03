@@ -30,7 +30,16 @@ import type { Cluster, GridNode, Temper } from "./types";
 export const MDE_COLS = 16;
 export const MDE_ROWS = 28;
 
-/** How long a session runs. The specification's forty-five seconds. */
+/**
+ * The nominal length of the music, for copy that mentions one — *not* a
+ * cutoff.
+ *
+ * It used to end the session, and a session that ends on a clock ends
+ * mid-dance: the floor cut to the film with the Dance Meter at four of
+ * eight, which reads as the reward being taken away rather than finished.
+ * The meter is the only ending now. There is no way to fail this and no
+ * way to run out of it either; the dance is over when it has been danced.
+ */
 export const MDE_SECONDS = 45;
 
 /** Chain length that scores. The instruction says three; so does this. */
@@ -140,6 +149,7 @@ export interface Snap {
 
 export interface MdeSnapshot {
   readonly elapsed: number;
+  /** Segments still to fill. Named for what a refiner is waiting on. */
   readonly remaining: number;
   readonly beat: number;
   /** 0..1 through the current beat — drives the pulse. */
@@ -391,6 +401,19 @@ export class MdeSession {
     return false;
   }
 
+  /**
+   * Seconds until the floor re-lights.
+   *
+   * Public because the demonstration needs it: a scripted chain that runs
+   * past the end of a phrase comes apart on screen, and a *demonstration*
+   * of the thing going wrong is the one lesson it must not teach. It waits
+   * for a phrase it can finish inside.
+   */
+  get phraseLeft(): number {
+    const at = this.rephraseAt >= 0 ? this.rephraseAt : this.nextPhraseAt;
+    return Math.max(0, at - this.elapsed);
+  }
+
   // ── input ──────────────────────────────────────────────────────────
 
   /** The cluster under a point, if it is lit and in play. */
@@ -518,7 +541,10 @@ export class MdeSession {
   step(dt: number): { beatFired: boolean; beat: number } {
     if (this.finished) return { beatFired: false, beat: this.beatIndex };
     const before = this.beatIndex;
-    this.elapsed = Math.min(MDE_SECONDS, this.elapsed + dt);
+    // Unclamped. The clock was pinned at MDE_SECONDS, which stopped the
+    // beat index advancing — so the phrase timer, the pulse and the
+    // release window all froze the moment the music nominally ran out.
+    this.elapsed += dt;
 
     if (this.rephraseAt >= 0 && this.elapsed >= this.rephraseAt) this.phrase();
     else if (this.elapsed >= this.nextPhraseAt && !this.finished) {
@@ -554,21 +580,25 @@ export class MdeSession {
   }
 
   /**
-   * Over — because the meter filled, or because the music stopped.
+   * Over, and only one thing ends it: the Dance Meter is full.
    *
-   * The first of those is new, and is the point: a dance that ends when
-   * the Dance Meter is full ends *because it was danced*. Running the
-   * clock out is still a finish, and still not a failure — there was
-   * never anything here to fail.
+   * A clock ended it too, once, and that is exactly how a refiner came to
+   * watch the floor cut to the film with four of eight segments lit. A
+   * meter drawn on screen is a promise about when this stops; ending
+   * before it fills breaks that promise, and the reward reads as
+   * confiscated rather than completed.
+   *
+   * Nothing here can be failed and nothing here can be run out of. The
+   * music simply plays until the dance is danced.
    */
   get finished(): boolean {
-    return this.elapsed >= MDE_SECONDS || this.meter >= METER_SEGMENTS;
+    return this.meter >= METER_SEGMENTS;
   }
 
   snapshot(): MdeSnapshot {
     return {
       elapsed: this.elapsed,
-      remaining: Math.max(0, MDE_SECONDS - this.elapsed),
+      remaining: Math.max(0, METER_SEGMENTS - this.meter),
       beat: this.beatIndex,
       beatPhase: (this.elapsed % this.beatS) / this.beatS,
       meter: this.meter,

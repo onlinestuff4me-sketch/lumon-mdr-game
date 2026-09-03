@@ -1836,11 +1836,15 @@ section("music dance experience");
   await page.waitForTimeout(200);
 
   const instruction = await page.evaluate(() => document.body.innerText);
-  check("the instruction is the one the specification writes",
-    /CONNECT 3\+ GLOWING GROUPS OF ONE TEMPER\. RELEASE ON THE BEAT\. FILL THE\s+DANCE METER\./.test(instruction),
-    instruction.slice(0, 120));
-  check("and it promises there is no way to fail",
-    /no way to fail/.test(instruction));
+  check("the instruction is a demonstration, not a sentence",
+    /DEMONSTRATION/.test(instruction) &&
+      /CONNECT 3 GROUPS OF ONE TEMPER/.test(instruction),
+    instruction.slice(0, 140));
+  check("and it says what fills a segment",
+    /Three groups of one temper, released on the beat,\s+fill one segment/.test(instruction),
+    instruction.slice(0, 200));
+  check("and it promises there is no way to fail, and no clock",
+    /no way to fail/.test(instruction) && /no clock to run out/.test(instruction));
 
   await page.getByText("BEGIN").click();
   await page.waitForFunction(() => !!window.__mde?.session, null, { timeout: 5000 });
@@ -2411,15 +2415,84 @@ section("the /dance door");
       !/HANDBOOK/.test(text), text.slice(0, 80));
   }
 
-  // And it plays: the same component, the same session handle.
   await page.getByText("DEFIANT JAZZ").click();
   await page.waitForTimeout(200);
   await page.getByText("MARACA").click();
-  await page.waitForTimeout(200);
+  await page.waitForTimeout(400);
+
+  // The demonstration. A refiner who read one sentence on a title card
+  // and then played the whole floor without ever chaining three is the
+  // reason this exists — so the screen before BEGIN has to be the move
+  // being made, on the real floor, with the real HUD.
+  {
+    const shown = await page.evaluate(() => document.body.innerText);
+    check("the instruction screen is a demonstration",
+      /DEMONSTRATION/.test(shown) && /CONNECT 3 GROUPS OF ONE TEMPER/.test(shown),
+      shown.split("\n").slice(0, 4).join(" / "));
+    // And it does the whole loop, unattended: three groups, a release,
+    // a segment. A demonstration that only moves a cursor teaches the
+    // cursor.
+    const filled = await page
+      .waitForFunction(
+        () => /DANCE METER [1-9] \/ 8/.test(document.body.innerText),
+        null,
+        { timeout: 12000 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    check("and it fills a segment of the meter on its own", filled,
+      (await page.evaluate(() => document.body.innerText)).slice(0, 120));
+  }
+
+  // And it plays: the same component, the same session handle.
   await page.getByText("BEGIN").click();
   await page.waitForFunction(() => !!window.__mde?.session, null, { timeout: 6000 });
   check("and the floor it opens has a chain of three on it",
     await page.evaluate(() => window.__mde.session.hasChain));
+
+  // The counter, in play. The rule the floor is asking for used to live
+  // in one grey line nobody read; it counts out loud now, from the first
+  // group touched, and a refiner holding two is told they are holding two.
+  {
+    const box = await page.locator("canvas").boundingBox();
+    const trio = await page.evaluate(() => {
+      const s = window.__mde.session;
+      const by = new Map();
+      for (const c of s.clusters) {
+        if (!c.lit || c.spent) continue;
+        const l = by.get(c.temper) ?? [];
+        l.push({ x: c.cx, y: c.cy });
+        by.set(c.temper, l);
+      }
+      for (const l of by.values()) if (l.length >= 3) return l.slice(0, 3);
+      return null;
+    });
+    const line = async () => {
+      const t = await page.evaluate(() => document.body.innerText);
+      return (t.match(/(CONNECT 3 GROUPS[^\n]*|\d OF 3[^\n]*|RELEASE ON THE BEAT)/) ?? [""])[0];
+    };
+    check("before a finger lands, the floor asks for three",
+      /CONNECT 3 GROUPS OF ONE TEMPER/.test(await line()), await line());
+    await page.mouse.move(box.x + trio[0].x, box.y + trio[0].y);
+    await page.mouse.down();
+    await page.waitForTimeout(150);
+    // One hop rather than a swept path: a drag interpolated across the
+    // floor picks up whatever it happens to cross, and this check is
+    // about what the HUD says for a chain of exactly two.
+    await page.mouse.move(box.x + trio[1].x, box.y + trio[1].y, { steps: 1 });
+    await page.waitForTimeout(200);
+    const held = await page.evaluate(
+      () => window.__mde.session.snapshot().chain.length,
+    );
+    check("two in hand reads as two of three",
+      held === 2 && /^2 OF 3/.test(await line()), `${held} held · ${await line()}`);
+    await page.mouse.move(box.x + trio[2].x, box.y + trio[2].y, { steps: 1 });
+    await page.waitForTimeout(200);
+    check("three in hand asks for the beat",
+      /RELEASE ON THE BEAT/.test(await line()), await line());
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+  }
 
   // Back to the terminal for whatever runs after this.
   await page.goto(APP_URL, { waitUntil: "networkidle" });

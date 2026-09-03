@@ -919,7 +919,7 @@ collapses into a phosphor bloom and fills a Dance Meter segment. Same
 instruction, same feel, zero new gestures, and every touch target stays the size
 it already is.
 
-### Four rules the floor keeps
+### Six rules the floor keeps
 
 **There is always a chain of three on the floor.** The instruction says
 connect three; a floor showing singles and pairs is the game contradicting
@@ -936,10 +936,18 @@ data invariant plays whole sessions and asserts it.
 refiner filled in the first fifteen seconds and then danced out the
 remaining thirty against a bar that could not move. A meter that stops
 counting before the experience does is a decoration. Eight segments is
-what a 45-second floor yields at a comfortable pace — and **filling it
-ends the session**, so the dance finishes because it was danced rather
-than because a clock ran out. Running the clock out is still a finish and
-still not a failure; there was never anything here to fail.
+what a 45-second floor yields at a comfortable pace.
+
+**And the meter is the only ending.** Filling it is the one thing that
+finishes a session. There *was* also a clock, and a clock underneath a
+meter is a promise quietly broken: the dance cut to the office film with
+the Dance Meter at four of eight, which reads as the reward being taken
+away rather than finished. `MDE_SECONDS` is now nothing but the nominal
+length of the music, for copy that mentions one. Nothing here can be
+failed and nothing here can be run out of — the music plays until the
+dance is danced. Two data invariants hold the line: eight chains fill the
+meter and end it, and ninety seconds of standing still on the floor ends
+nothing at all.
 
 **A merge is loud.** One bloom per cluster collapsing, plus one over the
 whole chain sized by its length and carrying a second ring and spokes —
@@ -954,6 +962,51 @@ is made of stop being the ones on the floor. Emptied silently that read as
 the game losing the drag, which is to say as a bug. The links now snap on
 screen in alarm red, dashing apart and drifting as they fade, which is the
 same event told honestly: it was there, the phrase ended, be quicker.
+
+**The floor counts to three out loud.** "Connect 3+ glowing groups of one
+temper" lived in one grey line above the board, and a refiner who did not
+read it had no second chance to learn the rule: nothing on screen counted
+anything until a release either worked or did not. Three pips now sit
+under the header and fill as groups are taken — `2 OF 3 — ONE MORE GROUP`,
+then `RELEASE ON THE BEAT`, breathing, when the chain is long enough. On
+the floor itself each held group is ringed *and numbered*, and every other
+lit group of the same temper wears a dashed ring on the beat: the answer
+to a new player looking at twenty glowing clumps and guessing which ones
+go together.
+
+**The screen before it shows the move being made.** See below.
+
+### The instruction screen is a demonstration
+
+A title card reading `CONNECT 3+ GLOWING GROUPS OF ONE TEMPER. RELEASE ON
+THE BEAT.` is a specification, not teaching. A refiner arriving here has
+spent eight files dragging *one* cluster at a time into a bin; nothing in
+that prepares them to hold three at once and let go on a beat, and someone
+played the whole floor through without ever chaining three and came away
+thinking it was broken.
+
+So the screen before `BEGIN` runs the dance instead of describing it. It
+is not a video and not a mock-up: it is a real `MdeSession`, painted by
+the real painter (`src/game/mdeDraw.ts`, lifted out of `MdeStage` for
+exactly this reason) and wearing the real HUD. A ghost fingertip walks
+onto three lit groups of one temper, the pips count them, the line turns
+into `RELEASE ON THE BEAT`, the chain collapses into its bloom, and one
+segment of the Dance Meter fills. Then it does it again, and the meter
+climbs — the thing being taught is the loop, not the move.
+
+Two constraints on the script:
+
+- It only starts a run on a phrase with room to finish it in, which is
+  what `MdeSession.phraseLeft` is for. The floor re-lights every eight
+  beats and takes any chain in hand apart when it does — correct in play,
+  and the one lesson a demonstration must not teach.
+- It steps the clock to the next beat before letting go, so the release
+  always lands. The window is generous in play; a demonstration that
+  missed it would be teaching the miss.
+
+Under `prefers-reduced-motion` the loop does not run at all. The screen
+holds the single frame the animation exists to arrive at: the chain built,
+the finger on the third group, the line reading `RELEASE ON THE BEAT`.
 
 ### The floor has a door of its own
 
