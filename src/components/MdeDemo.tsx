@@ -28,6 +28,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Play } from "lucide-react";
 import { GlyphAtlas } from "../game/glyphAtlas";
 import { drawFloor } from "../game/mdeDraw";
+import { prefersReduce } from "../game/reduceMotion";
 import {
   BEAT_WINDOW,
   MDE_ROWS,
@@ -357,8 +358,6 @@ export function MdeDemo({ genre, seed }: { genre: Genre; seed: number }) {
   );
 }
 
-const prefersReduce = () =>
-  window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
 
 /** Where the scrubber sits, given what the script is doing. */
 function progressOf(beat: Beat, step: number, held: number): number {

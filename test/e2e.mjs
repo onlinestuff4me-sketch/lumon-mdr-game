@@ -2551,6 +2551,122 @@ section("reduce motion");
   }
 }
 
+// ═══ the start screen ════════════════════════════════════════════════
+//
+// The first thing anyone sees, and the only part of the game that runs
+// with nobody watching it. What the pure invariants cannot say is whether
+// any of it is actually mounted and painting — so this is a cold open,
+// a stopwatch and the pixels.
+section("the start screen");
+{
+  const st = await openWith({});
+  try {
+    // The mark, and *decoded*: a wrong path renders as nothing at all and
+    // would pass every check that only asks whether the element is there.
+    const mark = st.page.locator('img[alt="Lumon Industries"]');
+    check("the start screen carries the Lumon mark", (await mark.count()) === 1);
+    const drawn = await mark.evaluate((el) => el.complete && el.naturalWidth > 0);
+    check("and the browser could actually load it", drawn === true);
+
+    // How much of the sheet is lit, away from the middle where the type
+    // sits. A group coming loose is six digits going from the resting
+    // field to full phosphor, and that shows up here as a step change.
+    const litAway = async () => {
+      const b64 = (await st.page.screenshot()).toString("base64");
+      return st.page.evaluate(
+        (s) =>
+          new Promise((res, rej) => {
+            const img = new Image();
+            img.onerror = () => rej(new Error("could not decode the frame"));
+            img.onload = () => {
+              const c = document.createElement("canvas");
+              c.width = img.width;
+              c.height = img.height;
+              const g = c.getContext("2d");
+              g.drawImage(img, 0, 0);
+              const { data } = g.getImageData(0, 0, img.width, img.height);
+              const x0 = img.width * 0.27, x1 = img.width * 0.73;
+              const y0 = img.height * 0.27, y1 = img.height * 0.73;
+              let n = 0;
+              for (let i = 0; i < data.length; i += 4) {
+                const px = (i / 4) % img.width;
+                const py = Math.floor(i / 4 / img.width);
+                if (px > x0 && px < x1 && py > y0 && py < y1) continue;
+                if (data[i + 1] > 180) n++;
+              }
+              res(n);
+            };
+            img.src = "data:image/png;base64," + s;
+          }),
+        b64,
+      );
+    };
+
+    // Reloaded so the clock starts where a refiner's does: `openWith` has
+    // already spent a second or two getting here. Sampled at a second and
+    // a half, which is inside the two seconds the screen promises and
+    // well inside the four the first group stays up for.
+    await st.page.reload({ waitUntil: "domcontentloaded" });
+    const opened = Date.now();
+    await st.page.waitForTimeout(Math.max(0, 1500 - (Date.now() - opened)));
+    const early = await litAway();
+
+    const seen = [early];
+    for (let i = 0; i < 11; i++) {
+      await st.page.waitForTimeout(650);
+      seen.push(await litAway());
+    }
+    const high = Math.max(...seen);
+    const low = Math.min(...seen);
+    check(
+      "groups light and subside rather than all staying lit",
+      high > low * 1.8,
+      `${low} at rest, ${high} lit`,
+    );
+    check("and a group had come loose within two seconds of opening",
+      early > low * 1.4, `${early} at 1.5s vs a floor of ${low}`);
+
+    // The sheet covers the whole screen, and not every button on the
+    // start screen is inside the title column — READ THE HANDBOOK sits
+    // below everything. A backdrop that takes a tap is a backdrop that
+    // makes the handbook unreachable from the first screen.
+    await st.page.getByText(/READ THE HANDBOOK/i).click({ timeout: 4000 });
+    await st.page.waitForTimeout(500);
+    check("the sheet takes no taps of its own",
+      (await st.page.getByRole("button", { name: /^SETTINGS$/ }).count()) > 0);
+
+    check("nothing threw on the start screen", st.errors.length === 0,
+      st.errors.join(" | "));
+  } finally {
+    await st.browser.close();
+  }
+}
+
+// The same screen for a refiner who asked for less motion: a picture of
+// the game rather than an empty one, and absolutely still.
+section("the start screen, reduce motion");
+{
+  const sr = await openWith({ reducedMotion: "reduce" });
+  try {
+    const before = await sr.page.screenshot();
+    await sr.page.waitForTimeout(2500);
+    const after = await sr.page.screenshot();
+    check("the sheet holds still with reduce motion on",
+      Buffer.compare(before, after) === 0);
+
+    // Still and *blank* would also hold still. The frame has to be worth
+    // holding, which means the numbers are on it.
+    const luma = await stageLuma(sr.page);
+    check("and it is still a dark screen", luma < 0.25, `luma ${luma.toFixed(2)}`);
+    check("and the mark is on it", await sr.page
+      .locator('img[alt="Lumon Industries"]')
+      .evaluate((el) => el.complete && el.naturalWidth > 0));
+    check("nothing threw", sr.errors.length === 0, sr.errors.join(" | "));
+  } finally {
+    await sr.browser.close();
+  }
+}
+
 // ═══ a problem a refiner can hand back ═══════════════════════════════
 //
 // A fresh terminal rather than this one: by now the suite has a ledger,

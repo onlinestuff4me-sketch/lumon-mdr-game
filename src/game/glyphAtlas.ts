@@ -40,23 +40,38 @@ export class GlyphAtlas {
   build(rawFontPx: number, dpr: number): void {
     const fontPx = GlyphAtlas.quantise(rawFontPx);
     if (this.fontPx === fontPx && this.dpr === dpr && this.strips.size) return;
+    // Before the new size is recorded: `release` clears it, so assigning
+    // first would leave the atlas claiming a font it had just dropped and
+    // rebuilding on every call.
+    this.release();
     this.fontPx = fontPx;
     this.dpr = dpr;
     this.cellW = Math.ceil(fontPx * 1.8);
     this.cellH = Math.ceil(fontPx * 2.0);
-    // Zero the outgoing canvases before dropping them: a detached canvas
-    // keeps its (often GPU-backed) store alive until GC, and that is the
-    // classic route to a WebKit "reloaded because it was using significant
-    // memory" kill.
+
+    for (const key of Object.keys(PALETTES) as PaletteKey[]) {
+      this.strips.set(key, this.renderStrip(PALETTES[key]));
+    }
+  }
+
+  /**
+   * Drop every strip, zeroing each one first.
+   *
+   * Called on rebuild and by any owner that unmounts. A detached canvas
+   * keeps its (often GPU-backed) store alive until GC, and that is the
+   * classic route to a WebKit "reloaded because it was using significant
+   * memory" kill — so an atlas that is finished with says so rather than
+   * waiting to be collected.
+   */
+  release(): void {
     for (const old of this.strips.values()) {
       old.width = 0;
       old.height = 0;
     }
     this.strips.clear();
-
-    for (const key of Object.keys(PALETTES) as PaletteKey[]) {
-      this.strips.set(key, this.renderStrip(PALETTES[key]));
-    }
+    // A released atlas must rebuild rather than early-return on the next
+    // `build` call with the same font size.
+    this.fontPx = 0;
   }
 
   private renderStrip(rgb: readonly [number, number, number]): HTMLCanvasElement {

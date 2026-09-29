@@ -61,5 +61,36 @@ await page.goto(`file://${resolve(here, "og.html")}`, { waitUntil: "load" });
 await page.waitForTimeout(250);
 const out = resolve(here, "..", "public", "og.png");
 await page.screenshot({ path: out });
+
+/**
+ * And the home-screen icon.
+ *
+ * Written inline rather than given a workshop file of its own: unlike the
+ * card, this is not a composition — it is the mark, centred, on the
+ * terminal's own background, and there is nothing in it to sit and look
+ * at while adjusting.
+ *
+ * 180x180 and opaque. iOS masks the icon to its own rounded square and
+ * composites transparency against whatever it likes, so the black is
+ * baked in and the corners are left square. PNG because iOS will not take
+ * an SVG here, which is the only reason this is a second file at all.
+ */
+const icon = await browser.newPage({
+  viewport: { width: 180, height: 180 },
+  deviceScaleFactor: 1,
+});
+await icon.setContent(`<!doctype html><html><body style="margin:0">
+  <div style="width:180px;height:180px;background:#010604;display:flex;
+              align-items:center;justify-content:center">
+    <div style="width:150px;filter:drop-shadow(0 0 9px rgba(47,214,138,0.55))">
+      ${buildMark().replace("<svg ", '<svg style="width:100%;height:auto;display:block" ')}
+    </div>
+  </div>
+</body></html>`);
+await icon.waitForTimeout(120);
+const iconOut = resolve(here, "..", "public", "apple-touch-icon.png");
+await icon.screenshot({ path: iconOut });
+
 await browser.close();
 console.log(`wrote ${out}`);
+console.log(`wrote ${iconOut}`);
