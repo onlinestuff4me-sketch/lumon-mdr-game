@@ -187,10 +187,20 @@ for most people, the only part of this design system they will ever see.
 crop of it is mostly empty deck. The card is built for the shape a chat
 bubble gives it, out of the same palette, the same Courier and the same
 four temper colours: a field of dim numbers with four clusters agitated in
-it, one of them boxed by a marquee, the title on a scrim of black, and the
-four bins along the foot. That is the whole game in one picture — a
-refiner finds the numbers that feel wrong and consigns each to the bin its
-temper evokes — and it reads at the size a bubble actually shows.
+it, one of them boxed by a marquee, and the logo on a scrim of black.
+
+**Everything on it has to survive being 340px wide**, which is about what
+a phone gives a link card. The four bins were on it for one draft and came
+off: four labelled boxes are four grey smudges at that size. What replaced
+them is the emblem — a plate with the four tempers as diamonds at its
+corners around one refined datum — which says the same thing in shapes
+instead of words and still reads when the words do not.
+
+**The mark is written for this branch.** It is an austere institutional
+badge in the same register as the show's, not a copy of the show's own
+trademark, and the diamond is the shape the dance floor already counts a
+chain in. Rings were tried first and read as an atom; a plate reads as
+something screwed to a wall, which is what this terminal is.
 
 Committed as a file rather than generated at build time: a scraper fetches
 it from a URL, so it has to exist at a stable one on both hosts, and a
