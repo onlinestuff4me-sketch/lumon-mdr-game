@@ -24,10 +24,6 @@
         --phos-400: #2fd68a;
         --phos-300: #7bf3bb;
         --phos-200: #c3fddf;
-        --woe: #4a8cd6;
-        --frolic: #f0c548;
-        --dread: #9b6cf0;
-        --malice: #ff5a4d;
         --mono: "Courier New", "Liberation Mono", "Courier", monospace;
       }
       * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -54,15 +50,24 @@
       }
       /* A cluster that has been probed and is agitated: its temper's colour,
          at full strength, lifted off the grid. */
+      /* An agitated cluster, in phosphor rather than in its temper's
+         colour.
+
+         Four accent hues scattered round a card whose subject is a logo
+         are four things competing with the logo, and they won. Monotone
+         also happens to be the truer picture: colour assist is off by
+         default in the game, so a refiner reads a cluster by its
+         brightness and its motion, which is exactly what is left here. */
       .lit {
         opacity: 1;
         font-size: 25px;
         transform: scale(1.06);
+        /* Brighter than the idle field and dimmer than the mark, which
+           is the order of importance on this card. At phosphor-200 they
+           were whiter than the logo and took the eye straight off it. */
+        color: var(--phos-400);
+        text-shadow: 0 0 10px rgba(47, 214, 138, 0.55);
       }
-      .wo { color: var(--woe); text-shadow: 0 0 4px var(--woe), 0 0 16px var(--woe); }
-      .fc { color: var(--frolic); text-shadow: 0 0 4px var(--frolic), 0 0 16px var(--frolic); }
-      .dr { color: var(--dread); text-shadow: 0 0 4px var(--dread), 0 0 16px var(--dread); }
-      .ma { color: var(--malice); text-shadow: 0 0 4px var(--malice), 0 0 16px var(--malice); }
 
       /* The marquee: a box drawn round the cluster being taken. */
       #box {
@@ -269,22 +274,24 @@
 
       // Four clusters, one per temper, placed where they sit clear of the
       // title plate: two out to the left, two out to the right.
+      // Which cells belong to an agitated cluster. No temper attached:
+      // the card is monotone, so a cluster is a brightness and nothing
+      // else — which is also how the game reads with colour assist off.
       const CLUSTERS = [
-        { t: "wo", cells: [[3,3],[4,3],[5,3],[3,4],[4,4],[5,4],[4,5]] },
-        { t: "dr", cells: [[2,13],[3,13],[4,13],[2,14],[3,14],[3,12]] },
-        { t: "fc", cells: [[29,3],[30,3],[31,3],[30,4],[31,4],[29,4]] },
-        { t: "ma", cells: [[28,13],[29,13],[30,13],[29,14],[30,14],[29,12]] },
+        [[3,3],[4,3],[5,3],[3,4],[4,4],[5,4],[4,5]],
+        [[2,13],[3,13],[4,13],[2,14],[3,14],[3,12]],
+        [[29,3],[30,3],[31,3],[30,4],[31,4],[29,4]],
+        [[28,13],[29,13],[30,13],[29,14],[30,14],[29,12]],
       ];
-      const temper = new Map();
-      for (const c of CLUSTERS) for (const [x, y] of c.cells) temper.set(`${x},${y}`, c.t);
+      const agitated = new Set();
+      for (const cells of CLUSTERS) for (const [x, y] of cells) agitated.add(`${x},${y}`);
 
       const field = document.getElementById("field");
       for (let y = 0; y < ROWS; y++) {
         for (let x = 0; x < COLS; x++) {
           const el = document.createElement("span");
           el.textContent = String(Math.floor(rand() * 10));
-          const t = temper.get(`${x},${y}`);
-          if (t) el.className = `lit ${t}`;
+          if (agitated.has(`${x},${y}`)) el.className = "lit";
           field.appendChild(el);
         }
       }
