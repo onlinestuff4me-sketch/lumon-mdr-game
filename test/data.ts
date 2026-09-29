@@ -25,7 +25,10 @@ import {
 import { selectPresentation } from "../src/game/present";
 import {
   CELL,
+  LEAD,
+  LIT,
   LOOP,
+  RISE,
   SPAN,
   STILL_AT,
   createAttract,
@@ -1163,17 +1166,27 @@ console.log(`\n── the attract loop ${"─".repeat(42)}`);
     fail(`${board.clusters.length - everLit.size} groups never take a turn`);
   } else ok("and every group takes its turn inside one loop");
 
-  // Within two seconds of the page opening, or the start screen looks
-  // like a still picture for long enough that nobody waits.
-  const firstLit = envelope(0, 1.9).a;
-  if (firstLit < 0.5) {
-    fail(`the first group is only ${firstLit.toFixed(2)} agitated at 1.9s`);
-  } else ok(`the first group is ${firstLit.toFixed(2)} agitated within 2s`);
+  // The sheet is at rest when the screen arrives. A bright thing in the
+  // same instant as the mark and the title makes the refiner choose what
+  // to read; the group comes loose a moment after they have read it.
+  const onArrival = envelope(0, LEAD - 0.2).a;
+  if (onArrival > 0) {
+    fail(`the first group is already ${onArrival.toFixed(2)} agitated before ${LEAD}s`);
+  } else ok(`nothing stirs for the first ${LEAD} seconds`);
+
+  // And then it surfaces, over a rise long enough to be watched rather
+  // than noticed.
+  const risen = envelope(0, LEAD + RISE).a;
+  const midRise = envelope(0, LEAD + RISE / 2).a;
+  if (risen < 0.999) fail(`the first group only reaches ${risen.toFixed(2)} by the top of its rise`);
+  else if (midRise > 0.6 || midRise < 0.4) {
+    fail(`the rise is not gradual — ${midRise.toFixed(2)} at its halfway point`);
+  } else ok(`and then rises over ${RISE}s, ${midRise.toFixed(2)} at the halfway mark`);
 
   // And it subsides rather than staying lit.
-  const rest = envelope(0, SPAN - 0.3).a;
-  if (rest > 0.02) fail(`the first group is still ${rest.toFixed(2)} lit a gap later`);
-  else ok("and it has subsided again before the next one starts");
+  const rest = envelope(0, LEAD + SPAN - 0.2).a;
+  if (rest > 0) fail(`the first group is still ${rest.toFixed(2)} lit a gap later`);
+  else ok(`and has subsided again ${(SPAN - LIT).toFixed(1)}s before the next one starts`);
 
   // The loop is a pure function of the clock: a dropped frame, a
   // backgrounded tab or a slow phone must not leave the sheet somewhere
