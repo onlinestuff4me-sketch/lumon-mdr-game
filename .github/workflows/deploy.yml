@@ -42,6 +42,11 @@ jobs:
           npm run lint
 
       - name: Build
+        # Its own origin, so the link card this host serves points at this
+        # host rather than at the other one. Open Graph needs an absolute
+        # URL and there are two places this is published.
+        env:
+          SITE_URL: https://onlinestuff4me-sketch.github.io/lumon-mdr-game
         run: npm run build
 
       # The suite drives the real game through real pointer events against a

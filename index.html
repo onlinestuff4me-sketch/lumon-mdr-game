@@ -13,9 +13,41 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta
       name="description"
-      content="Lumon Industries Macrodata Refinement terminal — sort the numbers by the feelings they evoke."
+      content="Find the numbers that feel wrong and bin them by the temper they evoke. The work is mysterious and important."
     />
     <title>LUMON OS — Macrodata Refinement</title>
+
+    <!--
+      What a link to this becomes when it is pasted into a message.
+
+      `%SITE_URL%` is substituted at build time by the `siteUrl` plugin in
+      `vite.config.ts` — Open Graph wants an absolute image URL, and this
+      ships to two hosts on two different origins, so the one thing it
+      cannot be is relative.
+    -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Lumon Industries" />
+    <meta property="og:title" content="LUMON OS — Macrodata Refinement" />
+    <meta
+      property="og:description"
+      content="Find the numbers that feel wrong and bin them by the temper they evoke. The work is mysterious and important."
+    />
+    <meta property="og:url" content="%SITE_URL%/" />
+    <meta property="og:image" content="%SITE_URL%/og.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta
+      property="og:image:alt"
+      content="The Lumon Industries wordmark under a badge holding four diamonds — Woe, Frolic, Dread and Malice — around a refined one, over a field of green numbers on black with four clusters agitated in those same colors."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="LUMON OS — Macrodata Refinement" />
+    <meta
+      name="twitter:description"
+      content="Find the numbers that feel wrong and bin them by the temper they evoke."
+    />
+    <meta name="twitter:image" content="%SITE_URL%/og.png" />
   </head>
   <body>
     <div id="root"></div>

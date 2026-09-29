@@ -1,0 +1,286 @@
+<!doctype html>
+<!--
+  The link card, at 1200x630.
+
+  Not a screenshot: the terminal is a tall phone screen and a landscape crop
+  of it is mostly empty deck. This is built for the shape a chat bubble
+  gives it, out of the same palette, the same Courier and the same four
+  temper colours the game is made of — a field of dim numbers with four
+  clusters agitated in it, one of them boxed, which is the whole game in one
+  picture.
+
+  Rendered to public/og.png by tools/og.mjs.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <style>
+      :root {
+        --phos-950: #010604;
+        --phos-900: #041a10;
+        --phos-700: #0a4a2c;
+        --phos-600: #0f7045;
+        --phos-500: #17a866;
+        --phos-400: #2fd68a;
+        --phos-300: #7bf3bb;
+        --phos-200: #c3fddf;
+        --woe: #4a8cd6;
+        --frolic: #f0c548;
+        --dread: #9b6cf0;
+        --malice: #ff5a4d;
+        --mono: "Courier New", "Liberation Mono", "Courier", monospace;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1200px; height: 630px; overflow: hidden; }
+      body {
+        background: var(--phos-950);
+        font-family: var(--mono);
+        position: relative;
+      }
+
+      /* The number field. Dim, evenly spaced, and behind everything — the
+         texture the whole game is played on. */
+      #field {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        grid-template-columns: repeat(34, 1fr);
+        grid-template-rows: repeat(17, 1fr);
+        place-items: center;
+        font-size: 21px;
+        font-weight: 700;
+        color: var(--phos-700);
+        opacity: 0.62;
+      }
+      /* A cluster that has been probed and is agitated: its temper's colour,
+         at full strength, lifted off the grid. */
+      .lit {
+        opacity: 1;
+        font-size: 25px;
+        transform: scale(1.06);
+      }
+      .wo { color: var(--woe); text-shadow: 0 0 4px var(--woe), 0 0 16px var(--woe); }
+      .fc { color: var(--frolic); text-shadow: 0 0 4px var(--frolic), 0 0 16px var(--frolic); }
+      .dr { color: var(--dread); text-shadow: 0 0 4px var(--dread), 0 0 16px var(--dread); }
+      .ma { color: var(--malice); text-shadow: 0 0 4px var(--malice), 0 0 16px var(--malice); }
+
+      /* The marquee: a box drawn round the cluster being taken. */
+      #box {
+        position: absolute;
+        left: 98px; top: 104px; width: 122px; height: 126px;
+        border: 1.5px solid var(--phos-300);
+        border-radius: 3px;
+        box-shadow: 0 0 18px rgba(123, 243, 187, 0.35), inset 0 0 22px rgba(123, 243, 187, 0.08);
+      }
+      #box::after {
+        content: "05";
+        position: absolute;
+        top: -23px; left: 3px;
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        color: var(--phos-300);
+        text-shadow: 0 0 10px rgba(123, 243, 187, 0.7);
+      }
+
+      /* A scrim under the title, so the type never fights the field. */
+      #scrim {
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(58% 50% at 50% 44%, rgba(1, 6, 4, 0.985) 0%, rgba(1, 6, 4, 0.95) 42%, rgba(1, 6, 4, 0.72) 72%, rgba(1, 6, 4, 0) 100%);
+      }
+
+      #plate {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding-top: 22px;
+        text-align: center;
+      }
+      #emblem {
+        width: 130px;
+        height: 130px;
+        filter: drop-shadow(0 0 16px rgba(47, 214, 138, 0.45));
+      }
+      /* The mark itself: the biggest thing on the card, because it is the
+         thing a glance is meant to land on. */
+      .wordmark {
+        margin-top: 20px;
+        font-size: 78px;
+        font-weight: 700;
+        line-height: 1;
+        letter-spacing: 0.3em;
+        text-indent: 0.3em;
+        color: var(--phos-200);
+        text-shadow: 0 0 3px var(--phos-300), 0 0 30px rgba(47, 214, 138, 0.6);
+      }
+      .eyebrow {
+        margin-top: 15px;
+        font-size: 20px;
+        font-weight: 700;
+        letter-spacing: 0.62em;
+        text-indent: 0.62em;
+        color: var(--phos-500);
+      }
+      .rule {
+        margin-top: 28px;
+        width: 320px;
+        height: 1px;
+        background: var(--phos-600);
+      }
+      h1 {
+        margin-top: 26px;
+        font-size: 43px;
+        font-weight: 700;
+        line-height: 1.04;
+        letter-spacing: 0.16em;
+        text-indent: 0.17em;
+        color: var(--phos-300);
+        text-shadow: 0 0 18px rgba(47, 214, 138, 0.4);
+      }
+      .tag {
+        margin-top: 20px;
+        font-size: 21px;
+        letter-spacing: 0.035em;
+        color: var(--phos-500);
+      }
+
+      /* The terminal's own furniture, along the top. Quiet enough that it
+         reads as a frame rather than as a second headline. */
+      #strip {
+        position: absolute;
+        left: 46px; right: 46px; top: 30px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: 0.22em;
+        color: var(--phos-600);
+      }
+      #meter { display: flex; align-items: center; gap: 13px; }
+      #meterTrack {
+        width: 168px; height: 5px;
+        border-radius: 2px;
+        background: rgba(6, 48, 29, 0.9);
+        overflow: hidden;
+      }
+      #meterFill {
+        width: 78%; height: 100%;
+        background: var(--phos-400);
+        box-shadow: 0 0 9px var(--phos-400);
+      }
+
+      /* CRT glass, last and over everything — the same scanlines and
+         vignette the terminal itself wears. */
+      #glass {
+        position: absolute;
+        inset: 0;
+        background: repeating-linear-gradient(
+          to bottom,
+          rgba(0, 0, 0, 0) 0px,
+          rgba(0, 0, 0, 0) 2px,
+          rgba(0, 0, 0, 0.26) 3px,
+          rgba(0, 0, 0, 0.26) 4px
+        );
+      }
+      #vignette {
+        position: absolute;
+        inset: 0;
+        background: radial-gradient(104% 88% at 50% 50%, rgba(1, 6, 4, 0) 38%, rgba(1, 6, 4, 0.55) 74%, rgba(1, 6, 4, 0.99) 100%);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="field"></div>
+    <div id="box"></div>
+    <div id="scrim"></div>
+
+    <div id="plate">
+      <!--
+        An emblem written for this branch, not the show's own mark: a
+        corporate badge in the same 1980s institutional register, carrying
+        the four tempers around a refined core. It says what the four bins
+        along the foot used to say, at a size that survives a chat bubble —
+        four coloured marks read where four labelled boxes do not.
+      -->
+      <svg id="emblem" viewBox="0 0 128 128" aria-hidden="true">
+        <!-- A plate, four tempers at its corners, one refined datum in
+             the middle. Rings read as an atom; a plate reads as a badge
+             screwed to a wall, which is the register this whole terminal
+             is written in. The diamond is the shape the floor already
+             counts a chain in. -->
+        <rect x="7" y="7" width="114" height="114" rx="10"
+              fill="rgba(4,26,16,0.55)" stroke="#17a866" stroke-width="3" />
+        <rect x="18" y="18" width="92" height="92" rx="5"
+              fill="none" stroke="#0a4a2c" stroke-width="1.25" />
+        <g>
+          <rect x="30" y="30" width="15" height="15" rx="1.5" transform="rotate(45 37.5 37.5)" fill="#4a8cd6" />
+          <rect x="83" y="30" width="15" height="15" rx="1.5" transform="rotate(45 90.5 37.5)" fill="#f0c548" />
+          <rect x="83" y="83" width="15" height="15" rx="1.5" transform="rotate(45 90.5 90.5)" fill="#9b6cf0" />
+          <rect x="30" y="83" width="15" height="15" rx="1.5" transform="rotate(45 37.5 90.5)" fill="#ff5a4d" />
+        </g>
+        <rect x="51" y="51" width="26" height="26" rx="2.5" transform="rotate(45 64 64)" fill="#c3fddf" />
+      </svg>
+
+      <div class="wordmark">LUMON</div>
+      <div class="eyebrow">INDUSTRIES</div>
+
+      <div class="rule"></div>
+      <h1>MACRODATA REFINEMENT</h1>
+      <div class="tag">Find the numbers that feel wrong.</div>
+    </div>
+
+    <div id="strip">
+      <div>LUMON OS &nbsp;·&nbsp; FILE: COLD HARBOR</div>
+      <div id="meter">
+        <div id="meterTrack"><div id="meterFill"></div></div>
+        <span>78%</span>
+      </div>
+    </div>
+
+    <div id="glass"></div>
+    <div id="vignette"></div>
+
+    <script>
+      // A fixed field rather than a random one: the card is committed to the
+      // repository, so it must come out the same every time it is rebuilt.
+      const COLS = 34, ROWS = 17;
+      const rand = (() => {
+        let s = 0x9e3779b1;
+        return () => {
+          s ^= s << 13; s >>>= 0;
+          s ^= s >> 17;
+          s ^= s << 5; s >>>= 0;
+          return s / 4294967296;
+        };
+      })();
+
+      // Four clusters, one per temper, placed where they sit clear of the
+      // title plate: two out to the left, two out to the right.
+      const CLUSTERS = [
+        { t: "wo", cells: [[3,3],[4,3],[5,3],[3,4],[4,4],[5,4],[4,5]] },
+        { t: "dr", cells: [[2,13],[3,13],[4,13],[2,14],[3,14],[3,12]] },
+        { t: "fc", cells: [[29,3],[30,3],[31,3],[30,4],[31,4],[29,4]] },
+        { t: "ma", cells: [[28,13],[29,13],[30,13],[29,14],[30,14],[29,12]] },
+      ];
+      const temper = new Map();
+      for (const c of CLUSTERS) for (const [x, y] of c.cells) temper.set(`${x},${y}`, c.t);
+
+      const field = document.getElementById("field");
+      for (let y = 0; y < ROWS; y++) {
+        for (let x = 0; x < COLS; x++) {
+          const el = document.createElement("span");
+          el.textContent = String(Math.floor(rand() * 10));
+          const t = temper.get(`${x},${y}`);
+          if (t) el.className = `lit ${t}`;
+          field.appendChild(el);
+        }
+      }
+    </script>
+  </body>
+</html>

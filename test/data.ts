@@ -23,7 +23,7 @@ import {
   type Progress,
 } from "../src/game/progress";
 import { selectPresentation } from "../src/game/present";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 let bad = 0;
 const fail = (m: string) => { bad++; console.log("  FAIL " + m); };
@@ -1009,6 +1009,70 @@ console.log(`\n── outie facts ${"─".repeat(46)}`);
     }
     if (mature > 0) fail(`${mature} mature facts were selected with no setting to allow them`);
     ok(`${seen.length} sentences drawn across the ladder, none repeated, none mature`);
+  }
+}
+
+// ── the link card ────────────────────────────────────────────────────
+// What a link to this becomes when it is pasted into a message. It is the
+// first thing anyone sees of the game and the only thing most people will
+// ever see of it, and it is the one asset no amount of playing the game
+// would ever reveal as broken.
+
+console.log(`\n── the link card ${"─".repeat(44)}`);
+{
+  const card = "public/og.png";
+  if (!existsSync(card)) {
+    fail(`${card} is missing — every shared link renders as bare text`);
+  } else {
+    const png = readFileSync(card);
+    // The IHDR chunk is fixed at bytes 16..24 of every PNG, so the real
+    // dimensions can be read without a decoder — and they have to be
+    // read, because the numbers the document *claims* are what a scraper
+    // lays out the card from.
+    const isPng = png.subarray(0, 8).toString("hex") === "89504e470d0a1a0a";
+    const width = png.readUInt32BE(16);
+    const height = png.readUInt32BE(20);
+    if (!isPng) fail(`${card} is not a PNG`);
+    else if (width !== 1200 || height !== 630) {
+      fail(`the card is ${width}x${height}; every scraper asks for 1200x630`);
+    } else if (png.length > 1_000_000) {
+      fail(`the card is ${(png.length / 1024).toFixed(0)}KB; some scrapers give up past 1MB`);
+    } else {
+      ok(`the card is a ${width}x${height} PNG, ${(png.length / 1024).toFixed(0)}KB`);
+    }
+
+    const html = readFileSync("index.html", "utf8");
+    const declared = (name: string) =>
+      html.match(new RegExp(`(?:property|name)="${name}"[^>]*content="([^"]*)"`, "s"))?.[1] ??
+      html.match(new RegExp(`content="([^"]*)"[^>]*(?:property|name)="${name}"`, "s"))?.[1] ??
+      null;
+
+    const required = [
+      "og:type", "og:title", "og:description", "og:url",
+      "og:image", "og:image:width", "og:image:height", "og:image:alt",
+      "twitter:card", "twitter:image",
+    ];
+    const missing = required.filter((n) => !declared(n));
+    if (missing.length) fail(`the document declares no ${missing.join(", ")}`);
+    else ok(`${required.length} card tags declared`);
+
+    // The numbers in the document and the pixels in the file are two
+    // copies of one fact, and a scraper believes the document.
+    if (declared("og:image:width") !== String(width) ||
+        declared("og:image:height") !== String(height)) {
+      fail(`the document says ${declared("og:image:width")}x${declared("og:image:height")}, the file is ${width}x${height}`);
+    } else ok("and the size it declares is the size the file is");
+
+    // A relative og:image is an og:image a scraper cannot fetch — it has
+    // no page to resolve it against. This ships to two origins, so the
+    // origin is stamped in at build time and this is what says so.
+    if (!/^%SITE_URL%\//.test(declared("og:image") ?? "")) {
+      fail(`og:image is "${declared("og:image")}" — it has to be absolute at build time`);
+    } else ok("and the image URL is made absolute at build time");
+
+    if (/summary_large_image/.test(declared("twitter:card") ?? "")) {
+      ok("and the card is the large one, not a thumbnail");
+    } else fail(`twitter:card is "${declared("twitter:card")}"`);
   }
 }
 

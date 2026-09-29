@@ -177,6 +177,45 @@ Minimum touch target is 44pt. Nothing tappable may be smaller.
 Full-bleed `absolute inset-0`, `bg-phos-950/97`, content in a column no
 wider than `286px`, centered. Entry is always `crt-open` (Part 5).
 
+### Link card
+
+What a link to the game becomes when it is pasted into a message — and,
+for most people, the only part of this design system they will ever see.
+`tools/og.html`, rendered to `public/og.png` by `node tools/og.mjs`.
+
+**Not a screenshot.** The terminal is a tall phone screen and a landscape
+crop of it is mostly empty deck. The card is built for the shape a chat
+bubble gives it, out of the same palette, the same Courier and the same
+four temper colours: a field of dim numbers with four clusters agitated in
+it, one of them boxed by a marquee, and the logo on a scrim of black.
+
+**Everything on it has to survive being 340px wide**, which is about what
+a phone gives a link card. The four bins were on it for one draft and came
+off: four labelled boxes are four grey smudges at that size. What replaced
+them is the emblem — a plate with the four tempers as diamonds at its
+corners around one refined datum — which says the same thing in shapes
+instead of words and still reads when the words do not.
+
+**The mark is written for this branch.** It is an austere institutional
+badge in the same register as the show's, not a copy of the show's own
+trademark, and the diamond is the shape the dance floor already counts a
+chain in. Rings were tried first and read as an atom; a plate reads as
+something screwed to a wall, which is what this terminal is.
+
+Committed as a file rather than generated at build time: a scraper fetches
+it from a URL, so it has to exist at a stable one on both hosts, and a
+build step that needs a browser is a build step that breaks on the host
+that does not have one.
+
+`og:image` must be **absolute** — a scraper has no page to resolve a
+relative URL against — and this ships to two origins. So the origin is
+stamped into the document at build time by the `siteUrl` plugin in
+`vite.config.ts`: `SITE_URL` if set (the Pages workflow sets its own),
+else Vercel's production domain, else the address that actually gets
+shared. Four invariants hold the rest: the file is a 1200×630 PNG under
+1MB, the document declares every tag a card needs, the size it declares is
+the size the file actually is, and the image it names is really served.
+
 ### Problem report
 
 One button, at the foot of the handbook's settings: `REPORT A PROBLEM`.
