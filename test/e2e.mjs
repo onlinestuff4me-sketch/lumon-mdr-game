@@ -16,7 +16,7 @@ import {
   lastTrainingIndex, orientationIndices, refineFile, readLedger, writeLedger,
   carryToWrongBin, findGroupToBin, carryHeldToItsBin, groupById,
   URL as APP_URL,
-  settled, beginRefining,
+  settled, beginRefining, openWith, stageLuma,
 } from "./harness.mjs";
 
 const { browser, page, origin, errors, cdp } = await open();
@@ -2502,6 +2502,92 @@ section("the /dance door");
   // Back to the terminal for whatever runs after this.
   await page.goto(APP_URL, { waitUntil: "networkidle" });
   await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+}
+
+// ═══ a terminal that was asked for less motion ═══════════════════════
+//
+// The bug: the CRT glass has a phosphor-flicker layer — a full-bleed
+// sheet of `phos-300` — whose only opacity lived inside its keyframes.
+// `.motion-guard` strips animations under `prefers-reduced-motion`, so
+// the sheet fell back to its declared opacity of 1 and painted solid mint
+// over everything below z-50. The start screen and the briefing sit above
+// that, so the terminal looked fine right up until the first file, which
+// is precisely the report we got: "blank green screen after the home
+// screen".
+section("reduce motion");
+{
+  const walk = async (t) => {
+    await t.page.getByRole("button", { name: /BEGIN ORIENTATION/i }).click();
+    await t.page.waitForTimeout(1200);
+    await beginRefining(t.page);
+    await t.page.waitForFunction(() => window.__mdr?.settled, null, { timeout: 15000 });
+    await t.page.waitForTimeout(400);
+    return stageLuma(t.page);
+  };
+
+  const rm = await openWith({ reducedMotion: "reduce" });
+  try {
+    const luma = await walk(rm);
+    // A board of dim digits on black sits near 0.05. The mint sheet sat
+    // at 0.85, which is the whole of this check.
+    check("the terminal is still a dark screen with reduce motion on",
+      luma < 0.25, `luma ${luma.toFixed(2)}`);
+
+    // And the rule behind it, stated where it can be enforced: a layer of
+    // the CRT glass whose resting look lives only in its keyframes paints
+    // at full strength the moment something declines to animate it.
+    const glass = await rm.page.evaluate(() =>
+      [...document.querySelectorAll(".motion-guard *")].map((el) => {
+        const cs = getComputedStyle(el);
+        return { opacity: Number(cs.opacity), bg: cs.backgroundColor };
+      }),
+    );
+    const opaque = glass.filter((g) => g.opacity > 0.75 && !/, ?0\)$/.test(g.bg));
+    check("no layer of the CRT glass is opaque without its animation",
+      opaque.length === 0, JSON.stringify(opaque));
+    check("nothing threw with reduce motion on", rm.errors.length === 0, rm.errors.join(" | "));
+  } finally {
+    await rm.browser.close();
+  }
+}
+
+// ═══ a problem a refiner can hand back ═══════════════════════════════
+//
+// A fresh terminal rather than this one: by now the suite has a ledger,
+// a run and whatever panel it left on screen, and what is being checked
+// is the route a tester takes from a cold open.
+section("problem report");
+{
+  const rp = await openWith({});
+  try {
+    await rp.page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+    // Through the drawer the way a thumb gets there, not by reaching into
+    // the stage: a report button nobody can navigate to is not a feature.
+    await rp.page.getByText(/READ THE HANDBOOK/i).click({ timeout: 5000 });
+    await rp.page.waitForTimeout(500);
+    await rp.page.getByRole("button", { name: /^SETTINGS$/ }).click();
+    await rp.page.waitForTimeout(900);
+
+    const button = rp.page.getByRole("button", { name: /REPORT A PROBLEM/i });
+    check("the handbook offers one button for it", (await button.count()) > 0);
+    await button.click();
+    await rp.page.waitForTimeout(400);
+    const report = await rp.page.evaluate(() => navigator.clipboard.readText());
+    // The line that would have named the mint-screen bug on the first
+    // read, and the one that says which build to look at.
+    check("the report names the motion preference",
+      /reduced motion : (yes|no)/.test(report), report.split("\n")[5] ?? "");
+    check("and the build it came from", /build +: \S+/.test(report));
+    check("and where the refiner was", /screen +: .+/.test(report));
+    check("and carries no address, name or ledger contents",
+      !/[\w.+-]+@[\w-]+\.[\w.]+/.test(report) &&
+        !/factsByRung|rewardQueue|seenFactIds/.test(report));
+    check("the button says so once it has gone",
+      /COPIED|REPORT FILED/i.test(await rp.page.evaluate(() => document.body.innerText)));
+    check("nothing threw filing it", rp.errors.length === 0, rp.errors.join(" | "));
+  } finally {
+    await rp.browser.close();
+  }
 }
 
 // ═══ 11. nothing threw ═══════════════════════════════════════════════

@@ -312,6 +312,12 @@
     0 0 26px rgba(23, 168, 102, 0.16);
 }
 
+/* The CRT glass holds still for anyone who asked for less motion.
+   Blunt on purpose — there is nothing on these layers worth animating for
+   someone who does not want it — which makes it the one rule in this file
+   that can leave an element with no animation at all. So every layer under
+   `.motion-guard` must declare the appearance it wants at rest, in its own
+   styles, rather than only inside its keyframes. */
 @media (prefers-reduced-motion: reduce) {
   .motion-guard,
   .motion-guard * {

@@ -393,6 +393,82 @@ export const beginRefining = async (page) => {
   return true;
 };
 
+/**
+ * A second terminal, opened with a device preference this machine does
+ * not have.
+ *
+ * The suite runs on a build machine with every default, which is exactly
+ * the set of conditions a device bug never happens under. A refiner with
+ * Reduce Motion switched on saw a flat mint screen from the first file
+ * onward, for weeks, because nothing here had ever asked the browser for
+ * that preference. Now something does.
+ */
+export async function openWith(prefs) {
+  const exe = browserPath();
+  const browser = await chromium.launch(exe ? { executablePath: exe } : {});
+  const ctx = await browser.newContext({
+    viewport: VIEWPORT,
+    deviceScaleFactor: 2,
+    hasTouch: true,
+    ...prefs,
+  });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
+  await page.goto(URL, { waitUntil: "networkidle" });
+  await page.waitForFunction(() => !!window.__mdr, null, { timeout: 15000 });
+  return { browser, page, errors };
+}
+
+/**
+ * How bright the middle of the stage is, 0 (black) to 1 (white).
+ *
+ * The invariant this exists for: **this terminal is a dark screen.** Every
+ * panel it draws is near-black phosphor with thin green type on it, so a
+ * bright middle means something is covering the game — whatever colour it
+ * happens to be, and whatever put it there.
+ *
+ * A coarser measure was tried first and is worth recording as a warning:
+ * "what share of the frame is one flat colour" read 82% with the mint
+ * sheet covering everything and 75% without it, because a board of dim
+ * digits on black is *itself* mostly one colour. It would have shipped
+ * looking like a regression test and caught nothing.
+ *
+ * The middle 40% rather than the whole frame, so the dark surround is not
+ * doing the work, and averaged, so one bright digit cannot swing it.
+ *
+ * Decoded in the page rather than in Node, because a PNG decoder is a
+ * dependency and a canvas is already there.
+ */
+export async function stageLuma(page) {
+  const shot = (await page.screenshot()).toString("base64");
+  return page.evaluate(
+    (b64) =>
+      new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onerror = () => reject(new Error("could not decode the frame"));
+        img.onload = () => {
+          const c = document.createElement("canvas");
+          c.width = img.width;
+          c.height = img.height;
+          c.getContext("2d").drawImage(img, 0, 0);
+          const w = Math.round(img.width * 0.4);
+          const h = Math.round(img.height * 0.4);
+          const { data } = c
+            .getContext("2d")
+            .getImageData(Math.round(img.width * 0.3), Math.round(img.height * 0.3), w, h);
+          let sum = 0;
+          for (let i = 0; i < data.length; i += 4) {
+            sum += (0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]) / 255;
+          }
+          resolve(sum / (data.length / 4));
+        };
+        img.src = `data:image/png;base64,${b64}`;
+      }),
+    shot,
+  );
+}
+
 export const load = async (page, index) => {
   await page.evaluate((i) => window.__mdr.startLevel(i), index);
   await page.waitForFunction(() => window.__mdr.settled, null, { timeout: 15000 });

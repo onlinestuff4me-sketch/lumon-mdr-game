@@ -9,6 +9,7 @@ import type { Progress } from "../game/progress";
 import type { RewardId } from "../game/rewards";
 import { IncentiveForecast } from "./IncentiveForecast";
 import { IncentiveShelf, WellnessRecord } from "./IncentiveShelf";
+import { ReportButton } from "./ReportButton";
 
 /**
  * The handbook is long — five sections and a full incentive record — and
@@ -512,6 +513,26 @@ export function HandbookModal({
             hint="Tint agitated clusters with their temper's color. Kier considers this a crutch."
           />
         </div>
+
+        {/* Last in the drawer, because it is the thing you go looking for
+            rather than the thing you browse to. Everything it needs is
+            already on this screen — which is why it lives here and not
+            behind a prop threaded down from the stage. */}
+        <ReportButton
+          context={{
+            screen: `${LEVELS[levelIndex]?.fileCode ?? "?"} · ${
+              LEVELS[levelIndex]?.name ?? "?"
+            } (level ${levelIndex + 1} of ${LEVELS.length})`,
+            progress: {
+              files: progress.filesCompleted,
+              screens: progress.screensCompleted,
+              bins: progress.binsTotal,
+              kept: Object.values(progress.rewardState).filter(
+                (v) => v === "claimed",
+              ).length,
+            },
+          }}
+        />
 
         <p className="mt-4 text-center text-[8px] tracking-[0.22em] text-phos-700">
           THE WORK IS MYSTERIOUS AND IMPORTANT

@@ -177,6 +177,38 @@ Minimum touch target is 44pt. Nothing tappable may be smaller.
 Full-bleed `absolute inset-0`, `bg-phos-950/97`, content in a column no
 wider than `286px`, centered. Entry is always `crt-open` (Part 5).
 
+### Problem report
+
+One button, at the foot of the handbook's settings: `REPORT A PROBLEM`.
+
+Deliberately not a form. A tester who has just hit something broken is
+already annoyed, and every field between them and sending turns a bug
+report into a shrug. One tap collects what the device can say for itself
+and opens the share sheet with it; on a desktop browser with no sheet it
+goes to the clipboard instead. `src/game/diagnostics.ts` builds it.
+
+What it carries, and the order it carries it in, is the lesson from the
+one that got away: **the device block comes first**, because the facts
+that differ between one phone and the build machine are the ones that
+cause a bug nobody on the build can see. Reduced motion, contrast, colour
+scheme, viewport, pixel ratio, touch points, standalone, whether storage
+works at all. Then the build stamp, the screen the refiner was on, their
+settings, their counters, and the last dozen things the page threw —
+`watchForTrouble()` is installed in `main.tsx` before React mounts, so a
+crash on the way up is in the report too.
+
+Two rules about its contents. **Nothing in it identifies a person**: a
+user agent describes a browser, not who is holding it, and there is no
+name, address, location or save content beyond counters. **Nothing leaves
+the device on its own**: collecting is free, sending happens on the tap.
+The button says both, under it, in words.
+
+Where it goes is the deployment's choice. With no configuration it opens
+the share sheet, which needs no address written into a public repository
+and lands in whatever app the tester already uses to talk to us. Setting
+`VITE_BUG_EMAIL` at build time switches it to a prefilled `mailto:`
+instead, which is better when there is an inbox to point it at.
+
 ---
 
 ## Part 5 — Motion
@@ -208,6 +240,35 @@ The keyframes live in `src/index.css`:
 **Every keyframe has a `prefers-reduced-motion` variant** that flattens it
 to its end state. That block is at the bottom of the keyframe section; a
 new animation without an entry there is an incomplete animation.
+
+**And an element's resting appearance never lives only in its keyframes.**
+This is the rule that cost us a bug report reading "blank green screen".
+The phosphor-flicker layer on the CRT glass is a full-bleed sheet of
+`phos-300`; its opacity was declared nowhere but inside `@keyframes
+crt-flicker`, so on a device that declined to run the animation it fell
+back to `opacity: 1` and painted solid mint over the whole stage. The
+start screen and the briefing sit above it at `z-70`, so the terminal
+looked perfect right up until the first file — which is exactly how the
+report arrived.
+
+`.motion-guard` is what declined to run it: a blunt `animation: none` over
+the CRT glass for anyone who asked for less motion, which is the right
+thing to do and the one rule in the stylesheet that can leave an element
+with no animation at all. So anything under it must declare what it looks
+like at rest, in its own styles. The general form, because
+`prefers-reduced-motion` is only the reason it happened *here*: **if an
+element would be wrong with its animation deleted, it is already wrong.**
+A paused tab, a throttled renderer, a device in a power-saving mode and a
+preference switch all arrive at the same place.
+
+The invariant is enforced two ways in the suite: the middle of the stage
+must stay dark under reduced motion — this terminal is a dark screen, so a
+bright middle means something is covering the game — and no layer of the
+CRT glass may compute to an opaque fill. A coarser check was tried first
+and is worth recording as a warning: *what share of the frame is one flat
+colour* read 82% with the mint sheet over everything and 75% without it,
+because a board of dim digits on black is itself mostly one colour. It
+would have shipped looking like a regression test and caught nothing.
 
 ### A screen reveals itself in beats, not all at once
 
