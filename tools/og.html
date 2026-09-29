@@ -49,8 +49,8 @@
         place-items: center;
         font-size: 21px;
         font-weight: 700;
-        color: var(--phos-700);
-        opacity: 0.62;
+        color: var(--phos-600);
+        opacity: 0.72;
       }
       /* A cluster that has been probed and is agitated: its temper's colour,
          at full strength, lifted off the grid. */
@@ -83,12 +83,17 @@
         text-shadow: 0 0 10px rgba(123, 243, 187, 0.7);
       }
 
-      /* A scrim under the title, so the type never fights the field. */
+      /* A scrim under the title, so the type never fights the field.
+         Much lighter than it was: at near-opaque it did its job by
+         deleting the board, and the board is the reason anyone knows what
+         the card is a picture of. The type gets its legibility from its
+         own dark halo below instead, which is local to the letters rather
+         than spread over the middle third of the picture. */
       #scrim {
         position: absolute;
         inset: 0;
         background:
-          radial-gradient(58% 50% at 50% 44%, rgba(1, 6, 4, 0.985) 0%, rgba(1, 6, 4, 0.95) 42%, rgba(1, 6, 4, 0.72) 72%, rgba(1, 6, 4, 0) 100%);
+          radial-gradient(64% 58% at 50% 49%, rgba(1, 6, 4, 0.78) 0%, rgba(1, 6, 4, 0.68) 50%, rgba(1, 6, 4, 0.34) 78%, rgba(1, 6, 4, 0) 100%);
       }
 
       #plate {
@@ -98,36 +103,18 @@
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding-top: 22px;
+        padding-top: 18px;
         text-align: center;
       }
-      #emblem {
-        width: 130px;
-        height: 130px;
-        filter: drop-shadow(0 0 16px rgba(47, 214, 138, 0.45));
-      }
-      /* The mark itself: the biggest thing on the card, because it is the
-         thing a glance is meant to land on. */
-      .wordmark {
-        margin-top: 20px;
-        font-size: 78px;
-        font-weight: 700;
-        line-height: 1;
-        letter-spacing: 0.3em;
-        text-indent: 0.3em;
-        color: var(--phos-200);
-        text-shadow: 0 0 3px var(--phos-300), 0 0 30px rgba(47, 214, 138, 0.6);
-      }
-      .eyebrow {
-        margin-top: 15px;
-        font-size: 20px;
-        font-weight: 700;
-        letter-spacing: 0.62em;
-        text-indent: 0.62em;
-        color: var(--phos-500);
+      /* Wide, because the mark is wide. It is the thing a glance is meant
+         to land on, so it gets nearly half the card. */
+      #mark {
+        width: 560px;
+        filter: drop-shadow(0 0 26px rgba(47, 214, 138, 0.6));
       }
       .rule {
-        margin-top: 28px;
+        box-shadow: 0 0 10px 3px rgba(1, 6, 4, 0.9);
+        margin-top: 26px;
         width: 320px;
         height: 1px;
         background: var(--phos-600);
@@ -138,15 +125,26 @@
         font-weight: 700;
         line-height: 1.04;
         letter-spacing: 0.16em;
-        text-indent: 0.17em;
+        text-indent: 0.16em;
         color: var(--phos-300);
-        text-shadow: 0 0 18px rgba(47, 214, 138, 0.4);
+        text-shadow:
+          0 0 6px rgba(1, 6, 4, 1),
+          0 0 16px rgba(1, 6, 4, 0.98),
+          0 0 30px rgba(1, 6, 4, 0.9),
+          0 0 20px rgba(47, 214, 138, 0.45);
       }
       .tag {
         margin-top: 20px;
         font-size: 21px;
         letter-spacing: 0.035em;
-        color: var(--phos-500);
+        color: var(--phos-400);
+        /* The thinnest type on the card, so it carries the deepest
+           halo — it is the one line the digits behind it can swallow. */
+        text-shadow:
+          0 0 5px rgba(1, 6, 4, 1),
+          0 0 11px rgba(1, 6, 4, 1),
+          0 0 20px rgba(1, 6, 4, 0.95),
+          0 0 34px rgba(1, 6, 4, 0.8);
       }
 
       /* The terminal's own furniture, along the top. Quiet enough that it
@@ -160,7 +158,8 @@
         font-size: 15px;
         font-weight: 700;
         letter-spacing: 0.22em;
-        color: var(--phos-600);
+        color: var(--phos-500);
+        text-shadow: 0 0 6px rgba(1, 6, 4, 1), 0 0 14px rgba(1, 6, 4, 0.9);
       }
       #meter { display: flex; align-items: center; gap: 13px; }
       #meterTrack {
@@ -177,15 +176,48 @@
 
       /* CRT glass, last and over everything — the same scanlines and
          vignette the terminal itself wears. */
+      /* The glass: scanlines crossed with an aperture grille, which is
+         what makes the bright parts break into phosphor dots rather than
+         just get striped.
+
+         Coarser than a real tube on purpose. A 1px pitch is correct at
+         1200px wide and turns to grey mush the moment a chat bubble
+         scales the card to a third of that, which is the size it is
+         actually looked at. Six pixels here is about two there — still a
+         texture rather than a haze. */
       #glass {
         position: absolute;
         inset: 0;
-        background: repeating-linear-gradient(
-          to bottom,
-          rgba(0, 0, 0, 0) 0px,
-          rgba(0, 0, 0, 0) 2px,
-          rgba(0, 0, 0, 0.26) 3px,
-          rgba(0, 0, 0, 0.26) 4px
+        background-image:
+          repeating-linear-gradient(
+            to bottom,
+            rgba(0, 0, 0, 0) 0px,
+            rgba(0, 0, 0, 0) 3px,
+            rgba(0, 0, 0, 0.44) 4px,
+            rgba(0, 0, 0, 0.44) 6px
+          ),
+          repeating-linear-gradient(
+            to right,
+            rgba(0, 0, 0, 0) 0px,
+            rgba(0, 0, 0, 0) 3px,
+            rgba(0, 0, 0, 0.36) 4px,
+            rgba(0, 0, 0, 0.36) 6px
+          );
+      }
+      /* And the triads themselves, tinting each surviving dot. Faint —
+         this is the difference between "a screen" and "a novelty filter". */
+      #triads {
+        position: absolute;
+        inset: 0;
+        mix-blend-mode: screen;
+        background-image: repeating-linear-gradient(
+          to right,
+          rgba(255, 40, 40, 0.09) 0px,
+          rgba(255, 40, 40, 0.09) 2px,
+          rgba(40, 255, 120, 0.09) 2px,
+          rgba(40, 255, 120, 0.09) 4px,
+          rgba(60, 110, 255, 0.09) 4px,
+          rgba(60, 110, 255, 0.09) 6px
         );
       }
       #vignette {
@@ -201,35 +233,9 @@
     <div id="scrim"></div>
 
     <div id="plate">
-      <!--
-        An emblem written for this branch, not the show's own mark: a
-        corporate badge in the same 1980s institutional register, carrying
-        the four tempers around a refined core. It says what the four bins
-        along the foot used to say, at a size that survives a chat bubble —
-        four coloured marks read where four labelled boxes do not.
-      -->
-      <svg id="emblem" viewBox="0 0 128 128" aria-hidden="true">
-        <!-- A plate, four tempers at its corners, one refined datum in
-             the middle. Rings read as an atom; a plate reads as a badge
-             screwed to a wall, which is the register this whole terminal
-             is written in. The diamond is the shape the floor already
-             counts a chain in. -->
-        <rect x="7" y="7" width="114" height="114" rx="10"
-              fill="rgba(4,26,16,0.55)" stroke="#17a866" stroke-width="3" />
-        <rect x="18" y="18" width="92" height="92" rx="5"
-              fill="none" stroke="#0a4a2c" stroke-width="1.25" />
-        <g>
-          <rect x="30" y="30" width="15" height="15" rx="1.5" transform="rotate(45 37.5 37.5)" fill="#4a8cd6" />
-          <rect x="83" y="30" width="15" height="15" rx="1.5" transform="rotate(45 90.5 37.5)" fill="#f0c548" />
-          <rect x="83" y="83" width="15" height="15" rx="1.5" transform="rotate(45 90.5 90.5)" fill="#9b6cf0" />
-          <rect x="30" y="83" width="15" height="15" rx="1.5" transform="rotate(45 37.5 90.5)" fill="#ff5a4d" />
-        </g>
-        <rect x="51" y="51" width="26" height="26" rx="2.5" transform="rotate(45 64 64)" fill="#c3fddf" />
-      </svg>
-
-      <div class="wordmark">LUMON</div>
-      <div class="eyebrow">INDUSTRIES</div>
-
+      <!-- The Lumon mark itself, which is wordmark and emblem in one, so
+           the card no longer sets LUMON separately underneath it. -->
+      <img id="mark" src="../public/lumon.svg" alt="" />
       <div class="rule"></div>
       <h1>MACRODATA REFINEMENT</h1>
       <div class="tag">Find the numbers that feel wrong.</div>
@@ -244,6 +250,7 @@
     </div>
 
     <div id="glass"></div>
+    <div id="triads"></div>
     <div id="vignette"></div>
 
     <script>

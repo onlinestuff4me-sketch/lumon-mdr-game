@@ -1041,6 +1041,22 @@ console.log(`\n── the link card ${"─".repeat(44)}`);
       ok(`the card is a ${width}x${height} PNG, ${(png.length / 1024).toFixed(0)}KB`);
     }
 
+    // The mark is drawn in one place and derived into the asset the site
+    // serves. Two copies of a logo is one copy and a thing that is
+    // slightly wrong, so this is what says they still agree.
+    const workshop = readFileSync("tools/lumon-mark.html", "utf8");
+    const drawn = workshop
+      .slice(workshop.indexOf('<svg id="lumon-mark"'), workshop.indexOf("</svg>") + 6)
+      .replaceAll("currentColor", "#7bf3bb")
+      .replace('<svg id="lumon-mark" viewBox', '<svg xmlns="http://www.w3.org/2000/svg" viewBox');
+    const served = existsSync("public/lumon.svg")
+      ? readFileSync("public/lumon.svg", "utf8")
+      : "";
+    if (!served) fail("public/lumon.svg is missing — run `node tools/og.mjs`");
+    else if (!served.includes(drawn)) {
+      fail("public/lumon.svg is stale — run `node tools/og.mjs`");
+    } else ok("the mark the site serves is the mark the workshop file draws");
+
     const html = readFileSync("index.html", "utf8");
     const declared = (name: string) =>
       html.match(new RegExp(`(?:property|name)="${name}"[^>]*content="([^"]*)"`, "s"))?.[1] ??
