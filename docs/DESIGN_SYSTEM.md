@@ -191,16 +191,22 @@ it, one of them boxed by a marquee, and the logo on a scrim of black.
 
 **Everything on it has to survive being 340px wide**, which is about what
 a phone gives a link card. The four bins were on it for one draft and came
-off: four labelled boxes are four grey smudges at that size. What replaced
-them is the emblem — a plate with the four tempers as diamonds at its
-corners around one refined datum — which says the same thing in shapes
-instead of words and still reads when the words do not.
+off: four labelled boxes are four grey smudges at that size.
 
-**The mark is written for this branch.** It is an austere institutional
-badge in the same register as the show's, not a copy of the show's own
-trademark, and the diamond is the shape the dance floor already counts a
-chain in. Rings were tried first and read as an atom; a plate reads as
-something screwed to a wall, which is what this terminal is.
+**The Lumon mark carries it instead.** `public/lumon.svg` — the wireframe
+globe with LUMON set across it and the teardrop knocked out of the O.
+Drawn as vector rather than traced from a frame grab, so it is sharp at
+any size and tintable: on the card it is phosphor green with the
+scanlines running over it, which is how the terminal in the show wears it
+too. It is wordmark and emblem in one, so the card sets no LUMON of its
+own underneath it.
+
+The geometry lives in exactly one place, `tools/lumon-mark.html`, which
+opens in a browser so it can be worked on by looking at it. `node
+tools/og.mjs` derives `public/lumon.svg` from it and re-renders the card;
+a data invariant fails if the served asset and the workshop file have
+drifted apart. Two copies of a logo is one copy and a thing that is
+slightly wrong.
 
 Committed as a file rather than generated at build time: a scraper fetches
 it from a URL, so it has to exist at a stable one on both hosts, and a

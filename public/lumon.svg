@@ -1,0 +1,59 @@
+<!--
+  The Lumon mark.
+
+  Generated from tools/lumon-mark.html by tools/og.mjs — edit that, not
+  this. Drawn as vector rather than traced from a frame grab, so it stays
+  sharp at any size.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 220" fill="none" aria-label="Lumon Industries">
+      <defs>
+        <!-- The globe's lines stop where the wordmark begins. On the real
+             mark the equator survives only as two stubs at the rim for
+             exactly this reason. -->
+        <mask id="behind-wordmark">
+          <rect width="400" height="220" fill="#fff" />
+          <rect x="55" y="74" width="290" height="72" fill="#000" />
+        </mask>
+        <!-- The teardrop inside the O, as a hole rather than a shape, so
+             whatever is behind the mark shows through it. -->
+        <mask id="drop">
+          <rect width="400" height="220" fill="#fff" />
+          <path
+            d="M266 90 C 270 101 279 110 279 117 a 13 13 0 1 1 -26 0 c 0 -7 9 -16 13 -27 z"
+            fill="#000"
+          />
+        </mask>
+      </defs>
+
+      <g stroke="#7bf3bb" stroke-width="4" stroke-linecap="round">
+        <!-- The silhouette. -->
+        <ellipse cx="200" cy="110" rx="192" ry="102" />
+        <!-- What the wordmark does not cover. -->
+        <g mask="url(#behind-wordmark)">
+          <ellipse cx="200" cy="110" rx="128" ry="102" />
+          <ellipse cx="200" cy="110" rx="64" ry="102" />
+          <line x1="200" y1="8" x2="200" y2="212" />
+        </g>
+        <line x1="35" y1="58" x2="365" y2="58" />
+        <line x1="35" y1="162" x2="365" y2="162" />
+        <!-- The equator, as much of it as the wordmark leaves. -->
+        <line x1="10" y1="110" x2="42" y2="110" />
+        <line x1="358" y1="110" x2="390" y2="110" />
+      </g>
+
+      <g transform="translate(200 110) scale(0.88) translate(-200 -110)">
+      <g fill="#7bf3bb" mask="url(#drop)">
+        <!-- L -->
+        <path d="M45 82 a4 4 0 0 1 4 -4 h9 a4 4 0 0 1 4 4 v43 h31 a4 4 0 0 1 4 4 v9 a4 4 0 0 1 -4 4 h-44 a4 4 0 0 1 -4 -4 z" />
+        <!-- U -->
+        <path d="M101 82 a4 4 0 0 1 4 -4 h9 a4 4 0 0 1 4 4 v39 a4 4 0 0 0 4 4 h14 a4 4 0 0 0 4 -4 v-39 a4 4 0 0 1 4 -4 h9 a4 4 0 0 1 4 4 v48 a12 12 0 0 1 -12 12 h-32 a12 12 0 0 1 -12 -12 z" />
+        <!-- M. The middle stops short of the baseline, which is most of
+             what makes this mark recognisable at a glance. -->
+        <path d="M161 142 v-60 a4 4 0 0 1 4 -4 h18 l14 22 l14 -22 h18 a4 4 0 0 1 4 4 v60 h-17 v-52 l-19 32 l-19 -32 v52 z" />
+        <!-- O, solid; the drop is knocked out of it by the mask. -->
+        <rect x="237" y="78" width="58" height="64" rx="22" ry="22" />
+        <!-- N -->
+        <path d="M299 142 v-60 a4 4 0 0 1 4 -4 h17 l19 40 v-36 a4 4 0 0 1 4 -4 h9 a4 4 0 0 1 4 4 v60 h-21 l-19 -40 v40 z" />
+      </g>
+      </g>
+    </svg>

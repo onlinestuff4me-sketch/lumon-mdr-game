@@ -8,12 +8,44 @@
  *
  *   node tools/og.mjs
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { resolve, dirname } from "node:path";
 import { chromium } from "playwright";
 
 const here = dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Rebuild `public/lumon.svg` from the workshop file.
+ *
+ * `tools/lumon-mark.html` is the one place the mark's geometry lives — it
+ * opens in a browser, so it can be worked on by looking at it. The asset
+ * the site serves is derived from it here rather than maintained beside
+ * it, because two copies of a logo is one copy and a thing that is
+ * slightly wrong. A data invariant checks they still agree.
+ */
+export function buildMark() {
+  const src = readFileSync(resolve(here, "lumon-mark.html"), "utf8");
+  const svg = src
+    .slice(src.indexOf('<svg id="lumon-mark"'), src.indexOf("</svg>") + 6)
+    // The phosphor is baked in: an <img> cannot inherit `currentColor`
+    // from the page that places it.
+    .replaceAll("currentColor", "#7bf3bb")
+    .replace('<svg id="lumon-mark" viewBox', '<svg xmlns="http://www.w3.org/2000/svg" viewBox');
+  return svg;
+}
+
+const HEADER = `<!--
+  The Lumon mark.
+
+  Generated from tools/lumon-mark.html by tools/og.mjs — edit that, not
+  this. Drawn as vector rather than traced from a frame grab, so it stays
+  sharp at any size.
+-->
+`;
+
+writeFileSync(resolve(here, "..", "public", "lumon.svg"), HEADER + buildMark() + "\n");
+
 const sandboxed = "/opt/pw-browsers/chromium";
 const browser = await chromium.launch(
   existsSync(sandboxed) ? { executablePath: sandboxed } : {},
