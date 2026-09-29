@@ -2590,6 +2590,35 @@ section("problem report");
   }
 }
 
+// ═══ the link card, as served ════════════════════════════════════════
+//
+// The data invariants check the file and the source document; this checks
+// the thing a scraper actually gets. A card that 404s is a bare text link,
+// and nobody playing the game would ever notice.
+section("the link card");
+{
+  const head = await page.evaluate(() => {
+    const at = (sel) => document.querySelector(sel)?.getAttribute("content") ?? null;
+    return {
+      image: at('meta[property="og:image"]'),
+      url: at('meta[property="og:url"]'),
+      title: at('meta[property="og:title"]'),
+    };
+  });
+  check("the served document carries an absolute image URL",
+    /^https?:\/\/[^\s"]+\/og\.png$/.test(head.image ?? ""), String(head.image));
+  check("and an absolute page URL", /^https?:\/\//.test(head.url ?? ""), String(head.url));
+  check("and a title", (head.title ?? "").length > 0, String(head.title));
+
+  // Fetched from this host rather than from the URL above: the built
+  // document names the origin it will be *published* at, which is not the
+  // preview server the suite is driving.
+  const res = await page.request.get(new URL("og.png", APP_URL).href);
+  const type = res.headers()["content-type"] ?? "";
+  check("and the image it names is really shipped",
+    res.status() === 200 && /image\/png/.test(type), `${res.status()} ${type}`);
+}
+
 // ═══ 11. nothing threw ═══════════════════════════════════════════════
 section("console");
 check("no page errors", errors.length === 0, errors.join(" | "));

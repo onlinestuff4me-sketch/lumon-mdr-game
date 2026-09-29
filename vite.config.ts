@@ -63,9 +63,37 @@ function buildStamp(): string {
   return `${sha.slice(0, 7)} ${new Date().toISOString().slice(0, 16)}Z`
 }
 
+/**
+ * Where this build will be served from, as an absolute origin.
+ *
+ * Open Graph requires an absolute image URL — a scraper has no page to
+ * resolve a relative one against — and this repository ships to two hosts
+ * on two different origins. So the origin is stamped into the document at
+ * build time rather than guessed at runtime: Vercel hands us its
+ * production domain, the Pages workflow sets `SITE_URL` to its own, and
+ * the fallback is the address that actually gets shared.
+ */
+function siteOrigin(): string {
+  const explicit = process.env.SITE_URL
+  if (explicit) return explicit.replace(/\/+$/, '')
+  const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  if (vercel) return `https://${vercel}`
+  return 'https://lumon-mdr-game.vercel.app'
+}
+
+function siteUrl(): Plugin {
+  const origin = siteOrigin()
+  return {
+    name: 'site-url',
+    transformIndexHtml(html) {
+      return html.replaceAll('%SITE_URL%', origin)
+    },
+  }
+}
+
 export default defineConfig({
   base: "./",
-  plugins: [react(), tailwindcss(), pagesFallback()],
+  plugins: [react(), tailwindcss(), siteUrl(), pagesFallback()],
   define: {
     __BUILD__: JSON.stringify(buildStamp()),
   },

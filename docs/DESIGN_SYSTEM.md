@@ -177,6 +177,35 @@ Minimum touch target is 44pt. Nothing tappable may be smaller.
 Full-bleed `absolute inset-0`, `bg-phos-950/97`, content in a column no
 wider than `286px`, centered. Entry is always `crt-open` (Part 5).
 
+### Link card
+
+What a link to the game becomes when it is pasted into a message — and,
+for most people, the only part of this design system they will ever see.
+`tools/og.html`, rendered to `public/og.png` by `node tools/og.mjs`.
+
+**Not a screenshot.** The terminal is a tall phone screen and a landscape
+crop of it is mostly empty deck. The card is built for the shape a chat
+bubble gives it, out of the same palette, the same Courier and the same
+four temper colours: a field of dim numbers with four clusters agitated in
+it, one of them boxed by a marquee, the title on a scrim of black, and the
+four bins along the foot. That is the whole game in one picture — a
+refiner finds the numbers that feel wrong and consigns each to the bin its
+temper evokes — and it reads at the size a bubble actually shows.
+
+Committed as a file rather than generated at build time: a scraper fetches
+it from a URL, so it has to exist at a stable one on both hosts, and a
+build step that needs a browser is a build step that breaks on the host
+that does not have one.
+
+`og:image` must be **absolute** — a scraper has no page to resolve a
+relative URL against — and this ships to two origins. So the origin is
+stamped into the document at build time by the `siteUrl` plugin in
+`vite.config.ts`: `SITE_URL` if set (the Pages workflow sets its own),
+else Vercel's production domain, else the address that actually gets
+shared. Four invariants hold the rest: the file is a 1200×630 PNG under
+1MB, the document declares every tag a card needs, the size it declares is
+the size the file actually is, and the image it names is really served.
+
 ### Problem report
 
 One button, at the foot of the handbook's settings: `REPORT A PROBLEM`.
