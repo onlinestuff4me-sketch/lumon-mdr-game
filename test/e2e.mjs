@@ -2603,17 +2603,24 @@ section("the start screen");
     };
 
     // Reloaded so the clock starts where a refiner's does: `openWith` has
-    // already spent a second or two getting here. Sampled at a second and
-    // a half, which is inside the two seconds the screen promises and
-    // well inside the four the first group stays up for.
+    // already spent a second or two getting here. Two samples with the
+    // stopwatch running, then a free-running series.
     await st.page.reload({ waitUntil: "domcontentloaded" });
     const opened = Date.now();
-    await st.page.waitForTimeout(Math.max(0, 1500 - (Date.now() - opened)));
-    const early = await litAway();
+    const at = async (ms) => {
+      await st.page.waitForTimeout(Math.max(0, ms - (Date.now() - opened)));
+      return litAway();
+    };
 
-    const seen = [early];
-    for (let i = 0; i < 11; i++) {
-      await st.page.waitForTimeout(650);
+    // The screen arrives at rest. A bright thing in the same instant as
+    // the mark and the title makes the refiner choose what to read.
+    const onArrival = await at(1300);
+    // And a group has surfaced by the middle of its hold.
+    const surfaced = await at(4800);
+
+    const seen = [onArrival, surfaced];
+    for (let i = 0; i < 14; i++) {
+      await st.page.waitForTimeout(700);
       seen.push(await litAway());
     }
     const high = Math.max(...seen);
@@ -2623,8 +2630,10 @@ section("the start screen");
       high > low * 1.8,
       `${low} at rest, ${high} lit`,
     );
-    check("and a group had come loose within two seconds of opening",
-      early > low * 1.4, `${early} at 1.5s vs a floor of ${low}`);
+    check("the sheet is still at rest through the first two seconds",
+      onArrival < low * 1.15, `${onArrival} at 1.3s vs a floor of ${low}`);
+    check("and a group has surfaced by five seconds in",
+      surfaced > low * 1.4, `${surfaced} at 4.8s vs a floor of ${low}`);
 
     // The sheet covers the whole screen, and not every button on the
     // start screen is inside the title column — READ THE HANDBOOK sits

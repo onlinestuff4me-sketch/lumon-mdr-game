@@ -247,9 +247,20 @@ logo in the register of a footnote.
 **And the board is already running behind it.** `AttractField` paints a
 sheet of numbers that refines itself: the whole field shimmering and
 drifting sub-pixel, and one group at a time coming loose, holding, and
-settling back. First group inside two seconds of opening — a start screen
-that waits longer than that is a still picture — then a two-second gap
-before the next.
+settling back.
+
+**The screen arrives at rest.** Two full seconds of nothing before the
+first group stirs. The first pass started it almost immediately, which
+put a bright thing on screen in the same instant as the mark and the
+title and made the refiner choose what to read. Two seconds is long
+enough to read the mark, and short enough that the stir is still an
+answer to it.
+
+**And a group surfaces rather than blinking.** 2.3s up, 1.1s held, 2.6s
+down, then a 2s gap — eight seconds a group, forty seconds a loop. The
+rise and fall each ran a second shorter at first and the group read as a
+flash; over two and a bit seconds it reads as something coming up through
+the sheet, which is what a refiner is being taught to look for.
 
 Three rules make it a backdrop rather than a second headline:
 

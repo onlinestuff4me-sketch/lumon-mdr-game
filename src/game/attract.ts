@@ -30,18 +30,33 @@ import type { Cluster, GridNode, Temper } from "./types";
 export const CELL = 26;
 
 /** How many groups are seeded, and so how long the loop runs before it
- *  repeats. Five at six seconds apiece is half a minute of start screen,
- *  which is longer than anyone looks at one. */
+ *  repeats. Five at eight seconds apiece is forty seconds of start
+ *  screen, which is longer than anyone looks at one. */
 const GROUPS = 5;
 
-/** The cycle, in seconds. */
-const LEAD = 0.35;
-const RISE = 1.3;
-const HOLD = 1.1;
-const FALL = 1.6;
-const GAP = 2.0;
+/**
+ * The cycle, in seconds.
+ *
+ * `LEAD` is a deliberate two seconds of nothing. The first pass started
+ * the first group almost immediately, which put a bright thing on screen
+ * in the same instant as the mark and the title and made the refiner
+ * choose what to read. The sheet is at rest when the screen arrives, and
+ * something comes loose in it a moment later — which is a terminal being
+ * watched rather than a page loading.
+ *
+ * `RISE` and `FALL` are long, and longer than they first were by a second
+ * apiece. A group that comes up in a second reads as a blink; over two
+ * and a bit it reads as something surfacing.
+ */
+export const LEAD = 2.0;
+export const RISE = 2.3;
+export const HOLD = 1.1;
+export const FALL = 2.6;
+export const GAP = 2.0;
+/** How long a group is anything other than at rest. */
+export const LIT = RISE + HOLD + FALL;
 /** One group's whole turn, agitation and silence together. */
-export const SPAN = RISE + HOLD + FALL + GAP;
+export const SPAN = LIT + GAP;
 /** When the loop starts over. */
 export const LOOP = GROUPS * SPAN;
 
@@ -81,7 +96,7 @@ function smooth(x: number): number {
 export function envelope(i: number, t: number): { a: number; clock: number } {
   const start = LEAD + i * SPAN;
   const local = ((t - start) % LOOP + LOOP) % LOOP;
-  if (local >= RISE + HOLD + FALL) return { a: 0, clock: 0 };
+  if (local >= LIT) return { a: 0, clock: 0 };
   if (local < RISE) return { a: smooth(local / RISE), clock: local };
   if (local < RISE + HOLD) return { a: 1, clock: local };
   return { a: 1 - smooth((local - RISE - HOLD) / FALL), clock: local };
