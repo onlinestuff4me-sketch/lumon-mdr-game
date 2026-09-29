@@ -193,6 +193,15 @@ it, one of them boxed by a marquee, and the logo on a scrim of black.
 a phone gives a link card. The four bins were on it for one draft and came
 off: four labelled boxes are four grey smudges at that size.
 
+**And it is monotone.** The agitated clusters were drawn in their temper
+colours for two drafts, which put four accent hues around a card whose
+subject is a logo — four things competing with the mark, and they won. A
+cluster is now a brightness and nothing else, pitched above the idle
+field and below the mark, which is the order of importance on the card.
+It is also the truer picture: colour assist is off by default in the
+game, so a refiner reads a cluster by its brightness and its motion
+anyway.
+
 **The Lumon mark carries it instead.** `public/lumon.svg` — the wireframe
 globe with LUMON set across it and the teardrop knocked out of the O.
 Drawn as vector rather than traced from a frame grab, so it is sharp at
