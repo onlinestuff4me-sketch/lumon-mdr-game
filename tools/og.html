@@ -83,12 +83,17 @@
         text-shadow: 0 0 10px rgba(123, 243, 187, 0.7);
       }
 
-      /* A scrim under the title, so the type never fights the field. */
+      /* A scrim under the title, so the type never fights the field.
+         Much lighter than it was: at near-opaque it did its job by
+         deleting the board, and the board is the reason anyone knows what
+         the card is a picture of. The type gets its legibility from its
+         own dark halo below instead, which is local to the letters rather
+         than spread over the middle third of the picture. */
       #scrim {
         position: absolute;
         inset: 0;
         background:
-          radial-gradient(70% 66% at 50% 49%, rgba(1, 6, 4, 0.99) 0%, rgba(1, 6, 4, 0.975) 52%, rgba(1, 6, 4, 0.8) 78%, rgba(1, 6, 4, 0) 100%);
+          radial-gradient(64% 58% at 50% 49%, rgba(1, 6, 4, 0.78) 0%, rgba(1, 6, 4, 0.68) 50%, rgba(1, 6, 4, 0.34) 78%, rgba(1, 6, 4, 0) 100%);
       }
 
       #plate {
@@ -108,6 +113,7 @@
         filter: drop-shadow(0 0 26px rgba(47, 214, 138, 0.6));
       }
       .rule {
+        box-shadow: 0 0 10px 3px rgba(1, 6, 4, 0.9);
         margin-top: 26px;
         width: 320px;
         height: 1px;
@@ -121,13 +127,24 @@
         letter-spacing: 0.16em;
         text-indent: 0.16em;
         color: var(--phos-300);
-        text-shadow: 0 0 18px rgba(47, 214, 138, 0.4);
+        text-shadow:
+          0 0 6px rgba(1, 6, 4, 1),
+          0 0 16px rgba(1, 6, 4, 0.98),
+          0 0 30px rgba(1, 6, 4, 0.9),
+          0 0 20px rgba(47, 214, 138, 0.45);
       }
       .tag {
         margin-top: 20px;
         font-size: 21px;
         letter-spacing: 0.035em;
         color: var(--phos-400);
+        /* The thinnest type on the card, so it carries the deepest
+           halo — it is the one line the digits behind it can swallow. */
+        text-shadow:
+          0 0 5px rgba(1, 6, 4, 1),
+          0 0 11px rgba(1, 6, 4, 1),
+          0 0 20px rgba(1, 6, 4, 0.95),
+          0 0 34px rgba(1, 6, 4, 0.8);
       }
 
       /* The terminal's own furniture, along the top. Quiet enough that it
@@ -141,7 +158,8 @@
         font-size: 15px;
         font-weight: 700;
         letter-spacing: 0.22em;
-        color: var(--phos-600);
+        color: var(--phos-500);
+        text-shadow: 0 0 6px rgba(1, 6, 4, 1), 0 0 14px rgba(1, 6, 4, 0.9);
       }
       #meter { display: flex; align-items: center; gap: 13px; }
       #meterTrack {
