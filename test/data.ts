@@ -23,6 +23,15 @@ import {
   type Progress,
 } from "../src/game/progress";
 import { selectPresentation } from "../src/game/present";
+import {
+  CELL,
+  LOOP,
+  SPAN,
+  STILL_AT,
+  createAttract,
+  envelope,
+  stepAttract,
+} from "../src/game/attract";
 import { existsSync, readFileSync } from "node:fs";
 
 let bad = 0;
@@ -1090,6 +1099,129 @@ console.log(`\n── the link card ${"─".repeat(44)}`);
       ok("and the card is the large one, not a thumbnail");
     } else fail(`twitter:card is "${declared("twitter:card")}"`);
   }
+}
+
+
+// ── the start screen's attract loop ──────────────────────────────────
+// The first thing anyone sees, and the only animation in the game that
+// runs with nobody watching it. Pure, so the whole loop can be run here
+// rather than looked at.
+
+console.log(`\n── the attract loop ${"─".repeat(42)}`);
+{
+  // A phone, with the title column down the middle of it.
+  const W = 390;
+  const H = 844;
+  const KEEP = { x: 35, y: 250, w: 320, h: 360 };
+  const board = createAttract(W, H, KEEP);
+
+  if (board.clusters.length < 3) {
+    fail(`only ${board.clusters.length} groups fit on a ${W}x${H} sheet`);
+  } else ok(`${board.clusters.length} groups seeded on a ${W}x${H} sheet`);
+
+  // Nothing stirs under the type. A group that agitates behind the
+  // headline is a group that makes the headline hard to read, which is
+  // the whole reason the column is measured and handed down.
+  const under = board.clusters.filter((c) =>
+    c.members.some((m) => {
+      const n = board.nodes[m];
+      return (
+        n.hx > KEEP.x - CELL && n.hx < KEEP.x + KEEP.w + CELL &&
+        n.hy > KEEP.y - CELL && n.hy < KEEP.y + KEEP.h + CELL
+      );
+    }),
+  );
+  if (under.length) fail(`${under.length} groups sit under the title column`);
+  else ok("and none of them sits under the title column");
+
+  // Nor off the edge: a group the refiner sees three digits of does not
+  // read as a shape coming loose from a sheet.
+  const clipped = board.clusters.filter((c) =>
+    c.members.some((m) => {
+      const n = board.nodes[m];
+      return n.hx < CELL || n.hx > W - CELL || n.hy < CELL || n.hy > H - CELL;
+    }),
+  );
+  if (clipped.length) fail(`${clipped.length} groups run off the edge`);
+  else ok("and none of them runs off the edge");
+
+  // One at a time, which is the entire point: two groups stirring at once
+  // is a board, and a board is what the refiner is about to be given.
+  let worst = 0;
+  let everLit = new Set<number>();
+  for (let t = 0; t < LOOP * 2; t += 1 / 30) {
+    const lit = board.clusters
+      .map((_, i) => i)
+      .filter((i) => envelope(i, t).a > 0.02);
+    worst = Math.max(worst, lit.length);
+    for (const i of lit) everLit.add(i);
+  }
+  if (worst > 1) fail(`${worst} groups agitate at once`);
+  else ok("exactly one group is ever agitated at a time");
+
+  if (everLit.size !== board.clusters.length) {
+    fail(`${board.clusters.length - everLit.size} groups never take a turn`);
+  } else ok("and every group takes its turn inside one loop");
+
+  // Within two seconds of the page opening, or the start screen looks
+  // like a still picture for long enough that nobody waits.
+  const firstLit = envelope(0, 1.9).a;
+  if (firstLit < 0.5) {
+    fail(`the first group is only ${firstLit.toFixed(2)} agitated at 1.9s`);
+  } else ok(`the first group is ${firstLit.toFixed(2)} agitated within 2s`);
+
+  // And it subsides rather than staying lit.
+  const rest = envelope(0, SPAN - 0.3).a;
+  if (rest > 0.02) fail(`the first group is still ${rest.toFixed(2)} lit a gap later`);
+  else ok("and it has subsided again before the next one starts");
+
+  // The loop is a pure function of the clock: a dropped frame, a
+  // backgrounded tab or a slow phone must not leave the sheet somewhere
+  // a steady one would never be.
+  const a = createAttract(W, H, KEEP);
+  const b = createAttract(W, H, KEEP);
+  stepAttract(a, 4.1);
+  for (const t of [0.3, 1.2, 2.9, 3.6, 4.1]) stepAttract(b, t);
+  const drift = a.nodes.reduce(
+    (m, n, i) => Math.max(m, Math.abs(n.dx - b.nodes[i].dx), Math.abs(n.dy - b.nodes[i].dy)),
+    0,
+  );
+  if (drift > 1e-9) fail(`stepping frame by frame drifts by ${drift}`);
+  else ok("and the sheet at a given moment does not depend on the frames before it");
+
+  // The still frame a refiner who declined motion is shown has to be
+  // worth holding — which means something has to be happening in it.
+  const still = createAttract(W, H, KEEP);
+  stepAttract(still, STILL_AT);
+  const moved = still.nodes.filter((n) => n.agitation > 0.5).length;
+  if (moved < 4) fail(`the reduced-motion still frame has only ${moved} stirred digits`);
+  else ok(`the reduced-motion still frame holds ${moved} digits mid-stir`);
+}
+
+// ── the home-screen icon ─────────────────────────────────────────────
+// iOS will not take an SVG here and falls back to a screenshot of the
+// page when it finds nothing, so this is the difference between a mark
+// and a picture of some small type.
+
+console.log(`\n── the home-screen icon ${"─".repeat(38)}`);
+{
+  const icon = "public/apple-touch-icon.png";
+  const html = readFileSync("index.html", "utf8");
+  if (!existsSync(icon)) {
+    fail(`${icon} is missing — run \`node tools/og.mjs\``);
+  } else {
+    const png = readFileSync(icon);
+    const w = png.readUInt32BE(16);
+    const h = png.readUInt32BE(20);
+    if (png.subarray(0, 8).toString("hex") !== "89504e470d0a1a0a") {
+      fail(`${icon} is not a PNG — iOS will not take an SVG`);
+    } else if (w !== 180 || h !== 180) {
+      fail(`the icon is ${w}x${h}; iOS asks for 180x180`);
+    } else ok(`the icon is a ${w}x${h} PNG, ${(png.length / 1024).toFixed(0)}KB`);
+  }
+  if (!/rel="apple-touch-icon"/.test(html)) {
+    fail("the document declares no apple-touch-icon");
+  } else ok("and the document declares it");
 }
 
 console.log(bad ? `\nFAILED — ${bad} problems` : "\nPASSED");

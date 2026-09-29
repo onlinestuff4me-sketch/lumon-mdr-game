@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CircleHelp, Play, RotateCcw, ChevronRight, FolderOpen } from "lucide-react";
 import { LEVELS } from "../game/constants";
 import type { HudSnapshot } from "../game/engine";
 import { activeRun, continueIndex, type RunStore } from "../game/runs";
 import type { Progress } from "../game/progress";
 import { IncentiveRecordBox } from "./IncentiveRecordBox";
+import { AttractField } from "./AttractField";
 
 interface Props {
   hud: HudSnapshot;
@@ -89,6 +90,11 @@ export function PhaseOverlay({
   // and a filing cabinet on the front of the terminal stays shut until
   // someone asks for it.
   const [showSaves, setShowSaves] = useState(false);
+  // Handed to the attract sheet so no group stirs under the type. A ref
+  // rather than a constant: the column's height depends on how many
+  // buttons this terminal is offering, which depends on how many saves
+  // exist.
+  const columnRef = useRef<HTMLDivElement>(null);
   if (hud.phase === "probe" || hud.phase === "select" || hud.phase === "carry") {
     return null;
   }
@@ -113,98 +119,134 @@ export function PhaseOverlay({
   const fileCount = new Set(fileKeys).size;
   const fileNumber = new Set(fileKeys.slice(0, hud.levelIndex + 1)).size;
 
+  const briefing = hud.phase === "briefing";
+
   return (
-    <div className="absolute inset-0 z-60 flex flex-col items-center justify-center bg-phos-950/94 px-7 text-center">
-      {hud.phase === "briefing" ? (
+    <div
+      className={`absolute inset-0 z-60 flex flex-col items-center justify-center px-7 text-center ${
+        // The briefing is opaque and grows its own board underneath. Every
+        // other panel is a scrim over the board the refiner was just on,
+        // and must stay one — dimming what is behind is the whole point.
+        briefing ? "bg-phos-950" : "bg-phos-950/94"
+      }`}
+    >
+      {briefing ? (
         <>
-          <p className="text-[9px] tracking-[0.3em] text-phos-600">
-            LUMON INDUSTRIES
-          </p>
-          <h1 className="crt-text-glow mt-2 text-[17px] font-bold leading-tight tracking-[0.16em] text-phos-200">
-            MACRODATA
-            <br />
-            REFINEMENT
-          </h1>
-          <div className="mt-4 h-px w-24 bg-phos-600" />
-          {/* One thought per line. Run together as prose these read as a
-              paragraph to be skimmed; stacked, each line is an instruction
-              the refiner can hold onto. */}
-          <div className="mt-4 flex flex-col gap-1.5 text-[10px] leading-snug text-phos-400">
-            <p>Welcome refiner.</p>
-            <p>Probe files for numbers that feel wrong.</p>
-            <p>Bin them by the temper they evoke.</p>
-          </div>
-          <div className="mt-4 flex flex-col gap-1.5 text-[9px] leading-snug tracking-[0.1em] text-phos-600">
-            <p>THE WORK IS MYSTERIOUS AND IMPORTANT</p>
-            <p>HEADPHONES RECOMMENDED</p>
-          </div>
-          {(() => {
-            const run = activeRun(runStore);
-            // A terminal nobody has worked at yet offers exactly what it
-            // always did: orientation first, skip if you insist.
-            if (!run && runStore.runs.length === 0) {
+          <AttractField keepOutRef={columnRef} />
+          {/* The type's own darkness, local to the column rather than
+              spread over the whole screen. The same lesson the link card
+              taught: a scrim heavy enough to guarantee legibility deletes
+              the board, and the board is the reason anyone can tell what
+              this is a picture of. */}
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{
+              background:
+                "radial-gradient(58% 46% at 50% 50%, rgba(1,6,4,0.93) 0%, rgba(1,6,4,0.86) 46%, rgba(1,6,4,0.45) 74%, rgba(1,6,4,0) 100%)",
+            }}
+          />
+          <div
+            ref={columnRef}
+            className="relative z-10 flex w-full max-w-80 flex-col items-center"
+          >
+            {/* Wordmark and emblem in one, so the screen no longer sets
+                LUMON INDUSTRIES as an eyebrow above the title. Same asset
+                the link card uses, from the same source file. */}
+            <img
+              src={`${import.meta.env.BASE_URL}lumon.svg`}
+              alt="Lumon Industries"
+              width={400}
+              height={220}
+              className="w-[184px]"
+              style={{ filter: "drop-shadow(0 0 14px rgba(47,214,138,0.55))" }}
+            />
+            <h1 className="crt-text-glow mt-3 text-[17px] font-bold leading-tight tracking-[0.16em] text-phos-200">
+              MACRODATA
+              <br />
+              REFINEMENT
+            </h1>
+            <div className="mt-4 h-px w-24 bg-phos-600" />
+            {/* One thought per line. Run together as prose these read as a
+                paragraph to be skimmed; stacked, each line is an instruction
+                the refiner can hold onto. */}
+            <div className="mt-4 flex flex-col gap-1.5 text-[10px] leading-snug text-phos-400">
+              <p>Welcome refiner.</p>
+              <p>Probe files for numbers that feel wrong.</p>
+              <p>Bin them by the temper they evoke.</p>
+            </div>
+            <div className="mt-4 flex flex-col gap-1.5 text-[9px] leading-snug tracking-[0.1em] text-phos-600">
+              <p>THE WORK IS MYSTERIOUS AND IMPORTANT</p>
+              <p>HEADPHONES RECOMMENDED</p>
+            </div>
+            {(() => {
+              const run = activeRun(runStore);
+              // A terminal nobody has worked at yet offers exactly what it
+              // always did: orientation first, skip if you insist.
+              if (!run && runStore.runs.length === 0) {
+                return (
+                  <>
+                    <button type="button" className={BTN} onClick={onStart}>
+                      <Play size={12} strokeWidth={2.6} />
+                      BEGIN ORIENTATION
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onPlay(FIRST_REAL_FILE)}
+                      className="mt-3 text-[9px] tracking-[0.2em] text-phos-600 underline-offset-4"
+                    >
+                      SKIP THE TRAINING FILES
+                    </button>
+                  </>
+                );
+              }
+              const at = run ? continueIndex(run, LEVELS.length) : 0;
+              const saves = [...runStore.runs].sort(
+                (a, b) => b.updatedAt - a.updatedAt,
+              );
               return (
                 <>
-                  <button type="button" className={BTN} onClick={onStart}>
+                  <button type="button" className={BTN} onClick={() => onPlay(at)}>
                     <Play size={12} strokeWidth={2.6} />
-                    BEGIN ORIENTATION
+                    {`CONTINUE — ${LEVELS[at].name}`}
                   </button>
                   <button
                     type="button"
-                    onClick={() => onPlay(FIRST_REAL_FILE)}
-                    className="mt-3 text-[9px] tracking-[0.2em] text-phos-600 underline-offset-4"
+                    onClick={onNewSave}
+                    className="mt-3 inline-flex items-center gap-2 rounded-[3px] border border-phos-600/60 px-4 py-2 text-[9px] font-bold tracking-[0.22em] text-phos-400 active:bg-phos-600/30"
                   >
-                    SKIP THE TRAINING FILES
+                    BEGIN A NEW SAVE
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowSaves((v) => !v)}
+                    className="mt-3 inline-flex items-center gap-1.5 text-[9px] tracking-[0.2em] text-phos-600 underline-offset-4"
+                  >
+                    <FolderOpen size={10} strokeWidth={2.2} aria-hidden />
+                    {`LOAD A PREVIOUS SAVE (${saves.length})`}
+                  </button>
+                  {showSaves ? (
+                    <div className="mt-2 flex max-h-40 w-full max-w-70 flex-col gap-1 overflow-y-auto">
+                      {saves.map((r) => (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => onLoadRun(r.id)}
+                          className="flex items-center justify-between rounded-[3px] border border-phos-600/40 px-3 py-1.5 text-[8px] tracking-[0.14em] text-phos-400 active:bg-phos-600/30"
+                        >
+                          <span>{stamp(r.updatedAt)}</span>
+                          <span className="text-phos-600">
+                            {`${Math.max(0, r.furthest + 1)}/${LEVELS.length} FILES`}
+                            {r.id === runStore.active ? " · ACTIVE" : ""}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </>
               );
-            }
-            const at = run ? continueIndex(run, LEVELS.length) : 0;
-            const saves = [...runStore.runs].sort(
-              (a, b) => b.updatedAt - a.updatedAt,
-            );
-            return (
-              <>
-                <button type="button" className={BTN} onClick={() => onPlay(at)}>
-                  <Play size={12} strokeWidth={2.6} />
-                  {`CONTINUE — ${LEVELS[at].name}`}
-                </button>
-                <button
-                  type="button"
-                  onClick={onNewSave}
-                  className="mt-3 inline-flex items-center gap-2 rounded-[3px] border border-phos-600/60 px-4 py-2 text-[9px] font-bold tracking-[0.22em] text-phos-400 active:bg-phos-600/30"
-                >
-                  BEGIN A NEW SAVE
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowSaves((v) => !v)}
-                  className="mt-3 inline-flex items-center gap-1.5 text-[9px] tracking-[0.2em] text-phos-600 underline-offset-4"
-                >
-                  <FolderOpen size={10} strokeWidth={2.2} aria-hidden />
-                  {`LOAD A PREVIOUS SAVE (${saves.length})`}
-                </button>
-                {showSaves ? (
-                  <div className="mt-2 flex max-h-40 w-full max-w-70 flex-col gap-1 overflow-y-auto">
-                    {saves.map((r) => (
-                      <button
-                        key={r.id}
-                        type="button"
-                        onClick={() => onLoadRun(r.id)}
-                        className="flex items-center justify-between rounded-[3px] border border-phos-600/40 px-3 py-1.5 text-[8px] tracking-[0.14em] text-phos-400 active:bg-phos-600/30"
-                      >
-                        <span>{stamp(r.updatedAt)}</span>
-                        <span className="text-phos-600">
-                          {`${Math.max(0, r.furthest + 1)}/${LEVELS.length} FILES`}
-                          {r.id === runStore.active ? " · ACTIVE" : ""}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </>
-            );
-          })()}
+            })()}
+          </div>
         </>
       ) : null}
 
