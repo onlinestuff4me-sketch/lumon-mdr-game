@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process'
 import { copyFileSync, existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { defineConfig, type Plugin } from 'vite'
@@ -38,7 +39,34 @@ function pagesFallback(): Plugin {
   };
 }
 
+/**
+ * What build this is, for a problem report to name.
+ *
+ * A report that says "it is broken" and cannot say *which* version is
+ * broken is a report that has to be reproduced before it can be read. The
+ * two hosts both put the commit in the environment; a local build asks
+ * git; a checkout with no git says so rather than guessing.
+ */
+function buildStamp(): string {
+  const sha =
+    process.env.VERCEL_GIT_COMMIT_SHA ??
+    process.env.GITHUB_SHA ??
+    (() => {
+      try {
+        return execSync('git rev-parse HEAD', { stdio: ['ignore', 'pipe', 'ignore'] })
+          .toString()
+          .trim()
+      } catch {
+        return 'unknown'
+      }
+    })()
+  return `${sha.slice(0, 7)} ${new Date().toISOString().slice(0, 16)}Z`
+}
+
 export default defineConfig({
   base: "./",
   plugins: [react(), tailwindcss(), pagesFallback()],
+  define: {
+    __BUILD__: JSON.stringify(buildStamp()),
+  },
 })
