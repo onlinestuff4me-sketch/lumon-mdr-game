@@ -21,64 +21,66 @@ diverged from the plan, it is marked ▸.
 
 ## Part 1 — ORIENTATION: reading the tempers by eye
 
-Twenty-nine screens in four stages, before the probe exists. No clock, no
+Twelve screens in six stages, before the probe exists. No clock, no
 hiding: every group is **already moving**, and all the player does is see
 it, box it, and bin it. What is being taught is not a gesture — it is *what
 each temper looks like*, learned by doing rather than by reading.
 
-### Stage 1 · one temper, one group (12 screens)
+It used to be twenty-nine screens across four stages with a lever table
+each, and both the length and the levers are gone. The ladder is now
+`ORIENT_STAGES` in `src/game/constants.ts` — six rungs, read literally by
+`orientationScreens()`, which is the only thing that builds these levels:
 
-Three screens per temper, in temper order, each with a single group and a
-single full-width bin.
+```ts
+{ screens: 3, tempers: 1, groupsPerTemper: 1, bins: 1 },
+{ screens: 2, tempers: 1, groupsPerTemper: 2, bins: 1 },
+{ screens: 2, tempers: 2, groupsPerTemper: 1, bins: 2 },
+{ screens: 2, tempers: 2, groupsPerTemper: 2, bins: 2 },
+{ screens: 2, tempers: 2, groupsPerTemper: 2, bins: 4 },
+{ screens: 1, tempers: 4, groupsPerTemper: 1, bins: 4 },
+```
 
-| Lever | Default | What it does |
+**One rung is one orientation file.** Six rungs, six files, `0001`–`0006`.
+The stages inside a file run together with no ceremony between them; the
+last stage of each carries the full one, because that is where the meter
+reaches 100% and an incentive may be owed. Each file gets its own addendum
+line from the Perpetuity Wing (`OR_LORE`) — the six used to share one, so
+the screen marking the end of a file said nothing about the file.
+
+| Rung | File | Screens | On the board | Bins | What it adds |
+|---|---|---|---|---|---|
+| 1 | `0001` | 3 | one temper, one group | 1 | *This is what a temper looks like.* One per screen: woe, then frolic, then dread. |
+| 2 | `0002` | 2 | one temper, two groups | 1 | Two things to find, before two things to tell apart. Opens on **malice** — the one temper rung 1 did not show. |
+| 3 | `0003` | 2 | two tempers, one group each | 2 | The first discrimination, and the first screen on which a wrong answer is possible. |
+| 4 | `0004` | 2 | two tempers, two groups each | 2 | Both demands at once, with the deck still only as wide as the answer. |
+| 5 | `0005` | 2 | two tempers, two groups each | 4 | Same board, **full deck**. The right bin now has to be picked rather than found — two of the four take nothing. |
+| 6 | `0006` | 1 | all four, one group each | 4 | The whole job, once, still visible and still untimed. |
+
+### The wheel
+
+Tempers are not drawn at random and not fixed in a table. `orientationScreens`
+keeps `k`, the wheel index of the temper most recently shown. A solo screen
+advances the wheel; a multi-temper screen **opens on that most recent temper**
+and introduces the next. So recall is always anchored on something just seen,
+and the chain falls out of the ladder rather than being written down beside it:
+
+> WO · FC · DR — MA · WO — WO+FC · FC+DR — DR+MA · MA+WO — WO+FC · FC+DR — all four
+
+### What every rung sets
+
+Not levers, just what the generator writes into each `LevelDef`:
+
+| Field | Value | Why |
 |---|---|---|
-| `stage1.screensPerTemper` | 3 | Screens spent on each temper before moving to the next. Lower = faster onboarding, less recognition drilled in. |
-| `stage1.groupsPerScreen` | 1 | Groups on the board. Above 1 the screen stops being "here is one thing, look at it". |
-| `stage1.temperOrder` | WO, FC, DR, MA | Sequence. Woe first because its droop is the slowest and most legible. |
-| `stage1.subtlety` | 1.35 | Motion amplitude multiplier. Deliberately louder than any real file — this motion must be noticeable to someone who does not yet know to look for motion. |
-
-Three screens per temper rather than one because recognition is the whole
-product of this stage, and recognition needs repetition in different places
-on the board. Three is also short enough that a repeat player is not
-punished — twelve screens at roughly 6–8 seconds each is about 90 seconds.
-
-### Stage B · two groups, still one temper (8 screens)
-
-Two things to find, before two things to tell apart. Each screen carries two
-groups of a single temper and a single bin, so the fill meter moves in
-halves. It opens on **malice** — the temper stage A has just finished with —
-and cycles backwards through the four twice: MA, DR, FC, WO, MA, DR, FC, WO.
-
-| Lever | Default | What it does |
-|---|---|---|
-| `stageB.screens` | 8 | Two full cycles of the four tempers. |
-| `stageB.groupsPerScreen` | 2 | Both of the same temper; `quota: 2`. |
-| `stageB.opensOn` | most recent | The temper the previous stage ended on, so the first new demand lands on something just seen. |
-
-### Stage C · two tempers, two groups (4 screens)
-
-The first discrimination: two bins on the deck, one group of each, and a
-wrong answer is now possible for the first time.
-
-| Lever | Default | What it does |
-|---|---|---|
-| `stage2.screens` | 4 | Screens in this stage. |
-| `stage2.groupsPerScreen` | 2 | One group per temper on the deck. |
-| `stageC.pairings` | derived | **Chained on recall, not fixed.** The first screen carries the two tempers the player has most recently seen; every screen after it keeps one temper from the screen before and introduces one new one. Every temper still appears exactly twice. At the current stage-B ordering that resolves to WO+FC → FC+DR → DR+MA → MA+WO. |
-| `stage2.subtlety` | 1.25 | Slightly quieter than stage 1. |
-| `stage2.spacing` | 6 | Minimum clear cells between groups, so each is read on its own. |
-
-### Stage D · four tempers, four groups (5 screens)
-
-The full deck, one group per temper, still all visible, still no clock.
-
-| Lever | Default | What it does |
-|---|---|---|
-| `stage3.screens` | 5 | Screens in this stage. |
-| `stage3.groupsPerScreen` | 4 | One per temper. |
-| `stage3.subtlety` | 1.15 | Quieter again — the last step before motion starts hiding. |
-| `stage3.spacing` | 5 | |
+| `untimed` | `true` | No clock anywhere in Part 1. |
+| `selfAgitate` | `true` | Every group is already moving. Nothing is hidden, because the probe does not exist yet. |
+| `startMode` | `"select"` | Straight into selecting; there is nothing to probe for. |
+| `minCapture` | `1` | One digit of overlap lifts the whole group. A new refiner is never told their correct instinct was a wrong box. |
+| `tapToSelect` | `true` | A tap anywhere on a group takes the whole group. |
+| `spacing` | 5 with four or more groups, else 6 | Minimum clear cells between groups, so each is read on its own. |
+| `focus` | `OR_FOCUS[rung]` | `center, center, mid, mid, edge, edge` — groups start where they cannot be missed and edge outwards as the ladder climbs. |
+| `ceremony` | `"full"` on the last stage of a file, else `"none"` | One continuous sequence per file, not a banner per screen. |
+| `autoAdvanceMs` | `900` | |
 
 ### Where the group sits
 
@@ -90,7 +92,7 @@ The full deck, one group per temper, still all visible, still no clock.
 
 | Lever | Default | What it does |
 |---|---|---|
-| `orientation.tapToSelect` | true | **A tap anywhere on a group lifts the whole group**, and **pressing on one and dragging carries it straight to the bin in one motion** — starting on empty board still draws a box. On by default on *every* file now, not just the teaching ones: the gesture that twenty-nine screens spend their whole length teaching used to stop working the moment training ended, silently. What protects the probe mechanic is the agitation gate, not the absence of the gesture — a tap on a group nobody has found yet is refused and says so. Hit-tested at the **contact point**, and against the group's live *footprint* rather than a radius around each glyph: the reticle floats above the finger so the lens is not under the thumb, and hit-testing there put every group's tappable region below its own digits. A tap on empty board does nothing, and a tap on a decoy answers `NO TEMPER DETECTED` exactly as a box would: a tap must never reveal what a box would not. |
+| `orientation.tapToSelect` | true | **A tap anywhere on a group lifts the whole group**, and **pressing on one and dragging carries it straight to the bin in one motion** — starting on empty board still draws a box. On by default on *every* file now, not just the teaching ones: the gesture that twelve screens spend their whole length teaching used to stop working the moment training ended, silently. What protects the probe mechanic is the agitation gate, not the absence of the gesture — a tap on a group nobody has found yet is refused and says so. Hit-tested at the **contact point**, and against the group's live *footprint* rather than a radius around each glyph: the reticle floats above the finger so the lens is not under the thumb, and hit-testing there put every group's tappable region below its own digits. A tap on empty board does nothing, and a tap on a decoy answers `NO TEMPER DETECTED` exactly as a box would: a tap must never reveal what a box would not. |
 | `orientation.binHint` | **every orientation screen** | Faint chevrons run from a held packet down to the bin it belongs in, **and that bin lights up**, so the second half of the gesture is discoverable too. It appears **with the packet**: an earlier version waited 1.1s for the player to hesitate, which meant the arrows arrived after the moment they were needed — the question "where does this go?" is asked the instant the box shows up. ▸ It used to be restricted to single-bin screens on the grounds that naming the bin on a wide deck gives the answer away. It does — and inside orientation that is the point. These screens exist to teach the gesture, box it, carry it, drop it; a refiner holding their first packet over a four-bin deck with no indication of where it goes is being tested on a rule nobody has told them. The arrows stop at the end of orientation, which is where the testing starts. |
 | `orientation.minOverlapDigits` | 1 | How many of a group's digits a selection box must touch to lift the **whole** group. At 1, dragging over any part of a group takes all of it. The real game requires 4 (`MIN_CAPTURE`); this is the "generous selection" rule, and it exists so a new player is never told their correct instinct was a wrong box. |
 | `orientation.ceremony` | `none` | What happens between screens. `none` = a REFINED flash and auto-advance; `full` = the normal 100% / addendum / NEXT FILE screen. ▸ Screens 1–20 are `none`; screen 21 is `full`, so the sequence ends properly and releases the one addendum it is worth. |

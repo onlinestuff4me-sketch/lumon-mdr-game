@@ -9,12 +9,26 @@ on:
   # the checks back without putting the deploy back. The `deploy` job is
   # gated on the event, so a PR builds and tests but never publishes.
   pull_request:
+    # Drafts are work in progress by definition. A ten-minute suite on every
+    # push to a branch nobody is reviewing yet buys nothing; marking the PR
+    # ready for review runs it.
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
-# Allow one concurrent deployment; a newer push supersedes an in-flight one
-# rather than queueing behind it.
+# One group per ref, and — critically — a *different* group for the runs
+# that publish.
+#
+# Both halves of this used to be `pages`, which meant a push to any open
+# pull request would cancel a deploy of `main` that was already in flight:
+# same group, `cancel-in-progress`, and the PR run wins because it started
+# later. The site was then left on whatever the last deploy that survived
+# had published, with a green merge commit suggesting otherwise.
+#
+# Now a PR only ever cancels its own earlier run, and only `main` can
+# cancel a deploy — which is the behaviour this was meant to have: a newer
+# push supersedes an in-flight publish rather than queueing behind it.
 concurrency:
-  group: pages
+  group: pages-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.number) || 'deploy' }}
   cancel-in-progress: true
 
 permissions:
@@ -25,6 +39,12 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # The suite is about ten minutes, most of it end-to-end. Twenty-five
+    # leaves room for a slow runner and still kills a job that has hung on
+    # a `waitForFunction` rather than letting it sit for the six hours
+    # GitHub allows by default.
+    timeout-minutes: 25
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     steps:
       - uses: actions/checkout@v4
 
@@ -74,8 +94,9 @@ jobs:
 
   deploy:
     needs: build
-    if: github.event_name != 'pull_request' 
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

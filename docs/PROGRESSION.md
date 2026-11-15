@@ -1,6 +1,6 @@
 # The queue
 
-Forty-six screens: a 29-screen orientation sequence, a file that
+Twenty-nine screens: a 12-screen orientation sequence, a file that
 introduces the probe, calibration, and then three acts. Orientation and the
 probe file are specified in [ONBOARDING.md](ONBOARDING.md) — this document
 covers everything from CALIBRATION onwards. The design goal is that a refiner should
@@ -16,24 +16,24 @@ the engine.
 
 | # | File | Act | Tempers | Bins | Groups / temper | Groups | Spacing | Per match | Clock | Subtlety |
 |---|---|---|---|---|---|---|---|---|---|---|
-| 1–29 | ORIENTATION | — | 1 → 1 → 2 → 4 | 1 → 1 → 2 → 4 | 1–2 | 1–4 | 6/6/6/5 | +100% / +50% | none | 1.35→1.15 |
-| 30 | BELLINGHAM | — | WO | 1 | 1 | 1 | 6 | +100% | none | pulsed |
-| 31 | CALIBRATION | — | 4 | 4 | 1 | 4 | 4 | +100% | none | 1.15 |
-| 24 | DRANESVILLE | I | WO | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
-| 25 | SUNSET PARK | I | FC | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
-| 26 | CAIRNS | I | DR | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
-| 27 | EMINENCE | I | MA | 1 | 3 | 3 | 5 | +33% | 180s | 1.10 |
-| 28 | KINGSPORT | II | WO FC | 2 | 2 | 4 | 4 | +50% | 150s | 1.00 |
-| 29 | LE MANS | II | DR MA | 2 | 2 | 4 | 4 | +50% | 150s | 0.95 |
-| 30 | LONGBRANCH | II | WO DR | 2 | 2 | 4 | 4 | +50% | 140s | 0.92 |
-| 31 | MOONBEAM | II | FC MA | 2 | 2 | 4 | 4 | +50% | 140s | 0.90 |
-| 32 | TUMWATER | III | all four | 4 | 2 | 8 | 3 | +50% | 120s | 1.00 |
-| 33 | JESUP | III | WO DR | 2 | 1 | 2 | 4 | +100% | none | 1.00 |
-| 34 | ALLENTOWN | III | all four | 4 | 2 | 8 | 3 | +50% | 110s | 0.86 |
-| 35 | NANNING | III | WO FC | 2 | 1 | 2 | 5 | +100% | none | 1.05 |
-| 36 | SIENA | III | all four | 4 | 2 | 8 | 3 | +50% | 100s | 0.72 |
-| 37 | YAKIMA | III | DR MA | 2 | 2 | 4 | 4 | +50% | 150s | 0.90 |
-| 38 | COLD HARBOR | III | all four | 4 | 2 | 8 | 3 | +50% | 90s | 0.58 |
+| 1–12 | ORIENTATION | — | 1 → 1 → 2 → 2 → 2 → 4 | 1 → 1 → 2 → 2 → 4 → 4 | 1–2 | 1–4 | 6/5 | +100% / +50% | none | self-agitated |
+| 13 | BELLINGHAM | — | WO | 1 | 1 | 1 | 6 | +100% | none | pulsed |
+| 14 | CALIBRATION | — | 4 | 4 | 1 | 4 | 4 | +100% | none | 1.15 |
+| 15 | DRANESVILLE | I | WO | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
+| 16 | SUNSET PARK | I | FC | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
+| 17 | CAIRNS | I | DR | 1 | 3 | 3 | 5 | +33% | none | 1.10 |
+| 18 | EMINENCE | I | MA | 1 | 3 | 3 | 5 | +33% | 180s | 1.10 |
+| 19 | KINGSPORT | II | WO FC | 2 | 2 | 4 | 4 | +50% | 150s | 1.00 |
+| 20 | LE MANS | II | DR MA | 2 | 2 | 4 | 4 | +50% | 150s | 0.95 |
+| 21 | LONGBRANCH | II | WO DR | 2 | 2 | 4 | 4 | +50% | 140s | 0.92 |
+| 22 | MOONBEAM | II | FC MA | 2 | 2 | 4 | 4 | +50% | 140s | 0.90 |
+| 23 | TUMWATER | III | all four | 4 | 2 | 8 | 3 | +50% | 120s | 1.00 |
+| 24 | JESUP | III | WO DR | 2 | 1 | 2 | 4 | +100% | none | 1.00 |
+| 25 | ALLENTOWN | III | all four | 4 | 2 | 8 | 3 | +50% | 110s | 0.86 |
+| 26 | NANNING | III | WO FC | 2 | 1 | 2 | 5 | +100% | none | 1.05 |
+| 27 | SIENA | III | all four | 4 | 2 | 8 | 3 | +50% | 100s | 0.72 |
+| 28 | YAKIMA | III | DR MA | 2 | 2 | 4 | 4 | +50% | 150s | 0.90 |
+| 29 | COLD HARBOR | III | all four | 4 | 2 | 8 | 3 | +50% | 90s | 0.58 |
 
 Clock figures are STANDARD pace; EXTENDED, the default, doubles them. Every
 correct assignment also credits 5 seconds back.

@@ -34,13 +34,16 @@ of them 404s every asset on the other.
 ## The loop
 
 The queue runs in three acts behind a training sequence, so the job is
-learned rather than sprung on you. **ORIENTATION** is 29 short screens in
+learned rather than sprung on you. **ORIENTATION** is 12 short screens in
 which nothing is hidden: every group is already moving, and all you do is
-box it and bin it. Three screens per temper teach what each one looks like,
-eight more put two groups of a single temper up so "two things to find" is
-learned before "two things to tell apart", four pair the tempers off, and
-five put up all four. Every stage opens on the temper you saw most recently,
-and each paired screen keeps one temper from the screen before it.
+box it and bin it. They come in six stages, one orientation file each.
+Three screens introduce a temper apiece; two put *two* groups of a single
+temper up, so "two things to find" is learned before "two things to tell
+apart"; two pair the tempers off a group at a time; two give each of the
+pair two groups; two keep that but open the whole bin deck, so the right
+bin has to be picked rather than found; and one puts up all four. Each
+stage opens on a temper carried over from the screen before it — except
+the second, which opens on the one temper the first stage did not show.
 Selecting is generous there — a tap anywhere on a group takes the whole
 group, and so does a box touching any one of its digits — faint arrows and a
 lit-up bin show a held packet where to go, and pressing on a group and
